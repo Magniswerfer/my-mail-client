@@ -62,6 +62,24 @@ struct StreamView: View {
             .id(thread.threadID)
             .tag(thread.threadID)
             .contextMenu { ThreadActions(thread: thread) }
+            #if os(iOS)
+            // Inbox-style swipes: right to pin, left for Done (full swipe) or Snooze.
+            .swipeActions(edge: .leading) {
+                Button { model.perform(thread.isPinned ? .unpin : .pin, on: [thread]) } label: {
+                    Label(thread.isPinned ? "Unpin" : "Pin", systemImage: thread.isPinned ? "pin.slash" : "pin")
+                }
+                .tint(.orange)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button { model.perform(.done, on: [thread]) } label: { Label("Done", systemImage: "checkmark") }
+                    .tint(.green)
+                Button {
+                    model.snoozeTarget = thread.threadID
+                    model.isSnoozePickerShown = true
+                } label: { Label("Snooze", systemImage: "clock") }
+                    .tint(.blue)
+            }
+            #endif
             // Drag a conversation onto a category (or Archive) in the sidebar to move it.
             .draggable(ThreadDrag(threadID: thread.threadID)) {
                 Label(thread.latest.subject, systemImage: "envelope")
@@ -115,7 +133,8 @@ struct EmptyStream: View {
             ContentUnavailableView {
                 Label("Nothing snoozed", systemImage: "clock")
             } description: {
-                Text("Press B on a conversation to bring it back later.")
+                Text(Platform.isPhone ? "Swipe left on a conversation to bring it back later."
+                                      : "Press B on a conversation to bring it back later.")
             }
         default:
             ContentUnavailableView {

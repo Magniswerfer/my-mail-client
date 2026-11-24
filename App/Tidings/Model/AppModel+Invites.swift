@@ -118,7 +118,7 @@ extension AppModel {
     func addToCalendar(_ invite: CalendarInvite) {
         Task {
             guard await CalendarBridge.shared.requestAccess() else {
-                show(Toast(message: String(localized: "Allow calendar access in System Settings › Privacy & Security › Calendars."),
+                show(Toast(message: Platform.calendarSettingsHint,
                            symbol: "calendar.badge.exclamationmark"))
                 return
             }

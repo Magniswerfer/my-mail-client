@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: hk.gnus
   deploymentTarget:
     macOS: "26.0"
+    iOS: "26.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -14,17 +15,18 @@ settings:
     LOCALIZATION_PREFERS_STRING_CATALOGS: YES
     SWIFT_EMIT_LOC_STRINGS: YES
     CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
-    ENABLE_HARDENED_RUNTIME: YES
 packages:
   MailEngine:
     path: ../MailEngine
 targets:
+  # Mac app. Shared code lives in Tidings/; Mac-only code in Tidings/Mac and behind #if os(macOS).
   Tidings:
     type: application
     platform: macOS
     sources:
       - path: Tidings
+        excludes:
+          - "iOS/**"
     dependencies:
       - package: MailEngine
         product: MailEngine
@@ -47,4 +49,61 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings
         PRODUCT_NAME: Tidings
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    scheme:
+      commandLineArguments:
+        "-TidingsDevServer": false
+
+  # iPhone and iPad app: the same model and views, with Tidings/iOS for navigation and life cycle.
+  # Set your team under Signing & Capabilities before running on a device. In the Simulator,
+  # tick -TidingsDevServer in the scheme to use the local Dovecot/Mailpit (see CLAUDE.md).
+  TidingsMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: Tidings
+        excludes:
+          - "Mac/**"
+          - "Info.plist"
+          - "Tidings.entitlements"
+    dependencies:
+      - package: MailEngine
+        product: MailEngine
+    info:
+      path: Tidings/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: $(PRODUCT_DISPLAY_NAME)
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, da]
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations~iphone:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - hk.gnus.tidings.refresh
+        NSCalendarsFullAccessUsageDescription: Tidings adds invitations you accept to your calendar, keeps them up to date when they change, and warns you about clashes.
+        # Remote images in mail are often plain http; this applies to the message view only.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoadsInWebContent: true
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings
+        PRODUCT_NAME: Tidings
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_IDENTITY: "Apple Development"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+    scheme:
+      commandLineArguments:
+        "-TidingsDevServer": false

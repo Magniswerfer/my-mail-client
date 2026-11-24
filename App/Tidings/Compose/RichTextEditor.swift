@@ -1,13 +1,130 @@
-import AppKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 extension NSAttributedString.Key {
     /// Marks quoted text (reply quotes, "> " paragraphs). Rendered as <blockquote>.
     static let tidingsQuote = NSAttributedString.Key("TidingsQuote")
     /// Marks the signature block so switching identity can replace it.
     static let tidingsSignature = NSAttributedString.Key("TidingsSignature")
+    /// "ul"/"ol" on list paragraphs typed on iPhone, where the markers are plain text (the Mac
+    /// uses NSTextList, which NSTextView manages itself).
+    static let tidingsList = NSAttributedString.Key("TidingsList")
 }
 
+// MARK: - Shared styling
+
+extension RichTextEditor {
+    #if os(macOS)
+    static let baseFont = PlatformFont.systemFont(ofSize: 14)
+    #else
+    static let baseFont = PlatformFont.preferredFont(forTextStyle: .body)
+    #endif
+
+    static var baseAttributes: [NSAttributedString.Key: Any] {
+        [.font: baseFont, .foregroundColor: PlatformColor.tidingsLabel]
+    }
+
+    static var quoteAttributes: [NSAttributedString.Key: Any] {
+        let style = NSMutableParagraphStyle()
+        style.headIndent = 14
+        style.firstLineHeadIndent = 14
+        return [.font: baseFont, .foregroundColor: PlatformColor.tidingsSecondaryLabel, .paragraphStyle: style, .tidingsQuote: true]
+    }
+}
+
+/// The Markdown-style input shortcuts both editors share (SPEC §9).
+@MainActor enum MarkdownShortcuts {
+    static let inlineRules: [(regex: NSRegularExpression, bold: Bool, markerLength: Int)] = [
+        (try! NSRegularExpression(pattern: #"\*\*([^*\n]+?)\*\*"#), true, 2),
+        (try! NSRegularExpression(pattern: #"(?<![*\w])\*([^*\n]+?)\*(?![*\w])"#), false, 1),
+        (try! NSRegularExpression(pattern: #"(?<![_\w])_([^_\n]+?)_(?![_\w])"#), false, 1),
+    ]
+
+    /// Turns completed `**bold**`, `*italic*` and `_italic_` in the paragraph at `caret` into
+    /// formatting. Returns the new caret, or nil when nothing changed.
+    static func applyInline(in storage: NSTextStorage, caret: Int) -> Int? {
+        guard storage.length > 0 else { return nil }
+        var paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: min(caret, storage.length - 1), length: 0))
+        var newCaret = caret
+        var changed = false
+        for rule in inlineRules {
+            while let match = rule.regex.firstMatch(in: storage.string, range: paragraph) {
+                let inner = match.range(at: 1)
+                let innerText = (storage.string as NSString).substring(with: inner)
+                var attrs = storage.attributes(at: inner.location, effectiveRange: nil)
+                let font = (attrs[.font] as? PlatformFont) ?? RichTextEditor.baseFont
+                attrs[.font] = FontTraits.adding(bold: rule.bold, italic: !rule.bold, to: font)
+                if !changed { storage.beginEditing(); changed = true }
+                storage.replaceCharacters(in: match.range, with: NSAttributedString(string: innerText, attributes: attrs))
+                let removed = rule.markerLength * 2
+                paragraph.length -= removed
+                if newCaret > match.range.location { newCaret = max(match.range.location, newCaret - removed) }
+            }
+        }
+        guard changed else { return nil }
+        storage.endEditing()
+        return min(newCaret, storage.length)
+    }
+
+    enum Block { case list(NSTextList.MarkerFormat), quote }
+
+    /// `- `, `* `, `1. ` or `> ` typed at the start of a paragraph.
+    static func block(forPrefix prefix: String) -> Block? {
+        switch prefix {
+        case "-", "*": .list(.disc)
+        case "1.": .list(.decimal)
+        case ">": .quote
+        default: nil
+        }
+    }
+
+    static func attributes(for block: Block) -> [NSAttributedString.Key: Any] {
+        var attrs = RichTextEditor.baseAttributes
+        switch block {
+        case .list(let marker):
+            let style = NSMutableParagraphStyle()
+            #if os(macOS)
+            style.textLists = [NSTextList(markerFormat: marker, options: 0)]
+            #else
+            attrs[.tidingsList] = marker == .decimal ? "ol" : "ul"
+            style.tabStops = [NSTextTab(textAlignment: .left, location: 8), NSTextTab(textAlignment: .left, location: 28)]
+            #endif
+            style.headIndent = 24
+            style.firstLineHeadIndent = 4
+            attrs[.paragraphStyle] = style
+        case .quote:
+            attrs.merge(RichTextEditor.quoteAttributes) { _, new in new }
+        }
+        return attrs
+    }
+
+    static func visibleMarker(_ marker: NSTextList.MarkerFormat, number: Int = 1) -> String {
+        marker == .disc ? "\t•\t" : "\t\(number).\t"
+    }
+
+    /// Return on an empty list item or quote line ends the list/quote (Mac). True when handled.
+    static func endsBlock(in storage: NSTextStorage, at location: Int) -> Bool {
+        let string = storage.string as NSString
+        let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+        let content = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
+        guard storage.length > 0 else { return false }
+        let at = min(paragraph.location, storage.length - 1)
+        let style = storage.attribute(.paragraphStyle, at: at, effectiveRange: nil) as? NSParagraphStyle
+        let inList = !(style?.textLists.isEmpty ?? true)
+        let inQuote = storage.attribute(.tidingsQuote, at: at, effectiveRange: nil) != nil
+        guard content.isEmpty, inList || inQuote else { return false }
+        storage.setAttributes(RichTextEditor.baseAttributes, range: paragraph)
+        return true
+    }
+}
+
+// MARK: - Mac editor
+
+#if os(macOS)
 /// The composer's body (SPEC §9: rich text with Markdown-style input shortcuts).
 ///
 /// An NSTextView, so Writing Tools, spell check, dictation and ⌘B/⌘I come from the system.
@@ -53,18 +170,6 @@ struct RichTextEditor: NSViewRepresentable {
         if view.attributedString() != text { view.textStorage?.setAttributedString(text) }
     }
 
-    static let baseFont = NSFont.systemFont(ofSize: 14)
-    static var baseAttributes: [NSAttributedString.Key: Any] {
-        [.font: baseFont, .foregroundColor: NSColor.labelColor]
-    }
-
-    static var quoteAttributes: [NSAttributedString.Key: Any] {
-        let style = NSMutableParagraphStyle()
-        style.headIndent = 14
-        style.firstLineHeadIndent = 14
-        return [.font: baseFont, .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style, .tidingsQuote: true]
-    }
-
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
         weak var textView: NSTextView?
@@ -73,114 +178,182 @@ struct RichTextEditor: NSViewRepresentable {
         init(_ parent: RichTextEditor) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
-            guard let view = textView, !isEditing else { return }
+            guard let view = textView, let storage = view.textStorage, !isEditing else { return }
             isEditing = true
-            applyInlineFormatting(in: view)
+            if let caret = MarkdownShortcuts.applyInline(in: storage, caret: view.selectedRange().location) {
+                view.setSelectedRange(NSRange(location: caret, length: 0))
+                view.typingAttributes = RichTextEditor.baseAttributes
+            }
             parent.text = view.attributedString().copy() as! NSAttributedString
             isEditing = false
-        }
-
-        static let inlineRules: [(NSRegularExpression, NSFontTraitMask, Int)] = [
-            (try! NSRegularExpression(pattern: #"\*\*([^*\n]+?)\*\*"#), .boldFontMask, 2),
-            (try! NSRegularExpression(pattern: #"(?<![*\w])\*([^*\n]+?)\*(?![*\w])"#), .italicFontMask, 1),
-            (try! NSRegularExpression(pattern: #"(?<![_\w])_([^_\n]+?)_(?![_\w])"#), .italicFontMask, 1),
-        ]
-
-        /// Turns completed `**bold**`, `*italic*` and `_italic_` in the edited paragraph into
-        /// formatting. Runs after every change, so typing, pasting and dictation all work.
-        private func applyInlineFormatting(in view: NSTextView) {
-            guard let storage = view.textStorage, storage.length > 0 else { return }
-            let caret = view.selectedRange().location
-            var paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: min(caret, storage.length - 1), length: 0))
-            var newCaret = caret
-            var changed = false
-            for (regex, trait, markerLength) in Self.inlineRules {
-                while let match = regex.firstMatch(in: storage.string, range: paragraph) {
-                    let inner = match.range(at: 1)
-                    let innerText = (storage.string as NSString).substring(with: inner)
-                    var attrs = storage.attributes(at: inner.location, effectiveRange: nil)
-                    let font = (attrs[.font] as? NSFont) ?? RichTextEditor.baseFont
-                    attrs[.font] = NSFontManager.shared.convert(font, toHaveTrait: trait)
-                    if !changed { storage.beginEditing(); changed = true }
-                    storage.replaceCharacters(in: match.range, with: NSAttributedString(string: innerText, attributes: attrs))
-                    let removed = markerLength * 2
-                    paragraph.length -= removed
-                    if newCaret > match.range.location { newCaret = max(match.range.location, newCaret - removed) }
-                }
-            }
-            guard changed else { return }
-            storage.endEditing()
-            view.setSelectedRange(NSRange(location: min(newCaret, storage.length), length: 0))
-            view.typingAttributes = RichTextEditor.baseAttributes
         }
 
         func textView(_ view: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
             guard let text, let storage = view.textStorage else { return true }
             let string = storage.string as NSString
 
-            // Return on an empty list item or quote line ends the list/quote.
             if text == "\n" {
-                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
-                let content = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
-                let style = storage.attribute(.paragraphStyle, at: min(paragraph.location, max(0, storage.length - 1)), effectiveRange: nil) as? NSParagraphStyle
-                let inList = !(style?.textLists.isEmpty ?? true)
-                let inQuote = storage.length > 0 && storage.attribute(.tidingsQuote, at: min(paragraph.location, storage.length - 1), effectiveRange: nil) != nil
-                if content.isEmpty, inList || inQuote {
-                    storage.setAttributes(RichTextEditor.baseAttributes, range: paragraph)
+                if MarkdownShortcuts.endsBlock(in: storage, at: range.location) {
                     view.typingAttributes = RichTextEditor.baseAttributes
                     return false
                 }
                 return true
             }
 
-            // Block shortcuts: "- ", "* ", "1. ", "> " at the start of a paragraph.
             if text == " " {
                 let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
                 let prefix = string.substring(with: NSRange(location: paragraph.location, length: range.location - paragraph.location))
-                let marker: NSTextList.MarkerFormat? = switch prefix {
-                case "-", "*": .disc
-                case "1.": .decimal
-                default: nil
-                }
-                if let marker {
-                    replace(prefix: prefix, in: view, at: paragraph.location) { attrs in
-                        let style = NSMutableParagraphStyle()
-                        style.textLists = [NSTextList(markerFormat: marker, options: 0)]
-                        style.headIndent = 24
-                        style.firstLineHeadIndent = 4
-                        attrs[.paragraphStyle] = style
-                    }
+                guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return true }
+                replace(prefix: prefix, in: view, at: paragraph.location, attributes: MarkdownShortcuts.attributes(for: block))
+                if case .list(let marker) = block {
                     // Show the marker right away; NSTextView inserts it on the next newline otherwise.
-                    let bullet = marker == .disc ? "\t•\t" : "\t1.\t"
-                    view.insertText(bullet, replacementRange: NSRange(location: paragraph.location, length: 0))
-                    return false
+                    view.insertText(MarkdownShortcuts.visibleMarker(marker), replacementRange: NSRange(location: paragraph.location, length: 0))
                 }
-                if prefix == ">" {
-                    replace(prefix: prefix, in: view, at: paragraph.location) { attrs in
-                        attrs.merge(RichTextEditor.quoteAttributes) { _, new in new }
-                    }
-                    return false
-                }
+                return false
             }
 
             return true
         }
 
-        private func replace(prefix: String, in view: NSTextView, at location: Int, style: (inout [NSAttributedString.Key: Any]) -> Void) {
+        private func replace(prefix: String, in view: NSTextView, at location: Int, attributes attrs: [NSAttributedString.Key: Any]) {
             guard let storage = view.textStorage else { return }
             let prefixRange = NSRange(location: location, length: (prefix as NSString).length)
             view.shouldChangeText(in: prefixRange, replacementString: "")
             storage.replaceCharacters(in: prefixRange, with: "")
-            var attrs = RichTextEditor.baseAttributes
-            style(&attrs)
             let paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: location, length: 0))
             storage.addAttributes(attrs, range: paragraph)
             view.typingAttributes = attrs
             view.didChangeText()
         }
-
     }
 }
+#endif
+
+// MARK: - iPhone editor
+
+#if os(iOS)
+/// The composer's body on iPhone: a UITextView with the same shortcuts as the Mac. Bold, italic
+/// and underline are in the edit menu; Writing Tools and dictation come from the system.
+struct RichTextEditor: UIViewRepresentable {
+    @Binding var text: NSAttributedString
+    var focusOnAppear = true
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.allowsEditingTextAttributes = true
+        view.adjustsFontForContentSizeCategory = true
+        view.font = Self.baseFont
+        view.typingAttributes = Self.baseAttributes
+        view.attributedText = text
+        view.backgroundColor = .clear
+        view.textContainerInset = UIEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        view.keyboardDismissMode = .interactive
+        view.writingToolsBehavior = .complete
+        view.dataDetectorTypes = []
+        context.coordinator.textView = view
+        if focusOnAppear {
+            DispatchQueue.main.async {
+                view.becomeFirstResponder()
+                view.selectedRange = NSRange(location: 0, length: 0)
+            }
+        }
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        guard !context.coordinator.isEditing else { return }
+        if view.attributedText != text { view.attributedText = text }
+    }
+
+    @MainActor final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: RichTextEditor
+        weak var textView: UITextView?
+        var isEditing = false
+
+        init(_ parent: RichTextEditor) { self.parent = parent }
+
+        func textViewDidChange(_ view: UITextView) {
+            guard !isEditing else { return }
+            isEditing = true
+            if let caret = MarkdownShortcuts.applyInline(in: view.textStorage, caret: view.selectedRange.location) {
+                view.selectedRange = NSRange(location: caret, length: 0)
+                view.typingAttributes = RichTextEditor.baseAttributes
+            }
+            parent.text = view.attributedText.copy() as! NSAttributedString
+            isEditing = false
+        }
+
+        func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            let storage = view.textStorage
+            let string = storage.string as NSString
+
+            if text == "\n", storage.length > 0 {
+                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
+                let at = min(paragraph.location, storage.length - 1)
+                let line = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
+                if let list = storage.attribute(.tidingsList, at: at, effectiveRange: nil) as? String {
+                    let marker = line.range(of: #"^\t[^\t]*\t"#, options: .regularExpression).map { String(line[$0]) } ?? ""
+                    if line == marker {
+                        // Return on an empty item ends the list.
+                        storage.replaceCharacters(in: paragraph, with: NSAttributedString(
+                            string: paragraph.length > (marker as NSString).length ? "\n" : "", attributes: RichTextEditor.baseAttributes))
+                        view.selectedRange = NSRange(location: paragraph.location, length: 0)
+                        view.typingAttributes = RichTextEditor.baseAttributes
+                    } else {
+                        // Continue the list with the next marker.
+                        let number = Int(marker.trimmingCharacters(in: CharacterSet(charactersIn: "\t."))) ?? 0
+                        let format: NSTextList.MarkerFormat = list == "ol" ? .decimal : .disc
+                        let attrs = MarkdownShortcuts.attributes(for: .list(format))
+                        let next = "\n" + MarkdownShortcuts.visibleMarker(format, number: number + 1)
+                        storage.replaceCharacters(in: range, with: NSAttributedString(string: next, attributes: attrs))
+                        view.selectedRange = NSRange(location: range.location + (next as NSString).length, length: 0)
+                        view.typingAttributes = attrs
+                    }
+                    textViewDidChange(view)
+                    return false
+                }
+                if storage.attribute(.tidingsQuote, at: at, effectiveRange: nil) != nil, line.isEmpty {
+                    storage.setAttributes(RichTextEditor.baseAttributes, range: paragraph)
+                    view.typingAttributes = RichTextEditor.baseAttributes
+                    textViewDidChange(view)
+                    return false
+                }
+                return true
+            }
+
+            if text == " " {
+                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
+                let prefix = string.substring(with: NSRange(location: paragraph.location, length: range.location - paragraph.location))
+                guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return true }
+                let attrs = MarkdownShortcuts.attributes(for: block)
+                storage.beginEditing()
+                storage.replaceCharacters(in: NSRange(location: paragraph.location, length: (prefix as NSString).length), with: "")
+                var caret = paragraph.location
+                if case .list(let marker) = block {
+                    let visible = MarkdownShortcuts.visibleMarker(marker)
+                    storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 0),
+                                              with: NSAttributedString(string: visible, attributes: attrs))
+                    caret += (visible as NSString).length
+                }
+                let updated = (storage.string as NSString).paragraphRange(for: NSRange(location: paragraph.location, length: 0))
+                storage.addAttributes(attrs, range: updated)
+                storage.endEditing()
+                view.selectedRange = NSRange(location: caret, length: 0)
+                view.typingAttributes = attrs
+                textViewDidChange(view)
+                return false
+            }
+
+            return true
+        }
+    }
+}
+#endif
+
+// MARK: - Export
 
 /// Turns the editor's attributed text into the two bodies a mail needs.
 enum MailBodyConverter {
@@ -217,7 +390,7 @@ enum MailBodyConverter {
             let range = string.paragraphRange(for: NSRange(location: location, length: 0))
             let attrs = text.attributes(at: range.location, effectiveRange: nil)
             let style = attrs[.paragraphStyle] as? NSParagraphStyle
-            let list = style?.textLists.first.map { $0.markerFormat == .decimal ? "ol" : "ul" }
+            let list = style?.textLists.first.map { $0.markerFormat == .decimal ? "ol" : "ul" } ?? (attrs[.tidingsList] as? String)
             let quote = attrs[.tidingsQuote] != nil
             closeBlocks(list: list, quote: quote)
             if quote, !inQuote { html += "<blockquote style=\"margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex;color:#555\">"; inQuote = true }
@@ -246,10 +419,9 @@ enum MailBodyConverter {
         text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attrs, range, _ in
             var piece = escape((text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines))
             guard !piece.isEmpty else { return }
-            if let font = attrs[.font] as? NSFont {
-                let traits = NSFontManager.shared.traits(of: font)
-                if traits.contains(.boldFontMask) { piece = "<b>\(piece)</b>" }
-                if traits.contains(.italicFontMask) { piece = "<i>\(piece)</i>" }
+            if let font = attrs[.font] as? PlatformFont {
+                if FontTraits.isBold(font) { piece = "<b>\(piece)</b>" }
+                if FontTraits.isItalic(font) { piece = "<i>\(piece)</i>" }
             }
             if (attrs[.underlineStyle] as? Int ?? 0) != 0 { piece = "<u>\(piece)</u>" }
             if (attrs[.strikethroughStyle] as? Int ?? 0) != 0 { piece = "<s>\(piece)</s>" }

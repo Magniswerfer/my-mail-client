@@ -137,12 +137,19 @@ extension AppModel {
 
     func snooze(_ preset: SnoozePreset) {
         isSnoozePickerShown = false
-        perform(.snooze(until: preset.date))
+        perform(.snooze(until: preset.date), on: takeSnoozeTarget())
     }
 
     func snooze(until date: Date) {
         isSnoozePickerShown = false
-        perform(.snooze(until: date))
+        perform(.snooze(until: date), on: takeSnoozeTarget())
+    }
+
+    /// The swiped conversation, if the picker was opened by a swipe (then forgotten).
+    private func takeSnoozeTarget() -> [ThreadSummary]? {
+        defer { snoozeTarget = nil }
+        guard let id = snoozeTarget else { return nil }
+        return threads.filter { $0.threadID == id }
     }
 
     /// Inbox conversations a sweep would mark done.

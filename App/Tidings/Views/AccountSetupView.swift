@@ -1,5 +1,4 @@
 import MailEngine
-import AppKit
 import SwiftUI
 
 /// Onboarding (SPEC §16). iCloud has no third-party OAuth (docs/research/icloud-imap.md), so an
@@ -72,7 +71,7 @@ struct AccountSetupView: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .macFrame(width: 520)
     }
 
     private func step(_ n: Int, done: Bool, title: LocalizedStringKey, detail: LocalizedStringKey,
@@ -90,7 +89,7 @@ struct AccountSetupView: View {
     }
 
     private func paste() {
-        guard let text = NSPasteboard.general.string(forType: .string) else {
+        guard let text = Platform.clipboardString() else {
             error = String(localized: "The clipboard is empty. Copy the password at account.apple.com first.")
             return
         }
@@ -158,7 +157,7 @@ struct SettingsView: View {
                 .formStyle(.grouped)
             }
         }
-        .frame(width: 560, height: 440)
+        .macFrame(width: 560, height: 440)
     }
 }
 

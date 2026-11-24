@@ -132,7 +132,7 @@ struct CommandPalette: View {
                 }
             }
         }
-        .frame(width: 520)
+        .macFrame(width: 520)
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
         .shadow(radius: 30, y: 10)
         .onAppear { focused = true }
@@ -214,7 +214,7 @@ struct SnoozePicker: View {
             }
         }
         .padding(20)
-        .frame(width: 380)
+        .macFrame(width: 380)
     }
 }
 
@@ -237,7 +237,7 @@ struct ToastView: View {
         .padding(.horizontal, 16).padding(.vertical, 10)
         .frame(maxWidth: 420)
         // A tinted glass so the message stays legible over a busy list.
-        .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.75)), in: .rect(cornerRadius: 18))
+        .glassEffect(.regular.tint(Color.windowBackground.opacity(0.75)), in: .rect(cornerRadius: 18))
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         .padding(.horizontal, 12)
         .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -3260,6 +3260,56 @@
           }
         }
       }
+    },
+    "Allow calendar access in Settings › Apps › Tidings › Calendars.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv adgang til kalenderen i Indstillinger › Apps › Tidings › Kalendere."
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luk"
+          }
+        }
+      }
+    },
+    "Close and keep the draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luk og behold kladden"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indstillinger"
+          }
+        }
+      }
+    },
+    "Swipe left on a conversation to bring it back later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe til venstre på en samtale for at få den tilbage senere."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

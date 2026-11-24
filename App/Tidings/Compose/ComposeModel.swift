@@ -1,5 +1,6 @@
-import AppKit
+import Foundation
 import MailEngine
+import SwiftUI
 import Observation
 
 /// One composer window's state. Autosaves to the outbox table as a draft.
@@ -161,7 +162,7 @@ final class ComposeModel {
         guard !signature.isEmpty else { return NSAttributedString() }
         var attrs = RichTextEditor.baseAttributes
         attrs[.tidingsSignature] = true
-        attrs[.foregroundColor] = NSColor.secondaryLabelColor
+        attrs[.foregroundColor] = PlatformColor.tidingsSecondaryLabel
         return NSAttributedString(string: "\n-- \n\(signature)", attributes: attrs)
     }
 }

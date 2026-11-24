@@ -157,6 +157,18 @@ public actor AccountSync {
         }
     }
 
+    /// A short-lived catch-up for when the app can't stay connected (iOS background refresh):
+    /// wakes due snoozes, sends due mail, pushes queued triage, then syncs. One connection, then done.
+    public func catchUp() async throws {
+        try store.resetInterruptedSends(accountID: account.id)
+        try await MailSession.open(endpoint: account.endpoint, password: password, profile: profile) { session in
+            try self.wakeDueSnoozes()
+            try await self.sendDue(session)
+            try await self.drain(session)
+            try await self.syncAll(session)
+        }
+    }
+
     /// One full pass over the interesting mailboxes, INBOX first.
     public func syncOnce() async throws {
         try await MailSession.open(endpoint: account.endpoint, password: password, profile: profile) { session in

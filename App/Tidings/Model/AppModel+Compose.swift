@@ -1,5 +1,6 @@
-import AppKit
+import Foundation
 import MailEngine
+import SwiftUI
 
 extension AppModel {
     // MARK: Identities
@@ -15,7 +16,7 @@ extension AppModel {
         guard let index = accounts.firstIndex(where: { $0.id == accountID }), trimmed.contains("@") else { return }
         var list = accounts[index].sendingIdentities
         guard !list.contains(where: { $0.address == trimmed }) else { return }
-        list.append(Identity(address: trimmed, name: list.first?.name ?? NSFullUserName(), signature: list.first?.signature ?? ""))
+        list.append(Identity(address: trimmed, name: list.first?.name ?? Platform.fullUserName, signature: list.first?.signature ?? ""))
         accounts[index].identities = list
         if !accounts[index].addresses.contains(trimmed) { accounts[index].addresses.append(trimmed) }
         persistAccounts()

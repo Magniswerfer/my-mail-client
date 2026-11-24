@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import MailEngine
 import Observation
@@ -83,6 +82,8 @@ final class AppModel {
     // Triage UI
     var toast: Toast?
     var isSnoozePickerShown = false
+    /// A conversation to snooze that isn't the selection (iPhone swipe); nil means the selection.
+    var snoozeTarget: String?
     var isCategoryPickerShown = false
     var isPaletteShown = false
     var sweepCandidate: SweepRequest?
@@ -152,7 +153,7 @@ final class AppModel {
         if !isDevServer {
             var changed = false
             for index in accounts.indices where accounts[index].identities == nil {
-                accounts[index].identities = [Identity(address: accounts[index].endpoint.username, name: NSFullUserName())]
+                accounts[index].identities = [Identity(address: accounts[index].endpoint.username, name: Platform.fullUserName)]
                 changed = true
             }
             if changed { AccountStorage.save(accounts) }
@@ -184,17 +185,7 @@ final class AppModel {
             }
         }
         for account in accounts where syncs[account.id] == nil {
-            let password: String
-            if account.id == "dev" {
-                password = "tidings-test"
-            } else if let stored = Keychain.password(account: account.endpoint.username) {
-                password = stored
-            } else {
-                lastError = String(localized: "No password in the Keychain for \(account.endpoint.username).")
-                continue
-            }
-            let sync = AccountSync(account: account, password: password, store: store, cache: cache,
-                                   profile: account.id == "dev" ? .iCloudSimulation : nil)
+            guard let sync = makeSync(for: account) else { continue }
             syncs[account.id] = sync
             // Subscribe before starting the loop, or a fast first sync can finish (and emit
             // everything, including "idle") before anyone is listening.
@@ -204,6 +195,61 @@ final class AppModel {
                 for await event in events { self?.handle(event, account: account) }
             })
         }
+    }
+
+    private func makeSync(for account: AccountConfig) -> AccountSync? {
+        let password: String
+        if account.id == "dev" {
+            password = "tidings-test"
+        } else if let stored = Keychain.password(account: account.endpoint.username) {
+            password = stored
+        } else {
+            lastError = String(localized: "No password in the Keychain for \(account.endpoint.username).")
+            return nil
+        }
+        return AccountSync(account: account, password: password, store: store, cache: cache,
+                           profile: account.id == "dev" ? .iCloudSimulation : nil)
+    }
+
+    // MARK: Foreground and background (iPhone)
+
+    /// Closes every connection. `start()` opens them again.
+    func stopSync() {
+        for task in tasks { task.cancel() }
+        tasks = []
+        syncs = [:]
+    }
+
+    /// Before iOS suspends the app: mail in its undo-send window goes now, queued Done/Pin/Snooze
+    /// reach the server, then the connections close (a suspended app's sockets die anyway).
+    /// Send-later mail stays queued for the next catch-up.
+    func finishWorkBeforeSuspending(timeout: Duration = .seconds(25)) async {
+        let soon = Date().addingTimeInterval(AccountSync.defaultUndoSendDelay + 5)
+        let due = ((try? store.outbox()) ?? []).filter { $0.state == .queued && ($0.sendAt ?? .distantPast) <= soon }
+        for item in due {
+            if let id = item.id { try? await syncs[item.accountID]?.retrySend(id: id) }
+        }
+        let dueIDs = Set(due.compactMap(\.id))
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            let outbox = (try? store.outbox()) ?? []
+            let sending = outbox.contains { item in item.id.map(dueIDs.contains) == true && (item.state == .queued || item.state == .sending) }
+            let pending = accounts.contains { !((try? store.pendingActions(accountID: $0.id)) ?? []).isEmpty }
+            if !sending && !pending { break }
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        stopSync()
+        reloadOutbox()
+    }
+
+    /// iOS background refresh: one catch-up per account on its own connection.
+    func backgroundCatchUp() async {
+        for account in accounts {
+            guard let sync = makeSync(for: account) else { continue }
+            try? await sync.catchUp()
+        }
+        reload()
+        reloadOutbox()
     }
 
     private func handle(_ event: AccountSync.Event, account: AccountConfig) {
@@ -256,7 +302,7 @@ final class AppModel {
         _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
         try Keychain.save(password: password, account: trimmed)
         let account = AccountConfig(displayName: trimmed, endpoint: endpoint, addresses: [trimmed],
-                                    identities: [Identity(address: trimmed, name: NSFullUserName())])
+                                    identities: [Identity(address: trimmed, name: Platform.fullUserName)])
         accounts.append(account)
         AccountStorage.save(accounts)
         start()

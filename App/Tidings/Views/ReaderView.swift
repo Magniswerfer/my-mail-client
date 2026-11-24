@@ -209,7 +209,7 @@ struct PrivacyBar: View {
 /// HTML mail in a locked-down web view: no JavaScript, links open in the browser, height follows
 /// content. Remote loads are blocked except images when allowed (SPEC §8); `cid:` parts are
 /// served from the message itself.
-struct MessageWebView: NSViewRepresentable {
+struct MessageWebView {
     let html: String
     var allowRemoteImages = false
     var inlineParts: [String: (data: Data, mimeType: String)] = [:]
@@ -217,14 +217,25 @@ struct MessageWebView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
 
-    func makeNSView(context: Context) -> WKWebView {
+    func makeWebView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = false
         config.websiteDataStore = .nonPersistent()
         config.setURLSchemeHandler(CIDSchemeHandler(parts: inlineParts), forURLScheme: "cid")
+        #if os(iOS)
+        config.dataDetectorTypes = [.link, .phoneNumber, .address, .calendarEvent]
+        #endif
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
+        #if os(macOS)
         view.setValue(false, forKey: "drawsBackground")
+        #else
+        view.isOpaque = false
+        view.backgroundColor = .clear
+        // The reader scrolls; the message grows to its full height inside it.
+        view.scrollView.isScrollEnabled = false
+        view.scrollView.bounces = false
+        #endif
         let page = Self.wrap(html, allowRemoteImages: allowRemoteImages)
         Coordinator.withRuleList(allowImages: allowRemoteImages) { list in
             if let list { view.configuration.userContentController.add(list) }
@@ -233,16 +244,11 @@ struct MessageWebView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: WKWebView, context: Context) {}
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: WKWebView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 600, height: height)
-    }
-
     static func wrap(_ html: String, allowRemoteImages: Bool) -> String {
         let images = allowRemoteImages ? "data: cid: https: http:" : "data: cid:"
         return """
         <!doctype html><html><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src \(images); style-src 'unsafe-inline'; font-src data:">
         <style>
           :root { color-scheme: light; }
@@ -299,7 +305,7 @@ struct MessageWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             if action.navigationType == .linkActivated, let url = action.request.url {
-                NSWorkspace.shared.open(url)
+                Platform.openExternally(url)
                 return .cancel
             }
             return action.request.url?.scheme == "about" || action.navigationType == .other ? .allow : .cancel
@@ -314,6 +320,24 @@ struct MessageWebView: NSViewRepresentable {
         }
     }
 }
+
+#if os(macOS)
+extension MessageWebView: NSViewRepresentable {
+    func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateNSView(_ view: WKWebView, context: Context) {}
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: WKWebView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 600, height: height)
+    }
+}
+#else
+extension MessageWebView: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateUIView(_ view: WKWebView, context: Context) {}
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: WKWebView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 375, height: height)
+    }
+}
+#endif
 
 /// "Primær · From a person ▾": why the conversation is here, and the place to correct it.
 struct CategoryLine: View {
@@ -375,7 +399,9 @@ struct CategoryPicker: View {
                 }
             }
             Toggle("Always for \(thread?.latest.senderDisplay ?? "this sender")", isOn: $alwaysForSender)
+                #if os(macOS)
                 .toggleStyle(.checkbox)
+                #endif
             Text(alwaysForSender
                  ? "Their existing and future mail moves too."
                  : "Tidings learns from this. Move the same sender twice and it becomes a rule.")
@@ -384,7 +410,7 @@ struct CategoryPicker: View {
             HStack { Spacer(); Button("Cancel") { model.isCategoryPickerShown = false }.keyboardShortcut(.cancelAction) }
         }
         .padding(20)
-        .frame(width: 340)
+        .macFrame(width: 340)
     }
 
     private func move(to category: MailCategory) {

@@ -1,0 +1,53 @@
+name: Build
+
+# Compiles both apps and runs the engine's unit tests on every push. Integration tests skip
+# themselves here (no local Dovecot/Mailpit), and nothing touches a real mail account.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine tests
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version && swift --version
+      - name: swift test
+        run: swift test --package-path MailEngine
+
+  apps:
+    name: ${{ matrix.name }}
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Mac app
+            scheme: Tidings
+            destination: platform=macOS
+          - name: iPhone app
+            scheme: TidingsMobile
+            destination: generic/platform=iOS Simulator
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - name: xcodebuild
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project App/Tidings.xcodeproj \
+            -scheme "${{ matrix.scheme }}" \
+            -destination "${{ matrix.destination }}" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            | tee build.log | grep -E "error:|warning: .*(Tidings|MailEngine)/|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Errors
+        if: failure()
+        run: grep -E "error:" build.log | sort -u | head -100

@@ -1,3 +1,4 @@
+#if os(macOS)
 import MailEngine
 import SwiftUI
 
@@ -261,3 +262,4 @@ struct RootView: View {
         return .handled
     }
 }
+#endif

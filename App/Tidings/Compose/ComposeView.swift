@@ -18,7 +18,7 @@ struct ComposeWindow: View {
                                        description: Text("It was sent or discarded in another window."))
             }
         }
-        .frame(minWidth: 560, minHeight: 420)
+        .macFrame(minWidth: 560, minHeight: 420)
         .onAppear { model = model ?? ComposeModel(draftID: draftID, app: app) }
         .onDisappear { model?.saveNow() }
     }
@@ -143,6 +143,15 @@ struct ComposeView: View {
     // MARK: Toolbar
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Close") {
+                model.saveNow()
+                close()
+            }
+            .help("Close and keep the draft")
+        }
+        #endif
         ToolbarItemGroup(placement: .primaryAction) {
             Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
@@ -189,7 +198,7 @@ struct ComposeView: View {
             }
         }
         .padding(20)
-        .frame(width: 360)
+        .macFrame(width: 360)
     }
 
     private func send(at date: Date?) async {
@@ -208,8 +217,38 @@ struct RecipientField: View {
     @State private var highlighted = 0
 
     var body: some View {
+        #if os(iOS)
+        VStack(alignment: .leading, spacing: 6) {
+            field
+            if !suggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(suggestions.enumerated()), id: \.offset) { _, address in
+                            Button { accept(address) } label: {
+                                Text(address.name ?? address.address).lineLimit(1)
+                            }
+                            .buttonStyle(.glass)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+            }
+        }
+        #else
+        field
+            .popover(isPresented: Binding(get: { !suggestions.isEmpty }, set: { if !$0 { suggestions = [] } }),
+                     attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) { suggestionList }
+        #endif
+    }
+
+    private var field: some View {
         TextField("", text: $text)
             .textFieldStyle(.plain)
+            #if os(iOS)
+            .keyboardType(.emailAddress)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            #endif
             .onChange(of: text) {
                 suggestions = app.suggestions(for: text)
                 highlighted = 0
@@ -231,26 +270,26 @@ struct RecipientField: View {
                 guard !suggestions.isEmpty else { return .ignored }
                 suggestions = []; return .handled
             }
-            .popover(isPresented: Binding(get: { !suggestions.isEmpty }, set: { if !$0 { suggestions = [] } }),
-                     attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(suggestions.enumerated()), id: \.offset) { index, address in
-                        Button { accept(address) } label: {
-                            VStack(alignment: .leading) {
-                                Text(address.name ?? address.address)
-                                if address.name != nil { Text(address.address).font(.caption).foregroundStyle(.secondary) }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(index == highlighted ? Color.accentColor.opacity(0.2) : .clear, in: .rect(cornerRadius: 6))
-                        }
-                        .buttonStyle(.plain)
+    }
+
+    private var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(suggestions.enumerated()), id: \.offset) { index, address in
+                Button { accept(address) } label: {
+                    VStack(alignment: .leading) {
+                        Text(address.name ?? address.address)
+                        if address.name != nil { Text(address.address).font(.caption).foregroundStyle(.secondary) }
                     }
-                    Text("Tab to choose").font(.caption2).foregroundStyle(.tertiary).padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(index == highlighted ? Color.accentColor.opacity(0.2) : .clear, in: .rect(cornerRadius: 6))
                 }
-                .padding(6)
-                .frame(width: 300)
+                .buttonStyle(.plain)
             }
+            Text("Tab to choose").font(.caption2).foregroundStyle(.tertiary).padding(.horizontal, 8)
+        }
+        .padding(6)
+        .frame(width: 300)
     }
 
     private func accept(_ address: MailAddress) {

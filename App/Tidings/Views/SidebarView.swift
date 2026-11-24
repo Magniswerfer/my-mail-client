@@ -3,10 +3,12 @@ import SwiftUI
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
+    /// Called on every pick, even of the current place (iPhone uses it to go to the list).
+    var didPick: (() -> Void)? = nil
 
     var body: some View {
         @Bindable var model = model
-        List(selection: Binding(get: { model.selection }, set: { if let s = $0 { model.selection = s } })) {
+        List(selection: Binding(get: { model.selection }, set: { if let s = $0 { model.selection = s; didPick?() } })) {
             Section {
                 // `.tag` must be the outermost modifier, or the row can't be selected.
                 Label("Inbox", systemImage: "tray")
