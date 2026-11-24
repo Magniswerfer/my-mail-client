@@ -63,8 +63,10 @@ extension AppModel {
         for category in MailCategory.allCases {
             list.append(AppCommand(id: "bundle-\(category.rawValue)", title: String(localized: "Go to \(category.title)"),
                                    symbol: category.symbol, keys: nil) { self.selection = .category(category) })
-            list.append(AppCommand(id: "move-\(category.rawValue)", title: String(localized: "Move Sender to \(category.title)"),
-                                   symbol: category.symbol, keys: "M", isEnabled: hasSelection) { self.moveSender(to: category) })
+            list.append(AppCommand(id: "move-\(category.rawValue)", title: String(localized: "Move to \(category.title)"),
+                                   symbol: category.symbol, keys: "M", isEnabled: hasSelection) { self.moveConversations(self.targetThreads, to: category) })
+            list.append(AppCommand(id: "moveSender-\(category.rawValue)", title: String(localized: "Always Put This Sender in \(category.title)"),
+                                   symbol: category.symbol, keys: nil, isEnabled: hasSelection) { self.moveSender(to: category) })
         }
         return list
     }
@@ -211,19 +213,36 @@ struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Label(toast.message, systemImage: toast.symbol)
-            if let box = toast.undo {
-                Button("Undo") { model.undoFromToast(box) }
-                    .buttonStyle(.borderless)
-                    .fontWeight(.semibold)
-            } else if let outboxID = toast.undoSend {
-                Button("Undo") { model.undoSend(outboxID) }
-                    .buttonStyle(.borderless)
-                    .fontWeight(.semibold)
+            Label {
+                Text(toast.message)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: toast.symbol)
             }
+            undoButton
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .glassEffect(.regular, in: .capsule)
+        .frame(maxWidth: 420)
+        // A tinted glass so the message stays legible over a busy list.
+        .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.75)), in: .rect(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .padding(.horizontal, 12)
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    @ViewBuilder private var undoButton: some View {
+        if let box = toast.undo {
+            Button("Undo") { model.undoFromToast(box) }
+                .buttonStyle(.borderless).fontWeight(.semibold)
+        } else if let outboxID = toast.undoSend {
+            Button("Undo") { model.undoSend(outboxID) }
+                .buttonStyle(.borderless).fontWeight(.semibold)
+        } else if let action = toast.undoAction {
+            Button("Undo") {
+                if let manager = model.undoManager, manager.canUndo { manager.undo() } else { action() }
+            }
+            .buttonStyle(.borderless).fontWeight(.semibold)
+        }
     }
 }

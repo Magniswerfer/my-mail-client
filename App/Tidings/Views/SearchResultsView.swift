@@ -100,17 +100,19 @@ struct SearchHitRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: hit.fromName ?? hit.fromAddress, tint: hit.category.tint, size: 28)
+            Avatar(name: hit.fromName ?? hit.fromAddress, size: 32)
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(hit.fromName ?? hit.fromAddress).font(.headline).lineLimit(1)
-                    Spacer()
-                    Text(MailDate.short(hit.date)).font(.caption).foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(hit.fromName ?? hit.fromAddress).font(.headline.weight(.regular)).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Image(systemName: hit.category.symbol).font(.caption).foregroundStyle(hit.category.tint)
+                        .accessibilityLabel(hit.category.title)
+                    Text(MailDate.short(hit.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 Text(hit.subject).font(.subheadline).lineLimit(1)
-                Text(hit.snippet).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(hit.snippet).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 }

@@ -9,6 +9,7 @@ struct ReaderView: View {
 
     var body: some View {
         if let threadID {
+            let _ = model.revision   // redraw after moves, flag changes and syncs
             let messages = model.messages(inThread: threadID)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -78,13 +79,15 @@ struct MessageCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: message.senderDisplay, tint: message.category.tint, size: 34)
+            Avatar(name: message.senderDisplay, size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                HStack {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(message.senderDisplay).font(.headline)
-                    Text(message.fromAddress).font(.caption).foregroundStyle(.secondary)
+                    if expanded {
+                        Text(message.fromAddress).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
                     Spacer()
-                    Text(MailDate.long(message.date)).font(.caption).foregroundStyle(.secondary)
+                    Text(MailDate.long(message.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 if expanded, let to = body_?.to, !to.isEmpty {
                     Text("To: \(to)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -308,54 +311,73 @@ struct CategoryLine: View {
 
     var body: some View {
         Menu {
-            Section("Always put mail from \(message.senderDisplay) in…") {
-                ForEach(MailCategory.allCases, id: \.self) { category in
-                    Button(category.title, systemImage: category.symbol) {
-                        if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
-                            model.moveSender(to: category, thread: thread)
-                        } else {
-                            model.moveSender(to: category)
-                        }
-                    }
-                    .disabled(category == message.category)
-                }
+            if let thread = model.threads.first(where: { $0.threadID == message.threadID }) ?? model.targetThreads.first {
+                MoveMenuContent(thread: thread)
             }
         } label: {
-            Label("\(message.category.title) · \(message.reasonText ?? "")", systemImage: message.category.symbol)
-                .font(.caption)
-                .foregroundStyle(message.category.tint)
+            HStack(spacing: 4) {
+                Image(systemName: message.category.symbol).accessibilityHidden(true)
+                Text(message.category.title).fontWeight(.medium)
+                Text("· \(message.reasonText ?? "")").foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Move to another category")
+            .font(.caption)
+            .foregroundStyle(message.category.tint)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
-        .help("Why this is here. Click to move this sender to another bundle (M).")
+        .help("Why it's here. Click to move it (M).")
     }
 }
 
-/// M: move the selected conversation's sender to a bundle (1–6).
+/// M: move the selected conversation to a category (1–6). "Always for this sender" is one tick away.
 struct CategoryPicker: View {
     @Environment(AppModel.self) private var model
+    @State private var alwaysForSender = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Always put mail from \(model.targetThreads.first?.latest.senderDisplay ?? "") in…").font(.headline)
-            ForEach(Array(MailCategory.allCases.enumerated()), id: \.element) { index, category in
-                Button { model.moveSender(to: category) } label: {
-                    HStack {
-                        Image(systemName: category.symbol).foregroundStyle(category.tint).frame(width: 22)
-                        Text(category.title)
-                        Spacer()
-                        Text("\(index + 1)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+        let thread = model.targetThreads.first
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Move to…").font(.headline)
+            VStack(spacing: 2) {
+                ForEach(Array(MailCategory.allCases.enumerated()), id: \.element) { index, category in
+                    Button { move(to: category) } label: {
+                        HStack {
+                            Image(systemName: category.symbol).foregroundStyle(category.tint).frame(width: 22)
+                            Text(category.title)
+                            if category == thread?.latest.category {
+                                Text("Current").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(index + 1)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
+                    .disabled(category == thread?.latest.category && !alwaysForSender)
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
             }
+            Toggle("Always for \(thread?.latest.senderDisplay ?? "this sender")", isOn: $alwaysForSender)
+                .toggleStyle(.checkbox)
+            Text(alwaysForSender
+                 ? "Their existing and future mail moves too."
+                 : "Tidings learns from this. Move the same sender twice and it becomes a rule.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack { Spacer(); Button("Cancel") { model.isCategoryPickerShown = false }.keyboardShortcut(.cancelAction) }
         }
         .padding(20)
         .frame(width: 340)
+    }
+
+    private func move(to category: MailCategory) {
+        if alwaysForSender { model.moveSender(to: category) } else { model.moveConversations(model.targetThreads, to: category) }
     }
 }
 

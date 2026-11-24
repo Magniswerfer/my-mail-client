@@ -322,7 +322,7 @@ extension MailStore {
                   let reason = (row["classificationReason"] as String?).flatMap(ClassificationReason.init(encoded:)) else { return nil }
             let weight: Float
             switch reason {
-            case .youMovedThisSender: weight = 3
+            case .youMovedThisSender, .youMovedThisConversation: weight = 3
             case .sentByYou: return nil   // my own mail says nothing about inbox categories
             default:
                 guard reason.confidence >= 0.85 else { return nil }

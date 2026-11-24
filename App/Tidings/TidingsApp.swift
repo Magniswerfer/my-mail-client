@@ -111,7 +111,7 @@ struct RootView: View {
         .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
         .searchFocused($searchFocused)
         .toolbar { toolbar }
-        .navigationTitle(model.currentMailboxTitle)
+        .navigationTitle(model.isSearching ? String(localized: "Search") : model.currentMailboxTitle)
         .overlay(alignment: .top) {
             if model.isPaletteShown {
                 ZStack(alignment: .top) {
@@ -145,6 +145,9 @@ struct RootView: View {
             AccountSetupView()
                 .interactiveDismissDisabled()
         }
+        .onChange(of: model.searchText) { _, text in
+            if text.isEmpty { searchFocused = false; streamFocused = true }
+        }
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in openWindow(id: "compose", value: id) }
@@ -153,30 +156,47 @@ struct RootView: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        // Over the stream: write, and filter.
+        ToolbarItemGroup(placement: .navigation) {
+            Button { model.composeNew() } label: { Label("New Message", systemImage: "square.and.pencil") }
+                .help("New Message (C or ⌘N)")
+            if model.selection == .inbox {
+                Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
+                    Label("Pinned Only", systemImage: model.pinnedOnly ? "pin.fill" : "pin")
+                }
+                .help(model.pinnedOnly ? "Showing pinned only (G P)" : "Show pinned only (G P)")
+            }
+        }
+        // Over the reader: answer, then triage.
         ToolbarItemGroup(placement: .primaryAction) {
+            let none = model.targetThreads.isEmpty
+            Button { model.compose(.reply) } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
+                .help("Reply (R)").disabled(none)
+            Button { model.compose(.replyAll) } label: { Label("Reply All", systemImage: "arrowshape.turn.up.left.2") }
+                .help("Reply All (A)").disabled(none)
+            Button { model.compose(.forward) } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
+                .help("Forward (F)").disabled(none)
+        }
+        ToolbarSpacer(.fixed)
+        ToolbarItemGroup(placement: .primaryAction) {
+            let none = model.targetThreads.isEmpty
             Button { model.perform(.done) } label: { Label("Done", systemImage: "checkmark") }
-                .help("Mark Done (E)")
-                .disabled(model.targetThreads.isEmpty)
+                .help("Mark Done (E)").disabled(none)
             Button { model.isSnoozePickerShown = true } label: { Label("Snooze", systemImage: "clock") }
-                .help("Snooze (B)")
-                .disabled(model.targetThreads.isEmpty)
+                .help("Snooze (B)").disabled(none)
             Button { model.togglePin() } label: {
                 Label("Pin", systemImage: model.targetThreads.first?.isPinned == true ? "pin.fill" : "pin")
             }
-            .help("Pin (P)")
-            .disabled(model.targetThreads.isEmpty)
-        }
-        ToolbarItemGroup(placement: .navigation) {
-            if model.selection == .inbox {
-                Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
-                    Label("Pinned only", systemImage: "pin.circle")
-                }
-                .help("Show only pinned (G P)")
-                Button { model.requestSweep() } label: { Label("Sweep", systemImage: "checkmark.rectangle.stack") }
-                    .help("Mark everything that isn't pinned done (⌘⇧E)")
+            .help("Pin (P)").disabled(none)
+            Menu {
+                if let thread = model.targetThreads.first { MoveMenuContent(thread: thread) }
+            } label: {
+                Label("Move to", systemImage: "tray.and.arrow.down")
             }
+            .menuIndicator(.hidden)
+            .help("Move to another category (M)")
+            .disabled(none)
         }
-        ToolbarItem(placement: .status) { SyncStatusView() }
     }
 
     /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
@@ -218,30 +238,5 @@ struct RootView: View {
         default: return .ignored
         }
         return .handled
-    }
-}
-
-struct SyncStatusView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if let error = model.lastError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.orange)
-                    .help(error)
-            }
-            if model.isRefining {
-                Label("Sorting with on-device AI…", systemImage: "sparkles")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .help("Sorting with on-device AI…")
-            }
-            Text(model.syncStatus.values.sorted().first ?? "")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
     }
 }

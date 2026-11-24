@@ -9,6 +9,8 @@ struct Toast: Identifiable, Equatable {
     var undo: ChangeBox? = nil
     /// Outbox id of a message in its undo-send window.
     var undoSend: Int64? = nil
+    /// Any other undoable change (category moves).
+    var undoAction: (@MainActor () -> Void)? = nil
 
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
 }
@@ -132,6 +134,9 @@ extension AppModel {
         isSnoozePickerShown = false
         perform(.snooze(until: date))
     }
+
+    /// Inbox conversations a sweep would mark done.
+    var sweepableCount: Int { selection == .inbox ? threads.filter { !$0.isPinned }.count : 0 }
 
     // MARK: Sweep
 

@@ -2210,6 +2210,316 @@
           }
         }
       }
+    },
+    "Categories": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategorier"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søgning"
+          }
+        }
+      }
+    },
+    "Move to": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til"
+          }
+        }
+      }
+    },
+    "Move": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt"
+          }
+        }
+      }
+    },
+    "This conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne samtale"
+          }
+        }
+      }
+    },
+    "Always for %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altid for %@"
+          }
+        }
+      }
+    },
+    "Moved to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttet til %@"
+          }
+        }
+      }
+    },
+    "%lld moved to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld flyttet til %2$@"
+          }
+        }
+      }
+    },
+    "Got it: mail from %@ goes to %@ from now on": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forstået: mail fra %1$@ lægges i %2$@ fremover"
+          }
+        }
+      }
+    },
+    "You moved this conversation to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du flyttede samtalen til %@"
+          }
+        }
+      }
+    },
+    "Move to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til %@"
+          }
+        }
+      }
+    },
+    "Always Put This Sender in %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læg altid denne afsender i %@"
+          }
+        }
+      }
+    },
+    "Move to…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til…"
+          }
+        }
+      }
+    },
+    "Their existing and future mail moves too.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deres nuværende og fremtidige mail flyttes også."
+          }
+        }
+      }
+    },
+    "Tidings learns from this. Move the same sender twice and it becomes a rule.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings lærer af det. Flytter du samme afsender to gange, bliver det en regel."
+          }
+        }
+      }
+    },
+    "Why it's here. Click to move it (M).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvorfor den er her. Klik for at flytte den (M)."
+          }
+        }
+      }
+    },
+    "Move to another category (M)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til en anden kategori (M)"
+          }
+        }
+      }
+    },
+    "Pinned Only": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun fastgjorte"
+          }
+        }
+      }
+    },
+    "Showing pinned only (G P)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viser kun fastgjorte (G P)"
+          }
+        }
+      }
+    },
+    "Show pinned only (G P)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis kun fastgjorte (G P)"
+          }
+        }
+      }
+    },
+    "New Message (C or ⌘N)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny besked (C eller ⌘N)"
+          }
+        }
+      }
+    },
+    "Reply (R)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar (R)"
+          }
+        }
+      }
+    },
+    "Reply All (A)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar alle (A)"
+          }
+        }
+      }
+    },
+    "Forward (F)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videresend (F)"
+          }
+        }
+      }
+    },
+    "Mark %lld Unpinned Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker %lld ikke-fastgjorte som færdige"
+          }
+        }
+      }
+    },
+    "Everything that isn't pinned goes to the Archive (⌘⇧E). You can undo it.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alt, der ikke er fastgjort, går til arkivet (⌘⇧E). Du kan fortryde."
+          }
+        }
+      }
+    },
+    "Inbox zero": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tom indbakke"
+          }
+        }
+      }
+    },
+    "Nothing left to deal with. New mail will show up here.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet tilbage at tage stilling til. Ny mail dukker op her."
+          }
+        }
+      }
+    },
+    "Nothing snoozed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet udsat"
+          }
+        }
+      }
+    },
+    "Press B on a conversation to bring it back later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tryk B på en samtale for at få den tilbage senere."
+          }
+        }
+      }
+    },
+    "Current": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nuværende"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

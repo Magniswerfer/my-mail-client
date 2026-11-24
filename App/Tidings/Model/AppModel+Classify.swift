@@ -7,6 +7,7 @@ extension ClassificationReason {
         switch self {
         case .sentByYou: String(localized: "You sent it")
         case .youMovedThisSender(let c): String(localized: "You moved this sender to \(c.title)")
+        case .youMovedThisConversation(let c): String(localized: "You moved this conversation to \(c.title)")
         case .socialNetwork(let domain): String(localized: "Notification from \(domain)")
         case .transactional: String(localized: "Automated message about an order, payment or booking")
         case .promotional: String(localized: "Bulk mail with a promotional subject")
@@ -36,43 +37,58 @@ extension AppModel {
         try? store.trustImages(from: senderOrDomain)
     }
 
-    /// "Mail from this sender belongs in X" — applies now and to future mail; undoable.
-    func moveSender(to category: MailCategory, thread: ThreadSummary? = nil) {
+    /// Moves conversations to a category: "this one" (teaches the classifier; two consistent
+    /// moves of a sender become a rule). Local and instant; undoable from the toast or ⌘Z.
+    func moveConversations(_ threads: [ThreadSummary], to category: MailCategory) {
         isCategoryPickerShown = false
-        guard let thread = thread ?? targetThreads.first, let sync = syncs[thread.latest.accountID] else { return }
-        let sender = thread.latest.fromAddress
-        let before = (try? store.db.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, category, classificationReason FROM message WHERE lower(fromAddress) = ?",
-                             arguments: [sender.lowercased()])
-        }) ?? []
-        let previous = before.map { (id: $0["id"] as Int64, category: MailCategory(rawValue: $0["category"]) ?? .primary,
-                                     reason: ($0["classificationReason"] as String?) ?? "") }
-        Task {
-            do {
-                try await sync.moveSender(of: [thread.threadID], to: category)
-                reload()
-                let name = thread.latest.senderDisplay
-                let box = ChangeBox()
-                undoManager?.registerUndo(withTarget: self) { model in
-                    MainActor.assumeIsolated { model.restoreCategories(previous, forgetting: sender) }
-                }
-                show(Toast(message: String(localized: "\(name) → \(category.title), now and in future"),
-                           symbol: category.symbol, undo: box))
-            } catch {
-                lastError = String(describing: error)
-            }
+        guard !threads.isEmpty,
+              let result = try? store.moveConversations(threads.map(\.threadID), to: category, ownAddresses: ownAddresses)
+        else { return }
+        let undo: @MainActor () -> Void = { [weak self] in
+            try? self?.store.restoreCategories(result.previous)
+            if let sender = result.promotedSender { try? self?.store.forgetSenderRule(sender) }
+            self?.toast = nil
+            self?.reload()
         }
+        registerCategoryUndo(undo)
+        reload()
+        let message: String
+        if let sender = result.promotedSender {
+            let name = threads.first(where: { $0.latest.fromAddress.lowercased() == sender })?.latest.senderDisplay ?? sender
+            message = String(localized: "Got it: mail from \(name) goes to \(category.title) from now on")
+        } else {
+            message = threads.count == 1 ? String(localized: "Moved to \(category.title)") : String(localized: "\(threads.count) moved to \(category.title)")
+        }
+        show(Toast(message: message, symbol: category.symbol, undoAction: undo))
     }
 
-    func restoreCategories(_ previous: [(id: Int64, category: MailCategory, reason: String)], forgetting sender: String) {
-        try? store.forgetSenderRule(sender)
-        for (category, group) in Dictionary(grouping: previous, by: \.category) {
-            for item in group {
-                try? store.setCategory(category, reason: ClassificationReason(encoded: item.reason) ?? .person, ids: [item.id])
-            }
+    /// "Mail from this sender belongs in X": now and for future mail; undoable.
+    func moveSender(to category: MailCategory, thread: ThreadSummary? = nil) {
+        isCategoryPickerShown = false
+        guard let thread = thread ?? targetThreads.first else { return }
+        let sender = thread.latest.fromAddress
+        let previous = (try? store.db.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, category, classificationReason FROM message WHERE lower(fromAddress) = ?",
+                             arguments: [sender.lowercased()])
+        })?.map { MailStore.CategorySnapshot(id: $0["id"], category: MailCategory(rawValue: $0["category"]) ?? .primary,
+                                            reason: $0["classificationReason"]) } ?? []
+        guard (try? store.remember(category: category, forSender: sender)) != nil else { return }
+        let undo: @MainActor () -> Void = { [weak self] in
+            try? self?.store.forgetSenderRule(sender)
+            try? self?.store.restoreCategories(previous)
+            self?.toast = nil
+            self?.reload()
         }
-        toast = nil
+        registerCategoryUndo(undo)
         reload()
+        show(Toast(message: String(localized: "\(thread.latest.senderDisplay) → \(category.title), now and in future"),
+                   symbol: category.symbol, undoAction: undo))
+    }
+
+    /// Registered synchronously (inside the click/key event) so AppKit's undo grouping sees it.
+    private func registerCategoryUndo(_ undo: @escaping @MainActor () -> Void) {
+        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
+        undoManager?.setActionName(String(localized: "Move"))
     }
 }
 

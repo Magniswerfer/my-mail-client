@@ -121,6 +121,7 @@ public final class MailStore: Sendable {
         registerPrivacyMigrations(&m)
         registerRiskMigrations(&m)
         registerEmbeddingMigrations(&m)
+        registerPreviewMigrations(&m)
         return m
     }
 
@@ -183,9 +184,40 @@ public final class MailStore: Sendable {
         try db.read { try StoredMessage.fetchCount($0) }
     }
 
+    /// The first words of what this message itself says. Quoted replies ("> …"), attribution
+    /// lines ("On … wrote:", "Den … skrev …:") and forwarded/original-message blocks are left out.
     static func makePreview(_ text: String) -> String {
-        let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return String(collapsed.prefix(160))
+        var kept: [Substring] = []
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix(">") { continue }
+            let lower = trimmed.lowercased()
+            if lower.hasPrefix("-----original message") || lower.hasPrefix("-----oprindelig")
+                || lower.hasPrefix("---------- forwarded") || lower.hasPrefix("---------- videresendt") { break }
+            let attribution = (lower.hasPrefix("on ") && lower.hasSuffix("wrote:"))
+                || (lower.hasPrefix("den ") && lower.contains("skrev") && lower.hasSuffix(":"))
+            if attribution { continue }
+            kept.append(line)
+        }
+        let collapsed = kept.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let result = collapsed.isEmpty ? text.split(whereSeparator: \.isWhitespace).joined(separator: " ") : collapsed
+        return String(result.prefix(160))
+    }
+
+    /// M4.5: recompute stored previews without quoted text.
+    static func registerPreviewMigrations(_ m: inout DatabaseMigrator) {
+        m.registerMigration("v9-clean-previews") { db in
+            var updates: [(Int64, String)] = []
+            let rows = try Row.fetchCursor(db, sql: "SELECT id, bodyText FROM message WHERE bodyText IS NOT NULL")
+            while let row = try rows.next() {
+                if let data: Data = row["bodyText"], let text = TextCompression.decompress(data) {
+                    updates.append((row["id"], makePreview(text)))
+                }
+            }
+            for (id, preview) in updates {
+                try db.execute(sql: "UPDATE message SET preview = ? WHERE id = ?", arguments: [preview, id])
+            }
+        }
     }
 }
 

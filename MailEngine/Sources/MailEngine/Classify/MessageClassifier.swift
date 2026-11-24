@@ -6,6 +6,7 @@ import GRDB
 public enum ClassificationReason: Sendable, Hashable {
     case sentByYou
     case youMovedThisSender(MailCategory)
+    case youMovedThisConversation(MailCategory)
     case socialNetwork(domain: String)
     case transactional
     case promotional
@@ -20,6 +21,7 @@ public enum ClassificationReason: Sendable, Hashable {
         switch self {
         case .sentByYou: "sentByYou"
         case .youMovedThisSender(let c): "senderRule|\(c.rawValue)"
+        case .youMovedThisConversation(let c): "moved|\(c.rawValue)"
         case .socialNetwork(let d): "social|\(d)"
         case .transactional: "transactional"
         case .promotional: "promotional"
@@ -38,6 +40,7 @@ public enum ClassificationReason: Sendable, Hashable {
         switch parts.first {
         case "sentByYou": self = .sentByYou
         case "senderRule": guard let c = MailCategory(rawValue: arg) else { return nil }; self = .youMovedThisSender(c)
+        case "moved": guard let c = MailCategory(rawValue: arg) else { return nil }; self = .youMovedThisConversation(c)
         case "social": self = .socialNetwork(domain: arg)
         case "transactional": self = .transactional
         case "promotional": self = .promotional
@@ -54,7 +57,7 @@ public enum ClassificationReason: Sendable, Hashable {
     /// How sure the deciding layer is; low values are candidates for the next layer.
     var confidence: Double {
         switch self {
-        case .sentByYou, .youMovedThisSender: 1
+        case .sentByYou, .youMovedThisSender, .youMovedThisConversation: 1
         case .socialNetwork, .mailingListUnsubscribe: 0.9
         case .transactional, .promotional: 0.85
         case .automatedSender, .mailingList: 0.75
@@ -116,6 +119,61 @@ extension MailStore {
         }
         try setCategory(category, reason: .youMovedThisSender(category), ids: ids)
         return ids
+    }
+
+    /// What a correction changed, so it can be undone exactly.
+    public struct CategorySnapshot: Sendable, Hashable {
+        public var id: Int64
+        public var category: MailCategory
+        public var reason: String?
+
+        public init(id: Int64, category: MailCategory, reason: String?) {
+            self.id = id
+            self.category = category
+            self.reason = reason
+        }
+    }
+
+    /// Moves conversations to a category ("only this one"). Teaches the classifier (a strong
+    /// training label) and, once the same sender has been moved to the same category in two
+    /// separate conversations, makes it a sender rule. Returns what changed (for undo) and the
+    /// sender that got a rule, if any.
+    public func moveConversations(_ threadIDs: [String], to category: MailCategory, ownAddresses: Set<String> = [],
+                                  promoteAfter: Int = 2) throws -> (previous: [CategorySnapshot], promotedSender: String?) {
+        guard !threadIDs.isEmpty else { return ([], nil) }
+        let placeholders = threadIDs.map { _ in "?" }.joined(separator: ",")
+        let rows = try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, category, classificationReason, lower(fromAddress) AS sender FROM message WHERE threadID IN (\(placeholders))",
+                             arguments: StatementArguments(threadIDs))
+        }
+        let previous = rows.map {
+            CategorySnapshot(id: $0["id"], category: MailCategory(rawValue: $0["category"]) ?? .primary, reason: $0["classificationReason"])
+        }
+        try setCategory(category, reason: .youMovedThisConversation(category), ids: previous.map(\.id))
+
+        var promoted: String?
+        let mine = Set(ownAddresses.map { $0.lowercased() })
+        let senders = Set(rows.compactMap { $0["sender"] as String? }).subtracting(mine)
+        let marker = ClassificationReason.youMovedThisConversation(category).encoded
+        for sender in senders where try senderRule(for: sender) == nil {
+            let moved = try db.read {
+                try Int.fetchOne($0, sql: "SELECT count(DISTINCT threadID) FROM message WHERE lower(fromAddress) = ? AND classificationReason = ?",
+                                 arguments: [sender, marker]) ?? 0
+            }
+            if moved >= promoteAfter {
+                try remember(category: category, forSender: sender)
+                promoted = sender
+            }
+        }
+        return (previous, promoted)
+    }
+
+    /// Puts categories back exactly as captured.
+    public func restoreCategories(_ snapshots: [CategorySnapshot]) throws {
+        for snapshot in snapshots {
+            let reason = snapshot.reason.flatMap(ClassificationReason.init(encoded:)) ?? .person
+            try setCategory(snapshot.category, reason: reason, ids: [snapshot.id])
+        }
     }
 
     public func forgetSenderRule(_ address: String) throws {

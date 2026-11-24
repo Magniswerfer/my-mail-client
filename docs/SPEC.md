@@ -65,7 +65,7 @@ Three layers, cheapest first:
 2. **Fast classifier** — on-device multilingual embeddings → small trainable head, retrained on corrections. ms per message.
 3. **Foundation Models** — only for low-confidence messages, Highlights extraction, NL rule conditions, thread summaries.
 
-- Corrections stick per sender (`senderRule`, layer 0). Every message shows "why it's here" (stable reason codes, localized in the app).
+- Corrections: move **this conversation** (default; a weight-3 training label) or **always for this sender** (`senderRule`, layer 0). Two consistent conversation moves for one sender become a rule automatically, with Undo. Every message shows "why it's here" (stable reason codes, localized in the app).
 - **M4 implementation:** layer 2 = NLContextualEmbedding (Latin script, one model for DA+EN, ~10 ms/message, 512-d stored as Float16) + on-device softmax regression trained on corrections (×3) and confident header decisions; layer 3 = Foundation Models. Conservative: moves into/out of Primary need layer 3 to agree (or ≥95% with no model). Runs in the background after each sync.
 - Mail is mixed Danish/English; system language is Danish. **M0 verified** Foundation Models is available and supports `da_DK` (6/6 samples correct, ~0.6 s each); Danish contextual embeddings are installed.
 
@@ -172,6 +172,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M2 · Triage** ✅ (verified on local server) | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
 | **M3 · Compose** ✅ (verified on local servers) | SMTP, outbox/undo send, identities, signatures — **daily driver** |
 | **M4 · Sorting** ✅ (verified on local servers) | AI categories, bundles + schedules, spam layers, remote-content protection |
+| **M4.5 · UI tightening** ✅ | Move a conversation (toolbar, right-click, drag to sidebar, M) that teaches the classifier and becomes a sender rule after two consistent moves; reply/forward/compose in the toolbar; status in the sidebar footer; sweep at the end of the list; neutral avatars, quieter bundles; previews without quoted text |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |

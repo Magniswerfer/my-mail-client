@@ -121,8 +121,13 @@ enum MailDate {
         return date.formatted(date: .numeric, time: .omitted)
     }
 
-    static func long(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .shortened)
+    /// "22. nov. 13.17" this year, "22. nov. 2025 13.17" otherwise.
+    static func long(_ date: Date, now: Date = Date()) -> String {
+        let calendar = Calendar.current
+        if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+            return date.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+        }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 }
 
@@ -132,16 +137,16 @@ extension StoredMessage {
     var isFlagged: Bool { flags.contains("\\Flagged") }
 }
 
-/// A monogram avatar tinted by category. (Contacts photos and BIMI logos arrive in M6.)
+/// A neutral monogram, like Contacts. Colour is reserved for categories and status.
+/// (Contacts photos and sender logos arrive in M6.)
 struct Avatar: View {
     let name: String
-    let tint: Color
     var size: CGFloat = 32
 
     var body: some View {
         let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
         Circle()
-            .fill(tint.gradient.opacity(0.85))
+            .fill(LinearGradient(colors: [Color(white: 0.66), Color(white: 0.52)], startPoint: .top, endPoint: .bottom))
             .frame(width: size, height: size)
             .overlay {
                 Text(initials.isEmpty ? "?" : initials)

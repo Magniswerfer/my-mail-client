@@ -11,9 +11,7 @@ struct StreamView: View {
             ForEach(model.streamItems) { item in
                 switch item {
                 case .thread(let thread):
-                    ThreadRow(thread: thread)
-                        .tag(thread.threadID)
-                        .contextMenu { ThreadActions(thread: thread) }
+                    row(thread)
                 case .bundle(let category, let members, let deliveredAt):
                     BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
                               deliveredAt: deliveredAt, waiting: model.waiting(category))
@@ -26,23 +24,86 @@ struct StreamView: View {
                             }
                         }
                     if model.expandedBundles.contains(category) {
-                        ForEach(members) { thread in
-                            ThreadRow(thread: thread, inBundle: true)
-                                .tag(thread.threadID)
-                                .contextMenu { ThreadActions(thread: thread) }
-                        }
+                        ForEach(members) { thread in row(thread, inBundle: true) }
                     }
                 }
+            }
+            if model.selection == .inbox, model.sweepableCount > 0 {
+                SweepFooter(count: model.sweepableCount)
+                    .selectionDisabled()
+                    .listRowSeparator(.hidden)
             }
         }
         .listStyle(.inset)
         .overlay {
-            if model.threads.isEmpty {
-                ContentUnavailableView {
-                    Label("Nothing here", systemImage: "tray")
-                } description: {
-                    Text(model.syncStatus.isEmpty ? "Add an account to start." : "Mail will appear as it syncs.")
-                }
+            if model.threads.isEmpty { EmptyStream() }
+        }
+    }
+
+    private func row(_ thread: ThreadSummary, inBundle: Bool = false) -> some View {
+        ThreadRow(thread: thread, inBundle: inBundle)
+            .tag(thread.threadID)
+            .contextMenu { ThreadActions(thread: thread) }
+            // Drag a conversation onto a category (or Archive) in the sidebar to move it.
+            .draggable(ThreadDrag(threadID: thread.threadID)) {
+                Label(thread.latest.subject, systemImage: "envelope")
+                    .padding(8)
+                    .glassEffect(.regular, in: .capsule)
+            }
+    }
+}
+
+/// What a dragged conversation carries.
+struct ThreadDrag: Codable, Transferable {
+    var threadID: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+    }
+}
+
+/// Inbox's "sweep" at the end of the list: where you arrive once you've read what matters.
+struct SweepFooter: View {
+    @Environment(AppModel.self) private var model
+    let count: Int
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Button {
+                model.requestSweep()
+            } label: {
+                Label("Mark \(count) Unpinned Done", systemImage: "checkmark.circle")
+            }
+            .buttonStyle(.glass)
+            .help("Everything that isn't pinned goes to the Archive (⌘⇧E). You can undo it.")
+            Spacer()
+        }
+        .padding(.vertical, 14)
+    }
+}
+
+struct EmptyStream: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        switch model.selection {
+        case .inbox where !model.syncStatus.isEmpty:
+            ContentUnavailableView {
+                Label("Inbox zero", systemImage: "checkmark.circle")
+            } description: {
+                Text("Nothing left to deal with. New mail will show up here.")
+            }
+        case .snoozed:
+            ContentUnavailableView {
+                Label("Nothing snoozed", systemImage: "clock")
+            } description: {
+                Text("Press B on a conversation to bring it back later.")
+            }
+        default:
+            ContentUnavailableView {
+                Label("Nothing here", systemImage: "tray")
+            } description: {
+                Text(model.syncStatus.isEmpty ? "Add an account to start." : "Mail will appear as it syncs.")
             }
         }
     }
@@ -54,33 +115,22 @@ struct ThreadRow: View {
 
     var body: some View {
         let m = thread.latest
+        let unread = thread.unreadCount > 0
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: m.senderDisplay, tint: m.category.tint, size: inBundle ? 26 : 32)
+            Avatar(name: senderLine, size: inBundle ? 26 : 32)
                 .padding(.leading, inBundle ? 18 : 0)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(senderLine)
-                        .font(.headline.weight(thread.unreadCount > 0 ? .semibold : .regular))
+                        .font(.headline.weight(unread ? .semibold : .regular))
                         .lineLimit(1)
                     if thread.messageCount > 1 {
                         Text("\(thread.messageCount)")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 4)
-                    if m.hasAttachments {
-                        Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)
-                            .accessibilityLabel("Has attachment")
-                    }
-                    if m.riskLevel > .none {
-                        Image(systemName: m.riskLevel == .danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(m.riskLevel == .danger ? .red : .orange)
-                            .accessibilityLabel(m.riskLevel == .danger ? "Looks like phishing" : "Be careful")
-                    }
-                    if thread.isPinned {
-                        Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange)
-                            .accessibilityLabel("Pinned")
-                    }
+                    Spacer(minLength: 6)
+                    statusIcons(m)
                     if let wake = thread.snoozedUntil {
                         Label(MailDate.short(wake), systemImage: "clock")
                             .font(.caption)
@@ -88,12 +138,12 @@ struct ThreadRow: View {
                             .accessibilityLabel("Snoozed until \(MailDate.long(wake))")
                     } else {
                         Text(MailDate.short(thread.arrivedAt))
-                            .font(.caption)
-                            .foregroundStyle(thread.unreadCount > 0 ? .primary : .secondary)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(unread ? .primary : .secondary)
                     }
                 }
                 Text(m.subject)
-                    .font(.subheadline.weight(thread.unreadCount > 0 ? .medium : .regular))
+                    .font(.subheadline.weight(unread ? .medium : .regular))
                     .lineLimit(1)
                 Text(m.preview)
                     .font(.subheadline)
@@ -103,11 +153,27 @@ struct ThreadRow: View {
         }
         .padding(.vertical, 4)
         .overlay(alignment: .leading) {
-            if thread.unreadCount > 0 {
+            if unread {
                 Circle().fill(Color.accentColor).frame(width: 7, height: 7)
                     .offset(x: inBundle ? 6 : -10)
                     .accessibilityLabel("Unread")
             }
+        }
+    }
+
+    @ViewBuilder private func statusIcons(_ m: StoredMessage) -> some View {
+        if m.riskLevel > .none {
+            Image(systemName: m.riskLevel == .danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(m.riskLevel == .danger ? .red : .orange)
+                .accessibilityLabel(m.riskLevel == .danger ? "Looks like phishing" : "Be careful")
+        }
+        if m.hasAttachments {
+            Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)
+                .accessibilityLabel("Has attachment")
+        }
+        if thread.isPinned {
+            Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange)
+                .accessibilityLabel("Pinned")
         }
     }
 
@@ -121,6 +187,8 @@ struct ThreadRow: View {
     }
 }
 
+/// A bundle in the stream. Its colour lives only in the symbol, so colour keeps meaning
+/// "category" and the mail itself stays the loudest thing on screen.
 struct BundleRow: View {
     let category: MailCategory
     let threads: [ThreadSummary]
@@ -130,22 +198,29 @@ struct BundleRow: View {
 
     var body: some View {
         let unread = threads.reduce(0) { $0 + $1.unreadCount }
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: category.symbol)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(category.tint.gradient, in: .circle)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(category.title)
                         .font(.headline.weight(unread > 0 ? .semibold : .regular))
                     if unread > 0 {
-                        Text("\(unread) new").font(.caption).foregroundStyle(category.tint)
+                        Text("\(unread) new")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(category.tint)
                     }
-                    Spacer()
+                    Spacer(minLength: 6)
                     Text(MailDate.short(deliveredAt ?? threads.first?.arrivedAt ?? .now))
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
                 Text(senders)
                     .font(.subheadline)
@@ -154,16 +229,11 @@ struct BundleRow: View {
                 if let waiting {
                     Label("\(waiting.count) more at \(waiting.next.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(expanded ? 90 : 0))
         }
-        .padding(.vertical, 6)
-        .background(category.tint.opacity(0.06), in: .rect(cornerRadius: 10))
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityHint(expanded ? "Collapse bundle" : "Expand bundle")
     }
@@ -178,23 +248,52 @@ struct BundleRow: View {
     }
 }
 
-/// Right-click actions for a conversation; same actions as the keys and the ⌘K palette.
+/// Right-click actions for a conversation; the same actions as the toolbar, keys and ⌘K.
 struct ThreadActions: View {
     @Environment(AppModel.self) private var model
     let thread: ThreadSummary
 
     var body: some View {
+        Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, thread: thread) }
+        Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, thread: thread) }
+        Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, thread: thread) }
+        Divider()
         Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
-        Button(thread.isPinned ? "Unpin" : "Pin", systemImage: "pin") { model.perform(thread.isPinned ? .unpin : .pin, on: [thread]) }
         Button("Snooze…", systemImage: "clock") {
             model.selectedThreadID = thread.threadID
             model.isSnoozePickerShown = true
         }
+        Button(thread.isPinned ? "Unpin" : "Pin", systemImage: "pin") { model.perform(thread.isPinned ? .unpin : .pin, on: [thread]) }
         Button(thread.unreadCount > 0 ? "Mark as Read" : "Mark as Unread", systemImage: "envelope.open") {
             model.perform(thread.unreadCount > 0 ? .markRead : .markUnread, on: [thread])
         }
+        Menu("Move to", systemImage: "tray.and.arrow.down") { MoveMenuContent(thread: thread) }
         Divider()
-        Button("Move to Trash", systemImage: "trash") { model.perform(.trash, on: [thread]) }
         Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk, on: [thread]) }
+        Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash, on: [thread]) }
+    }
+}
+
+/// "Move to": this conversation (the default, and it teaches the classifier) or always for the sender.
+struct MoveMenuContent: View {
+    @Environment(AppModel.self) private var model
+    let thread: ThreadSummary
+
+    var body: some View {
+        Section("This conversation") {
+            ForEach(MailCategory.allCases, id: \.self) { category in
+                Button(category.title, systemImage: category.symbol) {
+                    model.moveConversations([thread], to: category)
+                }
+                .disabled(category == thread.latest.category)
+            }
+        }
+        Section("Always for \(thread.latest.senderDisplay)") {
+            ForEach(MailCategory.allCases, id: \.self) { category in
+                Button(category.title, systemImage: category.symbol) {
+                    model.moveSender(to: category, thread: thread)
+                }
+            }
+        }
     }
 }
