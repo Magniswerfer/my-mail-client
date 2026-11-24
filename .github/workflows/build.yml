@@ -16,7 +16,7 @@ jobs:
     name: Engine tests
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: xcodebuild -version && swift --version
       - name: swift test
         run: |
@@ -42,7 +42,7 @@ jobs:
             scheme: TidingsMobile
             destination: generic/platform=iOS Simulator
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: xcodebuild -version
       - name: xcodebuild
         run: |

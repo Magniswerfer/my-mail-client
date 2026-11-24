@@ -209,7 +209,7 @@ struct PrivacyBar: View {
 /// HTML mail in a locked-down web view: no JavaScript, links open in the browser, height follows
 /// content. Remote loads are blocked except images when allowed (SPEC §8); `cid:` parts are
 /// served from the message itself.
-struct MessageWebView {
+@MainActor struct MessageWebView {
     let html: String
     var allowRemoteImages = false
     var inlineParts: [String: (data: Data, mimeType: String)] = [:]
