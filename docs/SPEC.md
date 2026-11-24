@@ -87,6 +87,14 @@ Flights/travel, packages, receipts/invoices, calendar events/invites, OTP/2FA co
 - **Share Availability** (⌥⌘A in the composer): free slots in working hours (Settings → Assistant) over the next five working days from your calendar, pick which, insert as text with your time zone.
 - **Contact sidebar** (⌃⌘I, toolbar, or tap an avatar; a sheet on iPhone): mail both ways, since when, last contact, typical reply time, links and phone numbers from their signature, recent conversations, colleagues at the same organisation. Built only from your own mail; nothing is looked up online.
 
+### Flow (M4.8)
+- **Send and Done** (default on, Settings → Assistant): sending a reply marks the conversation done; ⌥⌘↩ sends the other way; one Undo reverses both.
+- **Pre-send check:** "attached/vedhæftet/anbei…" with no attachment, or a dropped participant you name → Attach / Add / Send Anyway.
+- **Dark message bodies:** mail without its own background colours is recoloured in dark mode; designed mail keeps its colours on a light card; "Original Colours" per message.
+- **Reply Later** (L): keyword `$TidingsReplyLater` on the newest message (syncs via IMAP). Gathered in one row at the top of the Inbox; **Answer Now** (⌘⇧L) walks the pile with the conversation above and the reply below; Skip / Done Without Replying; replying clears it.
+- **Links and tasks:** `tidings://message/<Message-ID>`; Copy Link, Add to Reminders (due presets, link back), Add to Things (if installed); Shortcuts actions Get Open Message, Open Message, Add Open Message to Reminders.
+- **Keyboard shortcuts sheet** on ? and ⌘/.
+
 ### Writing assistance
 System Writing Tools in the composer, one-line thread summaries, "Summarize" for long threads, 2–3 smart-reply chips, "extract questions". No full drafting (plugins/MCP can add a bigger model later).
 
@@ -190,6 +198,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4.5 · UI tightening** ✅ | Move a conversation (toolbar, right-click, drag to sidebar, M) that teaches the classifier and becomes a sender rule after two consistent moves; reply/forward/compose in the toolbar; status in the sidebar footer; sweep at the end of the list; neutral avatars, quieter bundles; previews without quoted text |
 | **M4.6 · Invites** ✅ (engine tested on Linux; app not yet built) | Recognise invites/updates/cancellations/replies, invite card, RSVP by iTIP reply, calendar add/update/remove, clashes, threading by event UID |
 | **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
+| **M4.8 · Flow** ✅ (CI-built; engine tested) | Send and Done, pre-send check, dark message bodies, Reply Later + Answer Now, message links + Reminders/Things/Shortcuts, shortcuts sheet |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
