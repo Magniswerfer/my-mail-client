@@ -37,6 +37,23 @@ enum Platform {
         #endif
     }
 
+    /// Whether some app handles this URL (e.g. Things). iOS lists the schemes in Info.plist.
+    @MainActor static func canOpen(_ url: URL) -> Bool {
+        #if os(macOS)
+        NSWorkspace.shared.urlForApplication(toOpen: url) != nil
+        #else
+        UIApplication.shared.canOpenURL(url)
+        #endif
+    }
+
+    static var remindersSettingsHint: String {
+        #if os(macOS)
+        String(localized: "Allow Reminders access in System Settings › Privacy & Security › Reminders.")
+        #else
+        String(localized: "Allow Reminders access in Settings › Apps › Tidings › Reminders.")
+        #endif
+    }
+
     @MainActor static func copy(_ string: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()

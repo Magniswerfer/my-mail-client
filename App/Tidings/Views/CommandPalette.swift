@@ -59,6 +59,23 @@ extension AppModel {
         ]
         let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         list += [
+            AppCommand(id: "replyLater", title: thread?.isReplyLater == true ? String(localized: "Remove from Reply Later") : String(localized: "Reply Later"),
+                       symbol: "arrowshape.turn.up.left.circle", keys: "L", isEnabled: hasSelection) { self.toggleReplyLater() },
+            AppCommand(id: "replySession", title: String(localized: "Answer Reply Later Pile"), symbol: "arrowshape.turn.up.left.2.circle",
+                       keys: "⌘⇧L", isEnabled: !replyLaterThreads.isEmpty) { self.startReplySession() },
+            AppCommand(id: "addReminder", title: String(localized: "Add to Reminders"), symbol: "checklist", keys: "⌃⌘R",
+                       isEnabled: hasSelection) { self.addToReminders() },
+            AppCommand(id: "copyLink", title: String(localized: "Copy Link to Message"), symbol: "link", keys: nil,
+                       isEnabled: hasSelection) { self.copyLink() },
+            AppCommand(id: "shortcuts", title: String(localized: "Keyboard Shortcuts"), symbol: "keyboard", keys: "?") {
+                self.isShortcutsShown = true
+            },
+        ]
+        if canAddToThings {
+            list.append(AppCommand(id: "addThings", title: String(localized: "Add to Things"), symbol: "checkmark.square",
+                                   keys: nil, isEnabled: hasSelection) { self.addToThings() })
+        }
+        list += [
             AppCommand(id: "introReply", title: String(localized: "Reply to Introduction (Introducer to Bcc)"),
                        symbol: "person.2.wave.2", keys: "⌘⇧I", isEnabled: hasSelection) { self.replyToIntroduction() },
             AppCommand(id: "contact", title: isContactPanelShown ? String(localized: "Hide Contact Info") : String(localized: "Show Contact Info"),

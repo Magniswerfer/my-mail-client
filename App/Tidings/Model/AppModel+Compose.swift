@@ -59,16 +59,23 @@ extension AppModel {
     func compose(_ kind: ComposeKind, thread: ThreadSummary? = nil) {
         guard let thread = thread ?? targetThreads.first,
               let account = accounts.first(where: { $0.id == thread.latest.accountID }) else { return }
-        let original = messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
         Task {
-            do {
-                let raw = try await rawMessage(original)
-                let parsed = MIMEParser.parse(raw)
-                let draft = Self.draft(kind, replyingTo: parsed, raw: raw, account: account)
-                openDraft(draft.message, body: draft.body, accountID: account.id, kind: kind, originalLocalID: original.id)
-            } catch {
-                lastError = String(localized: "Couldn't open the original message: \(String(describing: error))")
-            }
+            if let id = await prepareDraft(kind, thread: thread, account: account) { openComposeWindow?(id) }
+        }
+    }
+
+    /// Builds and stores a reply/forward draft for a conversation without opening it.
+    func prepareDraft(_ kind: ComposeKind, thread: ThreadSummary, account: AccountConfig? = nil) async -> Int64? {
+        guard let account = account ?? accounts.first(where: { $0.id == thread.latest.accountID }) else { return nil }
+        let original = messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+        do {
+            let raw = try await rawMessage(original)
+            let parsed = MIMEParser.parse(raw)
+            let draft = Self.draft(kind, replyingTo: parsed, raw: raw, account: account)
+            return saveDraft(draft.message, body: draft.body, accountID: account.id, kind: kind, originalLocalID: original.id)
+        } catch {
+            lastError = String(localized: "Couldn't open the original message: \(String(describing: error))")
+            return nil
         }
     }
 
@@ -187,12 +194,38 @@ extension AppModel {
     // MARK: Sending
 
     func send(_ message: OutgoingMessage, accountID: String, sendAt: Date?, kind: ComposeKind,
-              originalLocalID: Int64?, draftID: Int64) async throws {
+              originalLocalID: Int64?, draftID: Int64, markDone: Bool = false) async throws {
         guard let sync = syncs[accountID] else { throw MailSessionError.commandFailed(command: "send", detail: "account is offline") }
         let item = try await sync.queue(message, sendAt: sendAt, kind: kind, originalLocalID: originalLocalID, replacingDraft: draftID)
         reloadOutbox()
+
+        // Answering takes the conversation off the Reply Later pile, and (Send and Done) out of the Inbox.
+        var boxes: [ChangeBox] = []
+        var markedDone = false
+        if kind == .reply || kind == .replyAll, let originalLocalID,
+           let original = try? store.message(id: originalLocalID), let threadID = original.threadID {
+            if messages(inThread: threadID).contains(where: { $0.flags.contains(replyLaterKeyword) }) {
+                boxes.append(performQuietly(.clearReplyLater, threadID: threadID, accountID: accountID))
+            }
+            if markDone, messages(inThread: threadID).contains(where: { $0.mailbox == "INBOX" }) {
+                boxes.append(performQuietly(.done, threadID: threadID, accountID: accountID))
+                markedDone = true
+            }
+        }
+
         if let id = item.id, sendAt == nil {
-            show(Toast(message: String(localized: "Sending…"), symbol: "paperplane", undoSend: id))
+            let allBoxes = boxes
+            if markedDone {
+                let undo: @MainActor () -> Void = { [weak self] in
+                    self?.undoSend(id)
+                    allBoxes.forEach { self?.undo(box: $0) }
+                }
+                undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
+                undoManager?.setActionName(String(localized: "Send and Done"))
+                show(Toast(message: String(localized: "Sending… and marked done"), symbol: "paperplane", undoAction: undo))
+            } else {
+                show(Toast(message: String(localized: "Sending…"), symbol: "paperplane", undoSend: id))
+            }
         } else if let sendAt {
             show(Toast(message: String(localized: "Will send \(sendAt.formatted(.dateTime.weekday(.wide).hour().minute()))"),
                        symbol: "clock", undoSend: item.id))

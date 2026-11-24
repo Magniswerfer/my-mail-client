@@ -352,6 +352,7 @@ struct AssistantSettings: View {
     @AppStorage(AssistSettings.followUpDaysKey) private var followUpDays = 3
     @AppStorage(AssistSettings.workdayStartKey) private var workdayStart = 9
     @AppStorage(AssistSettings.workdayEndKey) private var workdayEnd = 17
+    @AppStorage(AssistSettings.sendAndDoneKey) private var sendAndDone = true
 
     var body: some View {
         Form {
@@ -362,6 +363,14 @@ struct AssistantSettings: View {
                 }
             } footer: {
                 Text("Everything here runs on this device. Without Apple Intelligence, summaries are off and follow-ups use a short template.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Mark the conversation done when I send a reply", isOn: $sendAndDone)
+            } header: {
+                Text("Sending")
+            } footer: {
+                Text("⌘↩ sends and marks done; ⌥⌘↩ sends and keeps it in the Inbox. Undo brings both back.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Summaries") {

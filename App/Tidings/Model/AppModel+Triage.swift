@@ -79,9 +79,10 @@ extension AppModel {
 
     // MARK: Performing
 
-    func perform(_ kind: TriageKind, on threads: [ThreadSummary]? = nil, toast showToast: Bool = true) {
+    @discardableResult
+    func perform(_ kind: TriageKind, on threads: [ThreadSummary]? = nil, toast showToast: Bool = true) -> ChangeBox? {
         let targets = threads ?? targetThreads
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty else { return nil }
         let nextSelection = neighbour(after: targets.map(\.threadID))
         let box = ChangeBox()
         if showToast {
@@ -115,6 +116,30 @@ extension AppModel {
             pendingRemovals.subtract(ids)
             reload()
         }
+        return box
+    }
+
+    /// Like `perform`, for a conversation that may not be in the list on screen (e.g. replying
+    /// from search). Quiet: no toast, no undo registration; the caller handles both.
+    @discardableResult
+    func performQuietly(_ kind: TriageKind, threadID: String, accountID: String, from mailbox: String = "INBOX") -> ChangeBox {
+        if let loaded = threads.first(where: { $0.threadID == threadID }), mailbox == sourceMailbox {
+            return perform(kind, on: [loaded], toast: false) ?? ChangeBox()
+        }
+        let box = ChangeBox()
+        Task {
+            if let change = try? await syncs[accountID]?.perform(kind, threadIDs: [threadID], from: mailbox) {
+                box.changes.append(change)
+            }
+            if box.undone { await undo(box) }
+            reload()
+        }
+        return box
+    }
+
+    func toggleReplyLater() {
+        guard let thread = targetThreads.first else { return }
+        perform(thread.isReplyLater ? .clearReplyLater : .replyLater)
     }
 
     /// The conversation to select after the current one leaves the list (next, else previous).
@@ -237,6 +262,8 @@ extension TriageKind {
     var removesFromView: Bool {
         switch self {
         case .done, .trash, .junk, .moveToInbox, .snooze, .unsnooze: true
+        // Leaves the stream for the Reply Later row at the top.
+        case .replyLater: true
         default: false
         }
     }
@@ -253,6 +280,8 @@ extension TriageKind {
         case .unpin: "pin.slash"
         case .markRead: "envelope.open"
         case .markUnread: "envelope.badge"
+        case .replyLater: "arrowshape.turn.up.left.circle"
+        case .clearReplyLater: "checkmark.circle"
         }
     }
 
@@ -270,6 +299,8 @@ extension TriageKind {
         case .unpin: String(localized: "Unpinned")
         case .markRead: String(localized: "Marked read")
         case .markUnread: String(localized: "Marked unread")
+        case .replyLater: count == 1 ? String(localized: "Set aside to reply later") : String(localized: "\(count) set aside to reply later")
+        case .clearReplyLater: String(localized: "Removed from Reply Later")
         }
     }
 }

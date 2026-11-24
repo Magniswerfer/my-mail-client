@@ -48,6 +48,14 @@ struct TidingsApp: App {
                 Button("Reply to Introduction") { model.replyToIntroduction() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                 Divider()
+                Button("Reply Later") { model.toggleReplyLater() }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                Button("Answer Reply Later Pile…") { model.startReplySession() }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                Button("Add to Reminders") { model.addToReminders() }
+                    .keyboardShortcut("r", modifiers: [.command, .control])
+                Button("Copy Link to Message") { model.copyLink() }
+                Divider()
                 Button("Mark Done") { model.perform(.done) }
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("Pin / Unpin") { model.togglePin() }
@@ -76,6 +84,10 @@ struct TidingsApp: App {
                     model.toggleContactPanel()
                 }
                     .keyboardShortcut("i", modifiers: [.command, .control])
+            }
+            CommandGroup(after: .help) {
+                Button("Keyboard Shortcuts") { model.isShortcutsShown = true }
+                    .keyboardShortcut("/", modifiers: .command)
             }
             CommandMenu("Mailbox") {
                 Button("Check for New Mail") { model.checkForNewMail() }
@@ -165,6 +177,11 @@ struct RootView: View {
             return .handled
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
+        .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(item: $model.replySession) { session in
+            ReplySessionView(session: session).environment(model)
+        }
+        .onOpenURL { url in model.open(url: url) }
         .sheet(isPresented: $model.isCategoryPickerShown) { CategoryPicker() }
         .confirmationDialog(model.sweepCandidate?.title ?? "", isPresented: Binding(
             get: { model.sweepCandidate != nil }, set: { if !$0 { model.sweepCandidate = nil } }
@@ -275,6 +292,8 @@ struct RootView: View {
         case "r": model.compose(.reply)
         case "a": model.compose(.replyAll)
         case "f": model.compose(.forward)
+        case "l": model.toggleReplyLater()
+        case "?": model.isShortcutsShown = true
         default: return .ignored
         }
         return .handled

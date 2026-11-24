@@ -13,6 +13,9 @@ struct StreamView: View {
                 switch item {
                 case .thread(let thread):
                     row(thread)
+                case .replyLater(let pile):
+                    ReplyLaterRow(threads: pile)
+                        .selectionDisabled()
                 case .bundle(let category, let members, let deliveredAt):
                     BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
                               deliveredAt: deliveredAt, waiting: model.waiting(category))
@@ -69,6 +72,10 @@ struct StreamView: View {
                     Label(thread.isPinned ? "Unpin" : "Pin", systemImage: thread.isPinned ? "pin.slash" : "pin")
                 }
                 .tint(.orange)
+                Button { model.perform(thread.isReplyLater ? .clearReplyLater : .replyLater, on: [thread]) } label: {
+                    Label("Reply Later", systemImage: "arrowshape.turn.up.left.circle")
+                }
+                .tint(.accentColor)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button { model.perform(.done, on: [thread]) } label: { Label("Done", systemImage: "checkmark") }
@@ -295,6 +302,19 @@ struct ThreadActions: View {
         Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, thread: thread) }
         Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, thread: thread) }
         Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction(thread: thread) }
+        Button(thread.isReplyLater ? "Remove from Reply Later" : "Reply Later", systemImage: "arrowshape.turn.up.left.circle") {
+            model.perform(thread.isReplyLater ? .clearReplyLater : .replyLater, on: [thread])
+        }
+        Divider()
+        Menu("Add to Reminders", systemImage: "checklist") {
+            ForEach(AppModel.ReminderDue.allCases, id: \.self) { due in
+                Button(due.title) { model.addToReminders(thread: thread, due: due) }
+            }
+        }
+        if model.canAddToThings {
+            Button("Add to Things", systemImage: "checkmark.square") { model.addToThings(thread: thread) }
+        }
+        Button("Copy Link to Message", systemImage: "link") { model.copyLink(thread: thread) }
         Divider()
         Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
         Button("Snooze…", systemImage: "clock") {

@@ -3910,6 +3910,666 @@
           }
         }
       }
+    },
+    "Set aside to reply later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagt til side til senere svar"
+          }
+        }
+      }
+    },
+    "%lld set aside to reply later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld lagt til side til senere svar"
+          }
+        }
+      }
+    },
+    "Removed from Reply Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet fra Svar senere"
+          }
+        }
+      }
+    },
+    "Send and Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send og færdig"
+          }
+        }
+      }
+    },
+    "Sending… and marked done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sender… og markeret færdig"
+          }
+        }
+      }
+    },
+    "Send anyway?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send alligevel?"
+          }
+        }
+      }
+    },
+    "Attach Files…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæft filer…"
+          }
+        }
+      }
+    },
+    "Add %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj %@"
+          }
+        }
+      }
+    },
+    "Send Anyway": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send alligevel"
+          }
+        }
+      }
+    },
+    "Send and Keep in Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send og behold i indbakken"
+          }
+        }
+      }
+    },
+    "Send and Mark Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send og markér færdig"
+          }
+        }
+      }
+    },
+    "Send and mark the conversation done (⌘↩)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send og markér samtalen færdig (⌘↩)"
+          }
+        }
+      }
+    },
+    "You wrote “%@”, but nothing is attached.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du skrev “%@”, men intet er vedhæftet."
+          }
+        }
+      }
+    },
+    "You mention %@, but they aren't on this message.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du nævner %@, men vedkommende er ikke modtager."
+          }
+        }
+      }
+    },
+    "Match Dark Mode": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilpas mørk tilstand"
+          }
+        }
+      }
+    },
+    "Original Colours": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originale farver"
+          }
+        }
+      }
+    },
+    "Nothing set aside. Press L on a conversation to reply to it later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet lagt til side. Tryk L på en samtale for at svare senere."
+          }
+        }
+      }
+    },
+    "Reply Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar senere"
+          }
+        }
+      }
+    },
+    "Answer Now": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar nu"
+          }
+        }
+      }
+    },
+    "Answer them one after another (⌘⇧L)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar dem én efter én (⌘⇧L)"
+          }
+        }
+      }
+    },
+    "All answered": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle besvaret"
+          }
+        }
+      }
+    },
+    "%lld of %lld answered. The rest stay in Reply Later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld af %2$lld besvaret. Resten bliver i Svar senere."
+          }
+        }
+      }
+    },
+    "Reply %lld of %lld": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar %1$lld af %2$lld"
+          }
+        }
+      }
+    },
+    "Skip": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spring over"
+          }
+        }
+      }
+    },
+    "Leave it in Reply Later (⌥⌘→)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lad den blive i Svar senere (⌥⌘→)"
+          }
+        }
+      }
+    },
+    "Done Without Replying": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Færdig uden svar"
+          }
+        }
+      }
+    },
+    "Take it off the pile and mark it done (⌥⌘E)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern den fra bunken og markér den færdig (⌥⌘E)"
+          }
+        }
+      }
+    },
+    "Couldn't start a reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke starte et svar"
+          }
+        }
+      }
+    },
+    "The message may not be downloaded yet. Skip it or try again later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskeden er måske ikke hentet endnu. Spring den over eller prøv igen senere."
+          }
+        }
+      }
+    },
+    "Move around": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigation"
+          }
+        }
+      }
+    },
+    "Command Palette": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommandopalet"
+          }
+        }
+      }
+    },
+    "Keyboard Shortcuts": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tastaturgenveje"
+          }
+        }
+      }
+    },
+    "Triage": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortering"
+          }
+        }
+      }
+    },
+    "Move to Category…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til kategori…"
+          }
+        }
+      }
+    },
+    "Write": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv"
+          }
+        }
+      }
+    },
+    "Send and Mark Done (replies)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send og markér færdig (svar)"
+          }
+        }
+      }
+    },
+    "Attach Files": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæft filer"
+          }
+        }
+      }
+    },
+    "Other": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andet"
+          }
+        }
+      }
+    },
+    "Single keys work when you're not typing. Every command is also in ⌘K.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enkelttaster virker, når du ikke skriver. Alle kommandoer findes også i ⌘K."
+          }
+        }
+      }
+    },
+    "That message isn't on this device (yet).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskeden er ikke på denne enhed (endnu)."
+          }
+        }
+      }
+    },
+    "Link to the message copied": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link til beskeden kopieret"
+          }
+        }
+      }
+    },
+    "No Date": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen dato"
+          }
+        }
+      }
+    },
+    "This Afternoon": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I eftermiddag"
+          }
+        }
+      }
+    },
+    "Tomorrow Morning": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I morgen tidlig"
+          }
+        }
+      }
+    },
+    "Next Week": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Næste uge"
+          }
+        }
+      }
+    },
+    "From %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra %@"
+          }
+        }
+      }
+    },
+    "Added to Reminders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føjet til Påmindelser"
+          }
+        }
+      }
+    },
+    "Added to Reminders for %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føjet til Påmindelser til %@"
+          }
+        }
+      }
+    },
+    "Couldn't add the reminder: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke oprette påmindelsen: %@"
+          }
+        }
+      }
+    },
+    "Allow Reminders access in System Settings › Privacy & Security › Reminders.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv adgang til Påmindelser i Systemindstillinger › Anonymitet og sikkerhed › Påmindelser."
+          }
+        }
+      }
+    },
+    "Allow Reminders access in Settings › Apps › Tidings › Reminders.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv adgang til Påmindelser i Indstillinger › Apps › Tidings › Påmindelser."
+          }
+        }
+      }
+    },
+    "Follow up on email": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Følg op på mail"
+          }
+        }
+      }
+    },
+    "Remove from Reply Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern fra Svar senere"
+          }
+        }
+      }
+    },
+    "Answer Reply Later Pile": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar Svar senere-bunken"
+          }
+        }
+      }
+    },
+    "Answer Reply Later Pile…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar Svar senere-bunken…"
+          }
+        }
+      }
+    },
+    "Add to Reminders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føj til Påmindelser"
+          }
+        }
+      }
+    },
+    "Copy Link to Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér link til beskeden"
+          }
+        }
+      }
+    },
+    "Add to Things": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føj til Things"
+          }
+        }
+      }
+    },
+    "Mark the conversation done when I send a reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markér samtalen færdig, når jeg sender et svar"
+          }
+        }
+      }
+    },
+    "Sending": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendelse"
+          }
+        }
+      }
+    },
+    "⌘↩ sends and marks done; ⌥⌘↩ sends and keeps it in the Inbox. Undo brings both back.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘↩ sender og markerer færdig; ⌥⌘↩ sender og beholder den i indbakken. Fortryd bringer begge dele tilbage."
+          }
+        }
+      }
+    },
+    "No conversation is open in Tidings.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen samtale er åben i Tidings."
+          }
+        }
+      }
+    },
+    "Get Open Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent åben besked"
+          }
+        }
+      }
+    },
+    "Open Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn besked"
+          }
+        }
+      }
+    },
+    "Add Open Message to Reminders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føj åben besked til Påmindelser"
+          }
+        }
+      }
+    },
+    "Link": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

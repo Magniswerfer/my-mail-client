@@ -92,6 +92,22 @@ final class ComposeModel {
         return nil
     }
 
+    /// Forgotten attachment, or someone you named who's no longer on the message.
+    func sendProblems() -> [SendCheck.Problem] {
+        var people: [MailAddress] = []
+        if let id = originalLocalID, let original = try? app?.store.message(id: id) {
+            people = [MailAddress(name: original.fromName, address: original.fromAddress)] + AddressParser.parse(original.recipients)
+        }
+        return SendCheck.problems(text: MailBodyConverter.plainText(body), attachmentCount: attachments.count,
+                                  recipients: recipients(to) + recipients(cc) + recipients(bcc),
+                                  conversationPeople: people, ownAddresses: app?.ownAddresses ?? [])
+    }
+
+    func add(_ person: MailAddress) {
+        to = to.trimmingCharacters(in: .whitespaces).isEmpty ? person.description : "\(to), \(person.description)"
+        changed()
+    }
+
     // MARK: Saving
 
     func changed() {
@@ -118,13 +134,17 @@ final class ComposeModel {
     }
 
     /// Queues the message (send now = after the undo window; or at `sendAt`). Returns true when queued.
-    func send(at sendAt: Date? = nil) async -> Bool {
+    /// Replies follow the Send and Done setting; `markDone` overrides it (⌥⌘↩ sends the other way).
+    var isReply: Bool { kind == .reply || kind == .replyAll }
+
+    func send(at sendAt: Date? = nil, markDone: Bool? = nil) async -> Bool {
         if let problem = validationError() { error = problem; return false }
         saveTask?.cancel()
         guard let app else { return false }
         do {
             try await app.send(buildMessage(), accountID: accountID, sendAt: sendAt, kind: kind,
-                               originalLocalID: originalLocalID, draftID: draftID)
+                               originalLocalID: originalLocalID, draftID: draftID,
+                               markDone: isReply && (markDone ?? AssistSettings.sendAndDone))
             return true
         } catch {
             self.error = String(describing: error)

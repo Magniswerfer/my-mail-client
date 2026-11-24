@@ -185,3 +185,60 @@ private func message(_ uid: UInt32, thread: String, from: String, name: String? 
         #expect(IntroReply.plan(for: m, ownAddresses: [me]) == nil)
     }
 }
+
+@Suite struct SendCheckTests {
+    let anna = MailAddress(name: "Anna Holm", address: "anna@firma.dk")
+    let bo = MailAddress(name: "Bo Berg", address: "bo@firma.dk")
+
+    @Test func promisedAttachment() {
+        let text = "Hej Anna,\n\nJeg har vedhæftet kontrakten.\n\n-- \nMagnus"
+        #expect(SendCheck.problems(text: text, attachmentCount: 0, recipients: [anna], conversationPeople: [], ownAddresses: [me])
+                == [.missingAttachment(phrase: "vedhæft")])
+        #expect(SendCheck.problems(text: text, attachmentCount: 1, recipients: [anna], conversationPeople: [], ownAddresses: [me]).isEmpty)
+        #expect(SendCheck.problems(text: "Bo is unattached to the idea", attachmentCount: 0, recipients: [anna],
+                                   conversationPeople: [], ownAddresses: [me]).isEmpty, "whole words only")
+        #expect(SendCheck.problems(text: "Ok!\n\nOn Mon, Anna wrote:\n> see attached", attachmentCount: 0, recipients: [anna],
+                                   conversationPeople: [], ownAddresses: [me]).isEmpty, "quotes don't count")
+        #expect(SendCheck.problems(text: "Hi\n\n-- \nAttached: my vCard", attachmentCount: 0, recipients: [anna],
+                                   conversationPeople: [], ownAddresses: [me]).isEmpty, "signatures don't count")
+    }
+
+    @Test func namedSomeoneWhoWasDropped() {
+        let text = "Hej Anna og Bo, det lyder godt."
+        let found = SendCheck.problems(text: text, attachmentCount: 0, recipients: [anna],
+                                       conversationPeople: [anna, bo, MailAddress(name: "Magnus", address: me)], ownAddresses: [me])
+        #expect(found == [.missingPerson(bo)])
+    }
+}
+
+@Suite struct DarkModeTests {
+    @Test func plainAndLightlyStyledCanDarken() {
+        #expect(HTMLDarkMode.canDarken("<p>Hej <b>Anna</b></p>"))
+        #expect(HTMLDarkMode.canDarken(##"<table bgcolor="#FFFFFF"><td style="background-color: rgb(255,255,255); color:#333">x</td></table>"##))
+        #expect(HTMLDarkMode.canDarken(##"<div style="background: transparent">x</div>"##))
+    }
+
+    @Test func designedMailKeepsItsColours() {
+        #expect(!HTMLDarkMode.canDarken(##"<table bgcolor="#1a73e8">x</table>"##))
+        #expect(!HTMLDarkMode.canDarken(##"<div style="background-color:#f2f2f2">x</div>"##), "grey cards are design")
+        #expect(!HTMLDarkMode.canDarken(##"<div style="background:url(hero.jpg)">x</div>"##))
+    }
+}
+
+@Suite struct ReplyLaterStoreTests {
+    @Test func keywordShowsOnTheConversationAndLinksResolve() throws {
+        let s = try store()
+        var a = message(1, thread: "t", from: "anna@firma.dk", to: me, daysAgo: 2)
+        var b = message(2, thread: "t", from: "anna@firma.dk", to: me, daysAgo: 1)
+        b.flags = "\\Seen \(replyLaterKeyword)"
+        a.flags = "\\Seen"
+        var archived = b
+        archived.uid = 3
+        archived.mailbox = "Archive"
+        try s.upsert([(a, "x"), (b, "y"), (archived, "y")])
+        let threads = try s.threads(mailbox: "INBOX", ownAddresses: [me])
+        #expect(threads.first?.isReplyLater == true)
+        #expect(try s.message(messageID: "<m2@x>")?.mailbox == "INBOX", "the Inbox copy wins")
+        #expect(try s.message(messageID: "nope@x") == nil)
+    }
+}

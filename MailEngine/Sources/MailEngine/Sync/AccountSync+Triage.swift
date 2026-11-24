@@ -13,7 +13,13 @@ public enum TriageKind: Sendable, Hashable, Codable {
     case unpin
     case markRead
     case markUnread
+    /// "Reply Later" (HEY): a keyword on the newest message, so it survives reinstalls and other devices see it.
+    case replyLater
+    case clearReplyLater
 }
+
+/// The IMAP keyword for Reply Later. Plain keywords are fine on iCloud (verified in M0).
+public let replyLaterKeyword = "$TidingsReplyLater"
 
 /// One applied triage action: enough to show "Done · Undo" and to reverse it.
 public struct TriageChange: Sendable, Identifiable, Hashable {
@@ -90,7 +96,7 @@ extension AccountSync {
             return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
                                 snapshots: snapshots, addedFlags: add, removedFlags: remove)
 
-        case .pin, .unpin, .markRead, .markUnread:
+        case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater:
             let all = try store.localIDs(threadIDs: threadIDs, mailbox: nil, accountID: account.id)
             let snapshotsAll = try store.snapshots(localIDs: all)
             switch kind {
@@ -103,6 +109,14 @@ extension AccountSync {
             case .unpin:
                 localIDs = snapshotsAll.filter { $0.flags.contains("\\Flagged") }.map(\.localID)
                 remove = ["\\Flagged"]
+            case .replyLater:
+                localIDs = try threadIDs.compactMap { thread in
+                    try store.messages(inThread: thread).filter { $0.accountID == account.id }.last?.id
+                }
+                add = [replyLaterKeyword]
+            case .clearReplyLater:
+                localIDs = snapshotsAll.filter { $0.flags.contains(replyLaterKeyword) }.map(\.localID)
+                remove = [replyLaterKeyword]
             case .markRead:
                 localIDs = snapshotsAll.filter { !$0.flags.contains("\\Seen") }.map(\.localID)
                 add = ["\\Seen"]
@@ -155,7 +169,7 @@ extension AccountSync {
             let undoID = UUID().uuidString
             let current = try store.snapshotsIn(db, localIDs: change.snapshots.map(\.localID))
             switch change.kind {
-            case .pin, .unpin, .markRead, .markUnread:
+            case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater:
                 let ids = current.map(\.localID)
                 try store.applyLocalFlags(localIDs: ids, add: change.removedFlags, remove: change.addedFlags, in: db)
                 try store.enqueue(.flags(localIDs: ids, add: change.removedFlags, remove: change.addedFlags),

@@ -57,6 +57,30 @@ import MailEngine
         .sorted { $0.startDate < $1.startDate }
     }
 
+    // MARK: Reminders
+
+    enum Failure: Error { case noAccess, noList }
+
+    /// A reminder in the default list, with an optional due date (and an alert then).
+    func addReminder(title: String, notes: String?, url: URL?, due: Date?) async throws {
+        if EKEventStore.authorizationStatus(for: .reminder) != .fullAccess {
+            guard EKEventStore.authorizationStatus(for: .reminder) == .notDetermined,
+                  (try? await EKEventStore().requestFullAccessToReminders()) == true else { throw Failure.noAccess }
+            store = EKEventStore()
+        }
+        guard let list = store.defaultCalendarForNewReminders() else { throw Failure.noList }
+        let reminder = EKReminder(eventStore: store)
+        reminder.calendar = list
+        reminder.title = title.isEmpty ? String(localized: "Follow up on email") : title
+        reminder.notes = [notes, url?.absoluteString].compactMap { $0 }.joined(separator: "\n")
+        reminder.url = url
+        if let due {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: due)
+            reminder.addAlarm(EKAlarm(absoluteDate: due))
+        }
+        try store.save(reminder, commit: true)
+    }
+
     /// Times you're busy (for Share Availability): timed events that aren't free or cancelled.
     func busyIntervals(from start: Date, to end: Date) -> [DateInterval] {
         guard hasAccess, end > start else { return [] }

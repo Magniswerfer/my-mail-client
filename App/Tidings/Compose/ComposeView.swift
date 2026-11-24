@@ -31,6 +31,15 @@ struct ComposeView: View {
     @State private var isImporting = false
     @State private var isSendLaterShown = false
     @State private var isAvailabilityShown = false
+    @State private var pendingSend: PendingSend?
+
+    /// A send held back by the pre-send check.
+    struct PendingSend: Identifiable {
+        let id = UUID()
+        var date: Date?
+        var markDone: Bool?
+        var problems: [SendCheck.Problem]
+    }
     @State private var isSending = false
     @FocusState private var focused: Field?
 
@@ -69,6 +78,22 @@ struct ComposeView: View {
             if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
         }
         .sheet(isPresented: $isSendLaterShown) { sendLaterSheet }
+        .confirmationDialog(String(localized: "Send anyway?"), isPresented: Binding(
+            get: { pendingSend != nil }, set: { if !$0 { pendingSend = nil } }
+        ), titleVisibility: .visible, presenting: pendingSend) { pending in
+            if pending.problems.contains(where: { if case .missingAttachment = $0 { true } else { false } }) {
+                Button("Attach Files…") { isImporting = true }
+            }
+            ForEach(Array(pending.problems.enumerated()), id: \.offset) { _, problem in
+                if case .missingPerson(let person) = problem {
+                    Button(String(localized: "Add \(IntroReply.firstName(person))")) { model.add(person) }
+                }
+            }
+            Button("Send Anyway") { Task { await send(at: pending.date, markDone: pending.markDone, checked: true) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { pending in
+            Text(pending.problems.map(Self.describe).joined(separator: "\n"))
+        }
         .sheet(isPresented: $isAvailabilityShown) {
             AvailabilityPicker { text in model.insertion = TextInsertion(text: text) }
         }
@@ -170,6 +195,12 @@ struct ComposeView: View {
             } label: { Label("Discard", systemImage: "trash") }
                 .help("Discard draft")
             Menu {
+                if model.isReply {
+                    Button(AssistSettings.sendAndDone ? String(localized: "Send and Keep in Inbox") : String(localized: "Send and Mark Done")) {
+                        Task { await send(at: nil, markDone: !AssistSettings.sendAndDone) }
+                    }
+                    .keyboardShortcut(.return, modifiers: [.command, .option])
+                }
                 Button("Send Later…") { isSendLaterShown = true }
             } label: {
                 Label("Send", systemImage: "paperplane.fill")
@@ -177,7 +208,7 @@ struct ComposeView: View {
                 Task { await send(at: nil) }
             }
             .keyboardShortcut(.return, modifiers: .command)
-            .help("Send (⌘↩)")
+            .help(model.isReply && AssistSettings.sendAndDone ? "Send and mark the conversation done (⌘↩)" : "Send (⌘↩)")
             .disabled(isSending)
         }
     }
@@ -209,10 +240,26 @@ struct ComposeView: View {
         .macFrame(width: 360)
     }
 
-    private func send(at date: Date?) async {
+    private func send(at date: Date?, markDone: Bool? = nil, checked: Bool = false) async {
+        if !checked {
+            let problems = model.sendProblems()
+            if !problems.isEmpty {
+                pendingSend = PendingSend(date: date, markDone: markDone, problems: problems)
+                return
+            }
+        }
         isSending = true
         defer { isSending = false }
-        if await model.send(at: date) { close() }
+        if await model.send(at: date, markDone: markDone) { close() }
+    }
+
+    static func describe(_ problem: SendCheck.Problem) -> String {
+        switch problem {
+        case .missingAttachment(let phrase):
+            String(localized: "You wrote “\(phrase)”, but nothing is attached.")
+        case .missingPerson(let person):
+            String(localized: "You mention \(IntroReply.firstName(person)), but they aren't on this message.")
+        }
     }
 }
 

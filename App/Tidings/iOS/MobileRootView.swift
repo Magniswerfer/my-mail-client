@@ -71,6 +71,11 @@ struct MobileRootView: View {
         .sheet(isPresented: $model.isSnoozePickerShown, onDismiss: { model.snoozeTarget = nil }) {
             SnoozePicker().presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .fullScreenCover(item: $model.replySession) { session in
+            ReplySessionView(session: session).environment(model)
+        }
+        .onOpenURL { url in model.open(url: url) }
         .sheet(isPresented: $model.isCategoryPickerShown) {
             CategoryPicker().presentationDetents([.medium])
         }
@@ -161,6 +166,8 @@ struct MobileRootView: View {
                 Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll) }
                 Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
                 Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
+                Button("Reply Later", systemImage: "arrowshape.turn.up.left.circle") { model.toggleReplyLater() }
+                Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
             } primaryAction: {

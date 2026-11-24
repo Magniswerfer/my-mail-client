@@ -15,11 +15,14 @@ enum StreamItem: Identifiable, Hashable {
     case thread(ThreadSummary)
     /// Delivered conversations of a bundle; `deliveredAt` is set for scheduled bundles.
     case bundle(MailCategory, [ThreadSummary], deliveredAt: Date?)
+    /// Conversations set aside with Reply Later, gathered at the top of the Inbox.
+    case replyLater([ThreadSummary])
 
     var id: String {
         switch self {
         case .thread(let t): t.threadID
         case .bundle(let c, _, _): "bundle:\(c.rawValue)"
+        case .replyLater: "replyLater"
         }
     }
 
@@ -27,6 +30,7 @@ enum StreamItem: Identifiable, Hashable {
         switch self {
         case .thread(let t): t.arrivedAt
         case .bundle(_, let threads, let deliveredAt): deliveredAt ?? threads.map(\.arrivedAt).max() ?? .distantPast
+        case .replyLater: .distantFuture
         }
     }
 }
@@ -99,6 +103,12 @@ final class AppModel {
     @ObservationIgnored var writer: (any MailWriter)?
     @ObservationIgnored var writerChecked = false
     @ObservationIgnored var autoDraftTask: Task<Void, Never>?
+
+    // Reply Later: the focused answering session, when open.
+    var replySession: ReplySession?
+    var isShortcutsShown = false
+    /// The app's model, for App Intents and links that arrive without a view.
+    @ObservationIgnored static weak var shared: AppModel?
 
     // Contact sidebar
     var isContactPanelShown = false
@@ -173,6 +183,7 @@ final class AppModel {
         reload()
         reloadOutbox()
         scheduleDeliveryRefresh()
+        Self.shared = self
     }
 
     static let devAccount = AccountConfig(
@@ -395,7 +406,9 @@ final class AppModel {
         guard selection == .inbox else { return threads.map(StreamItem.thread) }
         var items: [StreamItem] = []
         var bundles: [MailCategory: [ThreadSummary]] = [:]
-        for thread in threads {
+        let later = threads.filter(\.isReplyLater)
+        if !later.isEmpty { items.append(.replyLater(later)) }
+        for thread in threads where !thread.isReplyLater {
             if thread.latest.category == .primary { items.append(.thread(thread)) }
             else { bundles[thread.latest.category, default: []].append(thread) }
         }
@@ -422,6 +435,7 @@ final class AppModel {
             switch item {
             case .thread(let t): [t.threadID]
             case .bundle(let c, let members, _): expandedBundles.contains(c) ? members.map(\.threadID) : []
+            case .replyLater: []
             }
         }
     }

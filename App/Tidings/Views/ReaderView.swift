@@ -51,6 +51,9 @@ struct MessageCard: View {
     @State private var body_: LoadedBody?
     @State private var loadError: String?
     @State private var showImages = false
+    /// Dark mode: show this message's own colours instead of recolouring it.
+    @State private var originalColors = false
+    @Environment(\.colorScheme) private var colorScheme
 
     init(message: StoredMessage, startsExpanded: Bool) {
         self.message = message
@@ -123,8 +126,16 @@ struct MessageCard: View {
                                model.trustImages(from: scope)
                                showImages = true
                            })
-                MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline)
-                    .id(showImages)   // rebuild with the new policy
+                let darken = colorScheme == .dark && !originalColors && HTMLDarkMode.canDarken(html.html)
+                MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline, dark: darken)
+                    .id("\(showImages)-\(darken)")   // rebuild with the new policy
+                if colorScheme == .dark, HTMLDarkMode.canDarken(html.html) {
+                    Button(originalColors ? "Match Dark Mode" : "Original Colours",
+                           systemImage: "circle.lefthalf.filled") { originalColors.toggle() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 Text(loaded.text)
                     .font(.body)
@@ -219,6 +230,8 @@ struct PrivacyBar: View {
     let html: String
     var allowRemoteImages = false
     var inlineParts: [String: (data: Data, mimeType: String)] = [:]
+    /// Recolour for dark mode (only for mail without its own background colours).
+    var dark = false
     @State private var height: CGFloat = 120
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
@@ -242,7 +255,7 @@ struct PrivacyBar: View {
         view.scrollView.isScrollEnabled = false
         view.scrollView.bounces = false
         #endif
-        let page = Self.wrap(html, allowRemoteImages: allowRemoteImages)
+        let page = Self.wrap(html, allowRemoteImages: allowRemoteImages, dark: dark)
         Coordinator.withRuleList(allowImages: allowRemoteImages) { list in
             if let list { view.configuration.userContentController.add(list) }
             view.loadHTMLString(page, baseURL: nil)
@@ -250,7 +263,7 @@ struct PrivacyBar: View {
         return view
     }
 
-    static func wrap(_ html: String, allowRemoteImages: Bool) -> String {
+    static func wrap(_ html: String, allowRemoteImages: Bool, dark: Bool = false) -> String {
         let images = allowRemoteImages ? "data: cid: https: http:" : "data: cid:"
         return """
         <!doctype html><html><head><meta charset="utf-8">
@@ -262,7 +275,7 @@ struct PrivacyBar: View {
                        font: 14px -apple-system, system-ui, sans-serif; overflow-wrap: anywhere; border-radius: 10px; }
           img { max-width: 100%; height: auto; }
           table { max-width: 100% !important; }
-        </style></head><body>\(html)</body></html>
+        </style></head><body>\(html)\(dark ? "<style>\(HTMLDarkMode.darkCSS)</style>" : "")</body></html>
         """
     }
 

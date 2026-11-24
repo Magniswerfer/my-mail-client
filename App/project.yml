@@ -39,6 +39,10 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: AGPL-3.0
         NSCalendarsFullAccessUsageDescription: Tidings adds invitations you accept to your calendar, keeps them up to date when they change, and warns you about clashes.
+        NSRemindersFullAccessUsageDescription: Tidings adds reminders for emails you choose, with a link back to the message.
+        CFBundleURLTypes:
+          - CFBundleURLName: hk.gnus.tidings.message
+            CFBundleURLSchemes: [tidings]
     entitlements:
       path: Tidings/Tidings.entitlements
       properties:
@@ -93,10 +97,16 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - hk.gnus.tidings.refresh
         NSCalendarsFullAccessUsageDescription: Tidings adds invitations you accept to your calendar, keeps them up to date when they change, and warns you about clashes.
+        NSRemindersFullAccessUsageDescription: Tidings adds reminders for emails you choose, with a link back to the message.
+        CFBundleURLTypes:
+          - CFBundleURLName: hk.gnus.tidings.message
+            CFBundleURLSchemes: [tidings]
         # Remote images in mail are often plain http; this applies to the message view only.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoadsInWebContent: true
         ITSAppUsesNonExemptEncryption: false
+        # "Add to Things" only shows when Things is installed.
+        LSApplicationQueriesSchemes: [things]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings

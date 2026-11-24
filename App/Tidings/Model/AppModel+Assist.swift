@@ -9,6 +9,8 @@ enum AssistSettings {
     static let followUpDaysKey = "assist.followUpDays"
     static let workdayStartKey = "assist.workdayStart"
     static let workdayEndKey = "assist.workdayEnd"
+    static let sendAndDoneKey = "compose.sendAndDone"
+    static var sendAndDone: Bool { UserDefaults.standard.object(forKey: sendAndDoneKey) as? Bool ?? true }
 
     static var summaries: Bool { UserDefaults.standard.object(forKey: summariesKey) as? Bool ?? true }
     static var autoDrafts: Bool { UserDefaults.standard.object(forKey: autoDraftsKey) as? Bool ?? true }
