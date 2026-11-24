@@ -8,7 +8,17 @@ Done/Pin/Snooze/category/bundle state has to survive reinstall and sync to a fut
 ## Decision
 - Actions with an IMAP meaning are expressed in IMAP: Done → Archive folder, Snooze → `Snoozed` folder, spam → Junk, read/flagged → system flags.
 - Rich state (category, pin, snooze-until, bundle membership, Highlights, rule history, classifier corrections) → CloudKit private database, keyed by account + `Message-ID` (fallback: hash of Date+From+Subject).
-- Custom IMAP keywords (`$Pinned`, …) are added *only* as a cross-client nicety if the fenced live keyword test (M0) passes.
+- Custom IMAP keywords (`$Pinned`, …) are written as a cross-client mirror of simple boolean state (pinned, category tag). **CloudKit stays the source of truth.**
+
+## Live result (M0, 2026-11-24, Magnus's iCloud account)
+Fenced keyword test on `imap.mail.me.com`:
+- `PERMANENTFLAGS` includes `\*`
+- `$TidingsPinned` persisted, visible from a second connection, MODSEQ 3570 → 3571
+- Survived a move (COPY + UID EXPUNGE)
+- 40 extra keywords accepted on one message, no cap hit
+- Not added to the mailbox `FLAGS` list (fixed list on iCloud; informational only)
+
+→ Keywords are usable. They still don't replace CloudKit: they can't carry values (snooze-until, Highlights, rule history), and other clients such as Apple Mail may replace a message's whole flag set (`STORE FLAGS`). Whether Apple Mail and iCloud.com preserve foreign keywords when changing read/flag state is **untested**. Check it in M1 by toggling read/flagged on a keyword-tagged test message in Apple Mail and re-fetching.
 
 ## Consequences
 - Requires paid Apple Developer membership (available).

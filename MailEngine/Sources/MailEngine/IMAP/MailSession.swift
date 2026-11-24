@@ -161,6 +161,10 @@ public final class MailSession: Sendable {
     }
     private let _qresyncEnabled = Mutex(false)
 
+    /// The mailbox state from the most recent SELECT/EXAMINE on this session.
+    public var selected: SelectedMailbox? { _selected.withLock { $0 } }
+    private let _selected = Mutex<SelectedMailbox?>(nil)
+
     private func enableExtensions() async throws {
         guard supports("ENABLE"), supports("QRESYNC") || supports("CONDSTORE") else { return }
         var wanted: [Capability] = []
@@ -206,18 +210,22 @@ public final class MailSession: Sendable {
         return collected
     }
 
+    /// `LIST "" "*"`. Must use the single-pattern form: `.pattern([...])` encodes as `("*")`,
+    /// which is LIST-EXTENDED syntax. iCloud lacks LIST-EXTENDED and answers that with OK and
+    /// zero mailboxes (found on the live server, 2026-11-24).
+    static let listAllCommand: Command = .list(
+        nil, reference: MailboxName(ByteBuffer(string: "")), .mailbox(ByteBuffer(string: "*"))
+    )
+
     public func listMailboxes() async throws -> [MailboxListing] {
-        let responses = try await run(
-            .list(nil, reference: MailboxName(ByteBuffer(string: "")), .pattern([ByteBuffer(string: "*")])),
-            name: "LIST"
-        )
+        let responses = try await run(Self.listAllCommand, name: "LIST")
         return responses.compactMap { response in
             guard case .untagged(.mailboxData(.list(let info))) = response else { return nil }
             let path = info.path.displayStringComponents().joined(separator: info.path.pathSeparator.map(String.init) ?? "/")
             return MailboxListing(
                 path: path,
                 separator: info.path.pathSeparator,
-                attributes: info.attributes.map { String(describing: $0) }
+                attributes: info.attributes.map { String($0) }
             )
         }
     }
@@ -255,6 +263,7 @@ public final class MailSession: Sendable {
             default: break
             }
         }
+        _selected.withLock { $0 = state }
         return state
     }
 
@@ -301,6 +310,7 @@ public final class MailSession: Sendable {
     }
 
     /// `UID SEARCH HEADER <field> <value>` on the selected mailbox.
+    /// - Warning: fails on iCloud (`NO [UNAVAILABLE]`); see `fetchHeaderField`.
     public func uidSearch(header field: String, contains value: String) async throws -> [UInt32] {
         let responses = try await run(
             .uidSearch(key: .header(field, ByteBuffer(string: value))), name: "UID SEARCH"
@@ -312,6 +322,59 @@ public final class MailSession: Sendable {
             }
         }
         return uids.sorted()
+    }
+
+    /// One header field's value per message, via `UID FETCH … BODY.PEEK[HEADER.FIELDS (field)]`.
+    /// `uids == nil` means every message in the selected mailbox. Messages without the header
+    /// map to an empty string.
+    ///
+    /// Use this instead of `uidSearch(header:)` on iCloud: `UID SEARCH HEADER` there fails with
+    /// `NO [UNAVAILABLE] Unexpected exception` (live server, 2026-11-24).
+    public func fetchHeaderField(_ field: String, uids: [UInt32]? = nil) async throws -> [UInt32: String] {
+        let set: LastCommandSet<UID>
+        if let uids {
+            guard let s = Self.uidSet(uids) else { return [:] }
+            set = s
+        } else {
+            if selected?.exists == 0 { return [:] }
+            let all = MessageIdentifierSet<UID>(UID(rawValue: 1)...UID.max)
+            set = .set(MessageIdentifierSetNonEmpty(set: all)!)
+        }
+        let section = SectionSpecifier(kind: .headerFields([field]))
+        let responses = try await run(
+            .uidFetch(set, [.uid, .bodySection(peek: true, section, nil)], []), name: "UID FETCH HEADER.FIELDS"
+        )
+        var result: [UInt32: String] = [:]
+        var uid: UInt32?
+        var bytes = ByteBuffer()
+        for response in responses {
+            guard case .fetch(let part) = response else { continue }
+            switch part {
+            case .start, .startUID:
+                uid = nil
+                bytes.clear()
+                if case .startUID(let u) = part { uid = u.rawValue }
+            case .simpleAttribute(.uid(let u)): uid = u.rawValue
+            case .streamingBytes(var chunk): bytes.writeBuffer(&chunk)
+            case .finish:
+                if let uid { result[uid] = Self.headerValue(field, in: String(buffer: bytes)) }
+            default: break
+            }
+        }
+        return result
+    }
+
+    /// Extracts an unfolded header value from a raw header block.
+    static func headerValue(_ field: String, in raw: String) -> String {
+        let unfolded = raw.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\n ", with: " ").replacingOccurrences(of: "\n\t", with: " ")
+        for line in unfolded.split(separator: "\n") {
+            guard let colon = line.firstIndex(of: ":") else { continue }
+            if line[..<colon].trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(field) == .orderedSame {
+                return line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return ""
     }
 
     /// `UID FETCH <uids> (UID FLAGS MODSEQ?)` on the selected mailbox.

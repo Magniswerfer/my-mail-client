@@ -8,6 +8,8 @@ public struct KeywordTest: Sendable {
         public var name: String
         public var passed: Bool
         public var detail: String
+        /// Reported but not required: doesn't affect whether keywords are usable.
+        public var informational = false
     }
 
     public struct Report: Sendable, Codable {
@@ -15,7 +17,7 @@ public struct KeywordTest: Sendable {
         public var capabilities: [String]
         public var steps: [Step]
         public var keywordCap: Int?
-        public var passed: Bool { steps.allSatisfy(\.passed) }
+        public var passed: Bool { steps.filter { !$0.informational }.allSatisfy(\.passed) }
     }
 
     public var endpoint: IMAPEndpoint
@@ -36,9 +38,9 @@ public struct KeywordTest: Sendable {
         let runID = "probe-" + UUID().uuidString.prefix(8).lowercased()
         let keyword = "$TidingsPinned"
         var steps: [Step] = []
-        func record(_ name: String, _ passed: Bool, _ detail: String) {
-            steps.append(Step(name: name, passed: passed, detail: detail))
-            log("\(passed ? "✓" : "✗") \(name): \(detail)")
+        func record(_ name: String, _ passed: Bool, _ detail: String, informational: Bool = false) {
+            steps.append(Step(name: name, passed: passed, detail: detail, informational: informational))
+            log("\(passed ? "✓" : informational ? "ℹ︎" : "✗") \(name): \(detail)")
         }
 
         var capabilities: [String] = []
@@ -80,8 +82,10 @@ public struct KeywordTest: Sendable {
             let selected = try await session.select(fence.path())
             let flags = try await session.fetchFlags(uids: [uid])[uid]?.flags ?? []
             record("Keyword visible from a second connection", flags.contains(keyword), "flags=\(flags)")
+            // iCloud returns a fixed FLAGS list and never adds new keywords to it. Nothing in the
+            // engine reads mailbox FLAGS, so this is reported only.
             record("Keyword listed in mailbox FLAGS", selected.flags.contains(keyword),
-                   selected.flags.joined(separator: " "))
+                   selected.flags.joined(separator: " "), informational: true)
 
             // Survives a move (COPY+EXPUNGE on iCloud).
             try await fence.move(uids: [uid], from: fence.path(), to: fence.path("Moved"))

@@ -13,7 +13,7 @@ struct TidingsProbe: AsyncParsableCommand {
               security add-generic-password -s Tidings -a you@icloud.com -w
             (you'll be prompted; the password never appears on screen or in shell history).
             """,
-        subcommands: [Greeting.self, Capabilities.self, KeywordTestCommand.self, AICheck.self, BenchSearch.self]
+        subcommands: [Greeting.self, KeychainCheck.self, Capabilities.self, KeywordTestCommand.self, AICheck.self, BenchSearch.self]
     )
 }
 
@@ -22,6 +22,9 @@ struct TidingsProbe: AsyncParsableCommand {
 struct ServerOptions: ParsableArguments {
     @Option(help: "Account address (also the Keychain account name).")
     var address: String
+
+    @Option(help: "IMAP login name, if different from --address (e.g. just the part before @ for iCloud).")
+    var login: String?
 
     @Option(help: "IMAP host. Defaults to iCloud.")
     var host: String = "imap.mail.me.com"
@@ -39,7 +42,7 @@ struct ServerOptions: ParsableArguments {
     var simulateICloud = false
 
     var endpoint: IMAPEndpoint {
-        IMAPEndpoint(host: host, port: port, useTLS: !plaintext, username: address)
+        IMAPEndpoint(host: host, port: port, useTLS: !plaintext, username: login ?? address)
     }
 
     var profile: ServerProfile? { simulateICloud ? .iCloudSimulation : nil }
@@ -77,6 +80,25 @@ enum Keychain {
 }
 
 // MARK: - Commands
+
+struct KeychainCheck: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "keychain-check",
+        abstract: "Check the stored password's shape without revealing it, and without logging in."
+    )
+    @Option(help: "Keychain account name used when saving the password.") var address: String
+
+    func run() async throws {
+        let password = try Keychain.password(service: "Tidings", account: address)
+        let appSpecific = password.range(of: #"^[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}$"#, options: .regularExpression) != nil
+        let undashed = password.range(of: #"^[a-z]{16}$"#, options: .regularExpression) != nil
+        print("Keychain item found for '\(address)'.")
+        print("  length: \(password.count) characters (an app-specific password is 19: xxxx-xxxx-xxxx-xxxx)")
+        print("  matches app-specific format: \(appSpecific ? "yes" : undashed ? "yes, but without dashes" : "NO")")
+        print("  contains whitespace: \(password.contains(where: \.isWhitespace) ? "YES, remove it" : "no")")
+        print("  contains uppercase or digits: \(password.contains(where: { $0.isUppercase || $0.isNumber }) ? "yes (app-specific passwords are lowercase letters only)" : "no")")
+    }
+}
 
 struct Greeting: AsyncParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Show the pre-login capability list (no credentials needed).")

@@ -11,6 +11,15 @@
 | Search, 250k synthetic messages (Zipf vocabulary, mixed DA/EN) | **Hits p95 6.1 ms** (budget 30), **facets p95 50 ms** (budget 100). 1.2 GB on disk incl. compressed text and FTS index |
 | Tests | 20 tests (unit + Dovecot integration) pass |
 
+## Live iCloud results (run by Magnus)
+| Check | Result |
+|---|---|
+| Login | Full `@icloud.com` address + app-specific password works; custom-domain address does not |
+| Capabilities | CONDSTORE, QRESYNC, IDLE, UIDPLUS, ESEARCH, LIST-STATUS present; MOVE, SPECIAL-USE, COMPRESS, NOTIFY, LIST-EXTENDED absent |
+| Folders | All 7 resolved; `\Sent`/`\Trash` attributes sent despite no SPECIAL-USE |
+| Keyword test | **Usable**: persists, cross-connection, MODSEQ bump, survives move, 40+ per message (see ADR 0002) |
+| Quirks found live | `LIST "" ("*")` → OK with zero mailboxes; `UID SEARCH HEADER` → `NO [UNAVAILABLE]`. Both fixed and covered by tests |
+
 ## Design changes M0 forced
 1. **Search is newest-first, in two phases.** The FTS rowid is a `SortKey` (date seconds | category | attachment bit | disambiguator), so FTS5 streams matches in date order and stops at the limit, and category/attachment/date filters and facets read the rowid without joins. Ranking all matches by bm25 was 600–800 ms per keystroke; this is ~3 ms.
 2. **Facets are phase 2** (after hits render) and are skipped for a lone 1-character prefix.
@@ -18,7 +27,7 @@
 4. **LLM classification is ~0.6 s/message** → 100k messages would take ~17 h through the LLM alone. Confirms ADR 0004: signals + fast classifier must handle the bulk.
 
 ## Open for M1
-- **Live iCloud checks** (`docs/M0-live-checks.md`), run by Magnus: capabilities + fenced keyword test on the real account.
+- Check that Apple Mail / iCloud.com preserve our keywords when they change read/flag state.
 - **Relevance:** newest-first ranks "The weekly update" above "Din faktura fra Zalando" for `faktura`. Add a small "best matches" strip (subject/sender-column query) above the chronological list.
 - Danish stemming beyond prefix matching (e.g. "køb" ↔ "købte") — evaluate a Snowball-style tokenizer.
 - Embedding storage (512-dim → int8 ≈ 128 MB per 250k) and the semantic tier.

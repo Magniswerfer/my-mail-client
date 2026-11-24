@@ -113,7 +113,7 @@ public final class MailStore: Sendable {
     /// extracted body; it is compressed for storage and indexed in full.
     public func upsert(_ items: [(message: StoredMessage, plainText: String)]) throws {
         try db.write { db in
-            for var (message, text) in items {
+            for case (var message, let text) in items {
                 if message.bodyText == nil, !text.isEmpty { message.bodyText = TextCompression.compress(text) }
                 if message.preview.isEmpty { message.preview = Self.makePreview(text) }
                 if let existing = try Row.fetchOne(db, sql: """

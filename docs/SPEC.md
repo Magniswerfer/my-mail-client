@@ -49,7 +49,7 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 ### Where state lives — [ADR 0002](adr/0002-inbox-state-cloudkit-plus-imap.md)
 - Things with IMAP meaning are IMAP: Done → Archive folder, Snooze → `Snoozed` folder, spam → Junk, read/flag → system flags. Other clients stay consistent.
 - Rich app state (category, pin, snooze-until, bundle, Highlights, rule history, classifier corrections) → **CloudKit private DB**, keyed by `Message-ID` + account.
-- Custom IMAP keywords (e.g. `$Pinned`) only as a convenience **if the live keyword test passes**.
+- Custom IMAP keywords (e.g. `$Pinned`) mirror simple state for other clients. **Verified usable on iCloud in M0.** CloudKit remains the source of truth.
 
 ### Always-on work — [ADR 0003](adr/0003-headless-engine.md)
 - v1: a login-item background helper runs sync, rules, snooze wake-ups, send-later and classification while the window is closed; catches up after sleep.
@@ -159,7 +159,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 
 | | Scope |
 |---|---|
-| **M0 · Engine spike** ✅ (live iCloud checks pending) | iCloud IMAP connect + quirks, fenced live keyword test, tier-1 store + FTS, Foundation Models/Danish check |
+| **M0 · Engine spike** ✅ | iCloud IMAP connect + quirks, fenced live keyword test, tier-1 store + FTS, Foundation Models/Danish check |
 | **M1 · Read-only client** | sync, stream, threads, reading pane, instant faceted search |
 | **M2 · Triage** | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
 | **M3 · Compose** | SMTP, outbox/undo send, identities, signatures — **daily driver** |

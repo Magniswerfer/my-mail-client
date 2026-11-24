@@ -10,7 +10,19 @@ Legend: **V** = verified by probe from this machine · **S** = sourced · **U** 
 ## Pre-auth IMAP capability (V)
 `XAPPLEPUSHSERVICE IMAP4 IMAP4rev1 SASL-IR AUTH=ATOKEN AUTH=PLAIN AUTH=ATOKEN2 AUTH=XOAUTH2` — `ID` rejected before login; strict about CRLF.
 
-## Post-auth IMAP capability (S)
+## Post-auth IMAP capability — VERIFIED on Magnus's account (2026-11-24)
+`XAPPLEPUSHSERVICE IMAP4 IMAP4rev1 CONDSTORE ENABLE QRESYNC QUOTA XAPPLELITERAL NAMESPACE UIDPLUS UNSELECT SORT ESEARCH ESORT CONTEXT=SORT WITHIN SASL-IR ID IDLE X-APPLE-REMOTE-LINKS LIST-STATUS`
+
+Differences from the older sourced list below: **no** ACL, METADATA, THREAD, CATENATE, BINARY, URLAUTH, MULTISEARCH, XMSEARCH, LANGUAGE, ANNOTATE; new: `XAPPLELITERAL`, `X-APPLE-REMOTE-LINKS`. Confirmed absent: MOVE, SPECIAL-USE, COMPRESS, NOTIFY, LIST-EXTENDED.
+- `ENABLE CONDSTORE QRESYNC` → OK (bare-OK handling works).
+- INBOX: `UIDVALIDITY 1`, `HIGHESTMODSEQ` reported.
+- **PERMANENTFLAGS verified:** `\Answered \Flagged \Draft \Deleted \Seen \Recent $MailFlagBit0 $MailFlagBit1 $MailFlagBit2 $Forwarded Redirected $NotJunk NotJunk $iCloudCleanup \*`
+- **`LIST "" ("*")` (LIST-EXTENDED pattern-list syntax) returns OK with zero mailboxes.** Use `LIST "" "*"`.
+- **LIST returns `\\Sent` and `\\Trash` attributes** (and `\\Noinferiors` on INBOX) even though SPECIAL-USE is not advertised. Archive/Junk/Drafts come without attributes → name matching still needed.
+- **`UID SEARCH HEADER X-Tidings-Test <id>` → `NO [UNAVAILABLE] Unexpected exception`.** Don't rely on SEARCH HEADER for custom headers; fetch `BODY.PEEK[HEADER.FIELDS (…)]` instead.
+- Username: full `@icloud.com` address works. A custom-domain (iCloud+) address does not work as login.
+
+## Post-auth IMAP capability, older sources (S)
 `ACL RIGHTS=tekx CONDSTORE ENABLE QRESYNC QUOTA NAMESPACE UIDPLUS CHILDREN BINARY UNSELECT SORT CATENATE URLAUTH LANGUAGE ESEARCH ESORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES CONTEXT=SEARCH CONTEXT=SORT WITHIN SASL-IR SEARCHRES METADATA ID XMSEARCH X-SUN-SORT ANNOTATE-EXPERIMENT-1 X-UNAUTHENTICATE X-SUN-IMAP XUM1 MULTISEARCH IDLE LIST-STATUS`
 Sources: MailKit #970, evolution-list 2021, nextcloud/mail #13889 (Oct 2026), postalsys/imapflow #457 (Nov 2026).
 
@@ -26,7 +38,7 @@ Sources: MailKit #970, evolution-list 2021, nextcloud/mail #13889 (Oct 2026), po
 - Capabilities may vary between backend hosts → never cache across connections.
 
 ## Keywords
-`PERMANENTFLAGS (\Answered \Flagged \Draft \Deleted \Seen \Recent $MailFlagBit0 $MailFlagBit1 $MailFlagBit2 $Forwarded Redirected $NotJunk NotJunk \*)` **S**. Persistence/visibility of arbitrary third-party keywords and any cap: **U** → fenced live test in M0.
+`PERMANENTFLAGS (... \*)` **V**. Third-party keywords: **V** persisted, visible from a second connection, bump MODSEQ, survive COPY+EXPUNGE moves, ≥ 41 per message accepted. Not added to the mailbox `FLAGS` list. Whether Apple Mail/iCloud.com preserve them when changing flags: **U**.
 
 ## Auth
 App-specific password required (2FA on). IMAP user = address (or local part); SMTP = full address. XOAUTH2 advertised but not available to new third parties. **S**

@@ -1,4 +1,5 @@
 import Foundation
+import NIOIMAP
 import Testing
 @testable import MailEngine
 
@@ -83,5 +84,26 @@ import Testing
         #expect(!TestFence.isInsideFence("Junk"))
         #expect(!TestFence.isInsideFence("Tidings-Testing"))
         #expect(!TestFence.isInsideFence("Archive/Tidings-Test"))
+    }
+}
+
+@Suite struct IMAPCommandShapeTests {
+    @Test func listUsesPlainPatternNotListExtendedSyntax() {
+        // iCloud has no LIST-EXTENDED: a parenthesized pattern list returns zero mailboxes.
+        guard case .list(let select, _, let patterns, let returnOptions) = MailSession.listAllCommand else {
+            Issue.record("not a LIST command"); return
+        }
+        #expect(select == nil)
+        #expect(returnOptions.isEmpty)
+        guard case .mailbox = patterns else { Issue.record("must be a single .mailbox pattern"); return }
+    }
+}
+
+@Suite struct HeaderValueTests {
+    @Test func extractsCaseInsensitiveAndUnfolded() {
+        let raw = "x-tidings-test: probe-1234\r\n\r\n"
+        #expect(MailSession.headerValue("X-Tidings-Test", in: raw) == "probe-1234")
+        #expect(MailSession.headerValue("X-Tidings-Test", in: "Subject: a\r\n continued\r\n\r\n") == "")
+        #expect(MailSession.headerValue("Subject", in: "Subject: a\r\n continued\r\n\r\n") == "a continued")
     }
 }

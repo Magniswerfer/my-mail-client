@@ -77,9 +77,15 @@ public struct TestFence: Sendable {
         return try await session.append(to: target, message: syntheticMessage(subject: subject))
     }
 
-    /// UIDs in the currently selected (fenced) mailbox that carry this run's marker.
+    /// UIDs in the currently selected mailbox that carry this run's marker.
+    /// Reads the header directly: iCloud fails `UID SEARCH HEADER`.
     public func markedUIDs() async throws -> [UInt32] {
-        try await session.uidSearch(header: Self.markerHeader, contains: runID)
+        try await session.fetchHeaderField(Self.markerHeader).filter { $0.value == runID }.keys.sorted()
+    }
+
+    /// UIDs carrying a marker from any probe run (used to clean up after interrupted runs).
+    public func anyRunMarkedUIDs() async throws -> [UInt32] {
+        try await session.fetchHeaderField(Self.markerHeader).filter { !$0.value.isEmpty }.keys.sorted()
     }
 
     private func checkMarked(_ uids: [UInt32], selected mailbox: String) async throws {
@@ -100,11 +106,12 @@ public struct TestFence: Sendable {
         try await session.move(uids: uids, to: destination)
     }
 
-    /// Removes every message this run created from the given fenced mailbox.
+    /// Removes every probe-created message (this run or an interrupted earlier one) from the given
+    /// fenced mailbox. Messages without the marker header are never touched.
     public func cleanUp(mailbox: String) async throws {
         try checkMailbox(mailbox)
         _ = try await session.select(mailbox)
-        let uids = try await markedUIDs()
+        let uids = try await anyRunMarkedUIDs()
         if !uids.isEmpty { try await session.expunge(uids: uids) }
     }
 
