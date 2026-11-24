@@ -226,10 +226,57 @@ extension AppModel {
     }
 }
 
+extension AppModel {
+    // MARK: Folders
+
+    /// Where a conversation can be moved (V): Inbox and Archive first, then your own folders.
+    /// Not the folder it's in, and not Sent, Drafts or Snoozed (snoozing has its own key).
+    func folderTargets(for thread: ThreadSummary?) -> [MailboxState] {
+        guard let accountID = thread?.latest.accountID ?? accounts.first?.id else { return [] }
+        let source = sourceMailbox
+        func rank(_ box: MailboxState) -> Int {
+            switch box.role {
+            case .inbox: 0
+            case .archive: 1
+            case .junk: 3
+            case .trash: 4
+            default: 2
+            }
+        }
+        return mailboxes
+            .filter { $0.accountID == accountID && $0.path != source && $0.path != AccountSync.snoozedMailbox
+                && $0.role != .sent && $0.role != .drafts }
+            .sorted { rank($0) == rank($1) ? $0.path.localizedStandardCompare($1.path) == .orderedAscending : rank($0) < rank($1) }
+    }
+
+    /// Moves conversations to a folder, using the matching triage action for the special ones
+    /// (so moving to Archive is Done, and back to Inbox clears snooze keywords).
+    func move(_ threads: [ThreadSummary]? = nil, toFolder box: MailboxState) {
+        let kind: TriageKind = switch box.role {
+        case .inbox: selection == .snoozed ? .unsnooze : .moveToInbox
+        case .archive: .done
+        case .trash: .trash
+        case .junk: .junk
+        default: .move(toMailbox: box.path)
+        }
+        perform(kind, on: threads)
+    }
+}
+
+extension MailboxState {
+    /// A folder's name as shown: the role's title for special folders, else the last path part.
+    var displayName: String { role?.title ?? Self.displayName(path) }
+
+    static func displayName(_ path: String) -> String {
+        if path.uppercased() == "INBOX" { return String(localized: "Inbox") }
+        return path.split(whereSeparator: { $0 == "/" || $0 == "." }).last.map(String.init) ?? path
+    }
+}
+
 extension TriageKind {
     var removesFromView: Bool {
         switch self {
-        case .done, .trash, .junk, .moveToInbox, .snooze, .unsnooze: true
+        case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze: true
         default: false
         }
     }
@@ -240,6 +287,7 @@ extension TriageKind {
         case .trash: "trash"
         case .junk: "xmark.bin"
         case .moveToInbox: "tray.and.arrow.down"
+        case .move: "folder"
         case .snooze: "clock"
         case .unsnooze: "clock.arrow.circlepath"
         case .pin: "pin"
@@ -255,6 +303,7 @@ extension TriageKind {
         case .trash: String(localized: "Moved to Trash")
         case .junk: String(localized: "Moved to Junk")
         case .moveToInbox: String(localized: "Moved to Inbox")
+        case .move(let path): String(localized: "Moved to \(MailboxState.displayName(path))")
         case .snooze(let until):
             until.map { String(localized: "Snoozed until \($0.formatted(.dateTime.weekday(.wide).hour().minute()))") }
                 ?? String(localized: "Snoozed for someday")

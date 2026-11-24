@@ -84,6 +84,7 @@ final class AppModel {
     var toast: Toast?
     var isSnoozePickerShown = false
     var isCategoryPickerShown = false
+    var isFolderPickerShown = false
     var isPaletteShown = false
     var sweepCandidate: SweepRequest?
     weak var undoManager: UndoManager?

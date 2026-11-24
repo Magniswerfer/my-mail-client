@@ -7,6 +7,7 @@ public enum TriageKind: Sendable, Hashable, Codable {
     case trash
     case junk
     case moveToInbox
+    case move(toMailbox: String)   // any folder ("Move to Folder…")
     case snooze(until: Date?)   // nil = "someday"
     case unsnooze
     case pin
@@ -46,7 +47,7 @@ extension AccountSync {
         var remove: [String] = []
 
         switch kind {
-        case .done, .trash, .junk, .moveToInbox, .snooze, .unsnooze:
+        case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze:
             let source: String = kind == .unsnooze ? Self.snoozedMailbox : mailbox
             localIDs = try store.localIDs(threadIDs: threadIDs, mailbox: source, accountID: account.id)
             guard !localIDs.isEmpty else { return nil }
@@ -62,6 +63,9 @@ extension AccountSync {
                 target = try path(for: .trash) ?? "Deleted Messages"
             case .junk:
                 target = try path(for: .junk) ?? "Junk"
+            case .move(let path):
+                guard path != mailbox else { return nil }
+                target = path
             case .moveToInbox:
                 target = "INBOX"
                 remove = Array(Set(snapshots.flatMap { SnoozeKeywords.all(in: $0.flags.split(separator: " ").map(String.init)) }))

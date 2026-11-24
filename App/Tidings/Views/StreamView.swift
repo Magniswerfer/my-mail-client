@@ -286,6 +286,7 @@ struct ThreadActions: View {
             model.perform(thread.unreadCount > 0 ? .markRead : .markUnread, on: [thread])
         }
         Menu("Move to", systemImage: "tray.and.arrow.down") { MoveMenuContent(thread: thread) }
+        Menu("Move to Folder", systemImage: "folder") { FolderMenuContent(thread: thread) }
         Divider()
         Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk, on: [thread]) }
         Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash, on: [thread]) }
@@ -311,6 +312,20 @@ struct MoveMenuContent: View {
                 Button(category.title, systemImage: category.symbol) {
                     model.moveSender(to: category, thread: thread)
                 }
+            }
+        }
+    }
+}
+
+/// Folders as menu items (the mouse route to what V does).
+struct FolderMenuContent: View {
+    @Environment(AppModel.self) private var model
+    let thread: ThreadSummary
+
+    var body: some View {
+        ForEach(model.folderTargets(for: thread), id: \.path) { box in
+            Button(box.displayName, systemImage: box.role?.symbol ?? "folder") {
+                model.move([thread], toFolder: box)
             }
         }
     }

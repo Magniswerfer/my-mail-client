@@ -45,6 +45,8 @@ extension AppModel {
             },
             AppCommand(id: "sweep", title: String(localized: "Sweep Inbox (Done for all unpinned)"), symbol: "checkmark.rectangle.stack",
                        keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
+            AppCommand(id: "moveFolder", title: String(localized: "Move to Folder…"), symbol: "folder", keys: "V",
+                       isEnabled: hasSelection) { self.isFolderPickerShown = true },
             AppCommand(id: "checkMail", title: String(localized: "Check for New Mail"), symbol: "arrow.clockwise", keys: "⌘⇧N") {
                 self.checkForNewMail()
             },
@@ -168,6 +170,96 @@ struct CommandPalette: View {
     private func run(_ command: AppCommand) {
         model.isPaletteShown = false
         command.run()
+    }
+}
+
+/// V: move the selected conversation to a folder. Type to filter, ↑↓ to choose, Return to move.
+struct FolderPicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+    @State private var highlighted = 0
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let thread = model.targetThreads.first
+        let matches = filtered(model.folderTargets(for: thread))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder").foregroundStyle(.secondary)
+                TextField("Move to folder", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.title3)
+                    .focused($focused)
+                    .onSubmit { moveHighlighted(matches) }
+            }
+            .padding(14)
+            Divider()
+            if matches.isEmpty {
+                Text("No folder matches “\(query)”")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(matches.enumerated()), id: \.element.path) { index, box in
+                                row(box, highlighted: index == highlighted)
+                                    .id(box.path)
+                                    .onTapGesture { move(to: box) }
+                            }
+                        }
+                        .padding(6)
+                    }
+                    .frame(maxHeight: 340)
+                    .onChange(of: highlighted) { _, i in
+                        if matches.indices.contains(i) { proxy.scrollTo(matches[i].path) }
+                    }
+                }
+            }
+        }
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .shadow(radius: 30, y: 10)
+        .onAppear { focused = true }
+        .onChange(of: query) { highlighted = 0 }
+        .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, max(0, matches.count - 1)); return .handled }
+        .onKeyPress(.upArrow) { highlighted = max(highlighted - 1, 0); return .handled }
+        .onKeyPress(.escape) { model.isFolderPickerShown = false; return .handled }
+    }
+
+    private func filtered(_ folders: [MailboxState]) -> [MailboxState] {
+        let words = query.lowercased().split(separator: " ")
+        guard !words.isEmpty else { return folders }
+        return folders.filter { box in
+            let haystack = "\(box.displayName) \(box.path)".lowercased()
+            return words.allSatisfy { haystack.contains($0) }
+        }
+    }
+
+    private func row(_ box: MailboxState, highlighted: Bool) -> some View {
+        HStack {
+            Image(systemName: box.role?.symbol ?? "folder").frame(width: 22)
+            Text(box.displayName)
+            Spacer()
+            if box.displayName != box.path, box.role == nil {
+                Text(box.path).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(highlighted ? Color.accentColor.opacity(0.2) : .clear, in: .rect(cornerRadius: 8))
+        .contentShape(Rectangle())
+    }
+
+    private func moveHighlighted(_ matches: [MailboxState]) {
+        guard matches.indices.contains(highlighted) else { return }
+        move(to: matches[highlighted])
+    }
+
+    private func move(to box: MailboxState) {
+        model.isFolderPickerShown = false
+        model.move(toFolder: box)
     }
 }
 
