@@ -4570,6 +4570,66 @@
           }
         }
       }
+    },
+    "Move to Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til mappe…"
+          }
+        }
+      }
+    },
+    "Move to Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til mappe"
+          }
+        }
+      }
+    },
+    "Move to folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til mappe"
+          }
+        }
+      }
+    },
+    "No folder matches “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen mappe matcher “%@”"
+          }
+        }
+      }
+    },
+    "Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappe"
+          }
+        }
+      }
+    },
+    "Move to another category (M) or folder (V)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til en anden kategori (M) eller mappe (V)"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

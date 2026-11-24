@@ -68,6 +68,8 @@ struct TidingsApp: App {
                     .keyboardShortcut(.delete, modifiers: .command)
                 Button("Move to Junk") { model.perform(.junk) }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
+                Button("Move to Folder…") { model.isFolderPickerShown = true }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
                 Divider()
                 Button("Accept Invitation") { model.respondToSelectedInvite(.accepted) }
                     .keyboardShortcut("y", modifiers: [.command, .control])
@@ -166,10 +168,18 @@ struct RootView: View {
                     CommandPalette().padding(.top, 80)
                 }
             }
+            if model.isFolderPickerShown {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.08).ignoresSafeArea()
+                        .onTapGesture { model.isFolderPickerShown = false }
+                    FolderPicker().padding(.top, 80)
+                }
+            }
         }
         .onKeyPress(phases: .down) { press in handleKey(press) }
         .onKeyPress(.escape) {
             if model.isPaletteShown { model.isPaletteShown = false; return .handled }
+            if model.isFolderPickerShown { model.isFolderPickerShown = false; return .handled }
             guard model.isSearching else { return .ignored }
             model.searchText = ""
             searchFocused = false
@@ -240,12 +250,15 @@ struct RootView: View {
             }
             .help("Pin (P)").disabled(none)
             Menu {
-                if let thread = model.targetThreads.first { MoveMenuContent(thread: thread) }
+                if let thread = model.targetThreads.first {
+                    MoveMenuContent(thread: thread)
+                    Section("Folder") { FolderMenuContent(thread: thread) }
+                }
             } label: {
                 Label("Move to", systemImage: "tray.and.arrow.down")
             }
             .menuIndicator(.hidden)
-            .help("Move to another category (M)")
+            .help("Move to another category (M) or folder (V)")
             .disabled(none)
         }
         ToolbarItem(placement: .primaryAction) {
@@ -258,7 +271,7 @@ struct RootView: View {
 
     /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        guard !searchFocused, !model.isPaletteShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown,
+        guard !searchFocused, !model.isPaletteShown, !model.isFolderPickerShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown,
               press.modifiers.subtracting(.shift).isEmpty else { return .ignored }
         let key = press.characters
 
@@ -288,6 +301,7 @@ struct RootView: View {
         case "i": model.run(commandID: "inbox")
         case "g": pendingG = Date()
         case "m": if !model.targetThreads.isEmpty { model.isCategoryPickerShown = true }
+        case "v": if !model.targetThreads.isEmpty { model.isFolderPickerShown = true }
         case "c": model.composeNew()
         case "r": model.compose(.reply)
         case "a": model.compose(.replyAll)

@@ -92,6 +92,30 @@ import Testing
         #expect(try f.store.count() == total, "no duplicates after the round trip")
     }
 
+    @Test func moveToFolderAndBack() async throws {
+        guard let f = try await fixture() else { return }
+        try await MailSession.open(endpoint: f.endpoint, password: "tidings-test", profile: .iCloudSimulation) { try await $0.create("Projects") }
+        try await f.sync.syncOnce()
+        let dinner = try f.thread("Middag")
+        let inboxCount = try await f.server("INBOX").count
+
+        #expect(try await f.sync.perform(.move(toMailbox: "INBOX"), threadIDs: [dinner.threadID]) == nil, "moving to where it already is does nothing")
+        let change = try #require(try await f.sync.perform(.move(toMailbox: "Projects"), threadIDs: [dinner.threadID]))
+        #expect(try f.inbox().contains { $0.threadID == dinner.threadID } == false)
+        #expect(try f.store.threads(mailbox: "Projects").contains { $0.threadID == dinner.threadID })
+        try await f.sync.processPendingActions()
+        #expect(try await f.server("Projects").count == 2)
+        #expect(try await f.server("INBOX").count == inboxCount - 2)
+
+        try await f.sync.undo(change)
+        try await f.sync.processPendingActions()
+        #expect(try await f.server("Projects").isEmpty)
+        #expect(try await f.server("INBOX").count == inboxCount)
+        let total = try f.store.count()
+        try await f.sync.syncOnce()
+        #expect(try f.store.count() == total, "no duplicates after the round trip")
+    }
+
     @Test func pinAndReadSetServerFlags() async throws {
         guard let f = try await fixture() else { return }
         let sofie = try f.thread("website")

@@ -89,6 +89,7 @@ final class AppModel {
     /// A conversation to snooze that isn't the selection (iPhone swipe); nil means the selection.
     var snoozeTarget: String?
     var isCategoryPickerShown = false
+    var isFolderPickerShown = false
     var isPaletteShown = false
     var sweepCandidate: SweepRequest?
     weak var undoManager: UndoManager?
