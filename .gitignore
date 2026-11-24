@@ -4,3 +4,6 @@
 DerivedData/
 .DS_Store
 App/build/
+App/build-dev/
+App/build-dev.log
+App/build.log

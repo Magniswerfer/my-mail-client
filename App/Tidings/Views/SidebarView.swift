@@ -8,9 +8,10 @@ struct SidebarView: View {
         @Bindable var model = model
         List(selection: Binding(get: { model.selection }, set: { if let s = $0 { model.selection = s } })) {
             Section {
+                // `.tag` must be the outermost modifier, or the row can't be selected.
                 Label("Inbox", systemImage: "tray")
+                    .badge(inboxUnread)
                     .tag(SidebarItem.inbox)
-                    .badge(model.threads.isEmpty ? 0 : inboxUnread)
                 Label("Snoozed", systemImage: "clock")
                     .tag(SidebarItem.snoozed)
             }
@@ -38,9 +39,8 @@ struct SidebarView: View {
         .listStyle(.sidebar)
     }
 
-    private var inboxUnread: Int {
-        model.threads.filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
-    }
+    /// Unread Primary conversations in the Inbox, whatever view is showing.
+    private var inboxUnread: Int { model.inboxUnreadCount }
 
     private func folders(for accountID: String) -> [MailboxState] {
         let order: [MailboxRole?] = [.archive, .sent, .drafts]
@@ -54,13 +54,6 @@ struct SidebarView: View {
     }
 
     private func displayName(_ box: MailboxState) -> String {
-        switch box.role {
-        case .sent: String(localized: "Sent")
-        case .drafts: String(localized: "Drafts")
-        case .archive: String(localized: "Archive")
-        case .trash: String(localized: "Trash")
-        case .junk: String(localized: "Junk")
-        default: box.path
-        }
+        box.role?.title ?? box.path
     }
 }

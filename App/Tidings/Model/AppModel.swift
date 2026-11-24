@@ -32,7 +32,14 @@ enum StreamItem: Identifiable, Hashable {
 @MainActor @Observable
 final class AppModel {
     // Navigation
-    var selection: SidebarItem = .inbox { didSet { if selection != oldValue { selectedThreadID = nil }; reload() } }
+    var selection: SidebarItem = .inbox {
+        didSet {
+            if selection != oldValue { selectedThreadID = nil }
+            // Choosing a place in the sidebar leaves search, so the click visibly goes there.
+            if !searchText.isEmpty { searchText = "" }
+            reload()
+        }
+    }
     var selectedThreadID: String? { didSet { scheduleMarkRead() } }
     var expandedBundles: Set<MailCategory> = []
     /// Show only pinned conversations (Google Inbox's pin toggle).
@@ -51,6 +58,7 @@ final class AppModel {
     private(set) var accounts: [AccountConfig] = []
     private(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
+    private(set) var inboxUnreadCount = 0
     private(set) var syncStatus: [String: String] = [:]
     var lastError: String?
 
@@ -157,7 +165,8 @@ final class AppModel {
         case .inbox: String(localized: "Inbox")
         case .snoozed: String(localized: "Snoozed")
         case .category(let c): c.title
-        case .mailbox(_, let path): path
+        case .mailbox(let accountID, let path):
+            mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
         }
     }
 
@@ -176,6 +185,8 @@ final class AppModel {
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
             }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
+            inboxUnreadCount = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+                .filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
         } catch {
             lastError = String(describing: error)
         }

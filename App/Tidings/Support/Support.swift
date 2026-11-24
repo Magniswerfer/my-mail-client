@@ -82,6 +82,17 @@ extension MailCategory {
 }
 
 extension MailboxRole {
+    var title: String {
+        switch self {
+        case .inbox: String(localized: "Inbox")
+        case .sent: String(localized: "Sent")
+        case .drafts: String(localized: "Drafts")
+        case .trash: String(localized: "Trash")
+        case .junk: String(localized: "Junk")
+        case .archive: String(localized: "Archive")
+        }
+    }
+
     var symbol: String {
         switch self {
         case .inbox: "tray"

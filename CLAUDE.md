@@ -5,7 +5,7 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 ## Layout
 - `MailEngine/` — headless Swift package (no AppKit/UIKit/SwiftUI). Sync, IMAP, storage, search, classification, rules.
   - `Sources/MailEngine` library · `Sources/tidings-probe` CLI for live checks · `Tests/`.
-- `App/` — macOS app (XcodeGen `project.yml`), arrives in M1.
+- `App/` — macOS app (XcodeGen `project.yml`; run `xcodegen generate` in `App/` after adding files).
 
 ## Conventions
 - Swift 6, strict concurrency. Engine types are `Sendable`; IO is async.
@@ -18,6 +18,9 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 - Never mutate anything in the real iCloud account outside the `Tidings-Test` mailbox; mutations only on messages carrying our `X-Tidings-Test` header (enforced by `TestFence`).
 - Agents never log in to the real iCloud account. Live probes are run by Magnus: the password comes from Keychain (`security add-generic-password -s Tidings -a <address> -w`).
 - Automated tests use the local Dovecot container (`MailEngine/TestServer/`).
+- Magnus runs the real app from `App/build` (bundle id `hk.gnus.tidings`). Agents test UI only with the **dev copy** (`hk.gnus.tidings.dev`, own data, local Dovecot), never by clicking in the real instance:
+  `xcodebuild -project App/Tidings.xcodeproj -scheme Tidings -derivedDataPath App/build-dev PRODUCT_BUNDLE_IDENTIFIER=hk.gnus.tidings.dev build`, then
+  `open -n App/build-dev/Build/Products/Debug/Tidings.app --args -TidingsDevServer`. With Stage Manager on, `osascript -e 'tell application id "hk.gnus.tidings.dev" to activate'` before screenshots.
 
 ## Commands
 - `swift build --package-path MailEngine`
