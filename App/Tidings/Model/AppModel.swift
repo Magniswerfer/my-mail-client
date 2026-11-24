@@ -81,7 +81,11 @@ final class AppModel {
     var lastError: String?
 
     // Search
-    var searchText = "" { didSet { runSearch() } }
+    var searchText = "" { didSet { selectedHitID = nil; runSearch() } }
+    /// The highlighted search result; selecting one opens its conversation.
+    var selectedHitID: Int64? {
+        didSet { if let id = selectedHitID { selectedThreadID = threadID(forMessage: id) } }
+    }
     private(set) var searchHits: [SearchHit] = []
     private(set) var facets: SearchFacets?
     private(set) var searchMilliseconds: Double = 0
@@ -333,8 +337,17 @@ final class AppModel {
         if expandedBundles.contains(category) { expandedBundles.remove(category) } else { expandedBundles.insert(category) }
     }
 
+    /// j/k: the next/previous conversation in the stream, or result while searching.
+    /// The lists scroll to follow (StreamView / SearchResultsView).
     func moveSelection(_ delta: Int) {
-        let ids = isSearching ? searchHits.compactMap { hit in threadID(forMessage: hit.id) } : visibleThreadIDs
+        if isSearching {
+            let ids = searchHits.map(\.id)
+            guard !ids.isEmpty else { return }
+            let index = selectedHitID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+            selectedHitID = ids[max(0, min(ids.count - 1, index + delta))]
+            return
+        }
+        let ids = visibleThreadIDs
         guard !ids.isEmpty else { return }
         let index = selectedThreadID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
         selectedThreadID = ids[max(0, min(ids.count - 1, index + delta))]

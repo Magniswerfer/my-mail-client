@@ -7,6 +7,7 @@ struct StreamView: View {
 
     var body: some View {
         @Bindable var model = model
+        ScrollViewReader { proxy in
         List(selection: $model.selectedThreadID) {
             ForEach(model.streamItems) { item in
                 switch item {
@@ -38,10 +39,17 @@ struct StreamView: View {
         .overlay {
             if model.threads.isEmpty { EmptyStream() }
         }
+        // Keep the selection in view as j/k move it (nil anchor = scroll only as far as needed).
+        .onChange(of: model.selectedThreadID) { _, id in
+            guard let id else { return }
+            withAnimation(.snappy(duration: 0.18)) { proxy.scrollTo(id) }
+        }
+        }
     }
 
     private func row(_ thread: ThreadSummary, inBundle: Bool = false) -> some View {
         ThreadRow(thread: thread, inBundle: inBundle)
+            .id(thread.threadID)
             .tag(thread.threadID)
             .contextMenu { ThreadActions(thread: thread) }
             // Drag a conversation onto a category (or Archive) in the sidebar to move it.

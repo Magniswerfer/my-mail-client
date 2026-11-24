@@ -4,17 +4,19 @@ import SwiftUI
 /// As-you-type results with refinement facets (SPEC §7). Newest first; facets arrive with the hits.
 struct SearchResultsView: View {
     @Environment(AppModel.self) private var model
-    @State private var selectedHit: Int64?
 
     var body: some View {
+        @Bindable var model = model
         VStack(spacing: 0) {
             if let facets = model.facets {
                 FacetBar(facets: facets)
             }
-            List(selection: $selectedHit) {
+            ScrollViewReader { proxy in
+            List(selection: $model.selectedHitID) {
                 Section {
                     ForEach(model.searchHits, id: \.id) { hit in
                         SearchHitRow(hit: hit)
+                            .id(hit.id)
                             .tag(hit.id)
                     }
                 } header: {
@@ -29,9 +31,11 @@ struct SearchResultsView: View {
                     ContentUnavailableView.search(text: model.searchText)
                 }
             }
-        }
-        .onChange(of: selectedHit) { _, id in
-            if let id { model.selectedThreadID = model.threadID(forMessage: id) }
+            .onChange(of: model.selectedHitID) { _, id in
+                guard let id else { return }
+                withAnimation(.snappy(duration: 0.18)) { proxy.scrollTo(id) }
+            }
+            }
         }
     }
 
