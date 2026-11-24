@@ -37,6 +37,9 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     public var surfacedAt: Date?
     public var snoozedUntil: Date?
     public var isSnoozed: Bool = false
+    /// Phishing/spoofing assessment (SPEC §8); reasons are encoded `RiskReason`s.
+    public var riskLevel: RiskLevel = .none
+    public var riskReasons: String?
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -114,6 +117,10 @@ public final class MailStore: Sendable {
         registerSyncMigrations(&m)
         registerTriageMigrations(&m)
         registerOutboxMigrations(&m)
+        registerClassifierMigrations(&m)
+        registerPrivacyMigrations(&m)
+        registerRiskMigrations(&m)
+        registerEmbeddingMigrations(&m)
         return m
     }
 

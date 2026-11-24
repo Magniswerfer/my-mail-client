@@ -5,7 +5,7 @@ import Foundation
 public enum SignalClassifier {
     public struct Decision: Sendable, Hashable {
         public var category: MailCategory
-        public var reason: String
+        public var reason: ClassificationReason
     }
 
     static let socialDomains = [
@@ -41,25 +41,25 @@ public enum SignalClassifier {
             || message.header("Auto-Submitted").map { $0.lowercased() != "no" } == true
 
         if userAddresses.contains(from) {
-            return Decision(category: .primary, reason: "Sent by you")
+            return Decision(category: .primary, reason: .sentByYou)
         }
         if socialDomains.contains(where: { domain == $0 || domain.hasSuffix("." + $0) }) {
-            return Decision(category: .social, reason: "Notification from \(domain)")
+            return Decision(category: .social, reason: .socialNetwork(domain: domain))
         }
         if transactionalWords.contains(where: subject.contains), isAutomated || isBulk {
-            return Decision(category: .transactions, reason: "Automated message about an order, payment or booking")
+            return Decision(category: .transactions, reason: .transactional)
         }
         if isBulk {
             if promoWords.contains(where: subject.contains) {
-                return Decision(category: .advertising, reason: "Bulk mail with a promotional subject")
+                return Decision(category: .advertising, reason: .promotional)
             }
             return isAutomated
-                ? Decision(category: .newsletters, reason: "Mailing list with an unsubscribe link")
-                : Decision(category: .newsletters, reason: "Sent to a mailing list")
+                ? Decision(category: .newsletters, reason: .mailingListUnsubscribe)
+                : Decision(category: .newsletters, reason: .mailingList)
         }
         if isAutomated {
-            return Decision(category: .updates, reason: "Automated message from \(local)@")
+            return Decision(category: .updates, reason: .automatedSender(local: local))
         }
-        return Decision(category: .primary, reason: "From a person")
+        return Decision(category: .primary, reason: .person)
     }
 }

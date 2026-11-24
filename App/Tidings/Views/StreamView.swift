@@ -14,8 +14,9 @@ struct StreamView: View {
                     ThreadRow(thread: thread)
                         .tag(thread.threadID)
                         .contextMenu { ThreadActions(thread: thread) }
-                case .bundle(let category, let members):
-                    BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category))
+                case .bundle(let category, let members, let deliveredAt):
+                    BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
+                              deliveredAt: deliveredAt, waiting: model.waiting(category))
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
                         .selectionDisabled()
@@ -71,6 +72,11 @@ struct ThreadRow: View {
                         Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)
                             .accessibilityLabel("Has attachment")
                     }
+                    if m.riskLevel > .none {
+                        Image(systemName: m.riskLevel == .danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(m.riskLevel == .danger ? .red : .orange)
+                            .accessibilityLabel(m.riskLevel == .danger ? "Looks like phishing" : "Be careful")
+                    }
                     if thread.isPinned {
                         Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange)
                             .accessibilityLabel("Pinned")
@@ -119,6 +125,8 @@ struct BundleRow: View {
     let category: MailCategory
     let threads: [ThreadSummary]
     let expanded: Bool
+    var deliveredAt: Date? = nil
+    var waiting: (count: Int, next: Date)? = nil
 
     var body: some View {
         let unread = threads.reduce(0) { $0 + $1.unreadCount }
@@ -136,13 +144,18 @@ struct BundleRow: View {
                         Text("\(unread) new").font(.caption).foregroundStyle(category.tint)
                     }
                     Spacer()
-                    Text(MailDate.short(threads.first?.latest.date ?? .now))
+                    Text(MailDate.short(deliveredAt ?? threads.first?.arrivedAt ?? .now))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Text(senders)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if let waiting {
+                    Label("\(waiting.count) more at \(waiting.next.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))

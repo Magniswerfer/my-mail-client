@@ -43,7 +43,10 @@ import Testing
         #expect(byCategory[.transactions]?.count == 3)
         #expect(byCategory[.social]?.count == 1)
         #expect(byCategory[.updates]?.count == 2)
-        #expect(byCategory[.primary]?.count == 3)
+        #expect(byCategory[.primary]?.count == 4, "3 conversations + the phishing attempt")
+        let phish = try #require(inbox.first { $0.latest.subject == "Din Apple-konto er låst" })
+        #expect(phish.latest.riskLevel == .danger)
+        #expect(RiskAssessment.decode(phish.latest.riskReasons).count >= 2)
 
         let contract = try #require(inbox.first { $0.latest.subject == "Kontrakt til gennemsyn" })
         #expect(contract.latest.hasAttachments)

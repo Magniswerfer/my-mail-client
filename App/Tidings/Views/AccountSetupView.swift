@@ -140,6 +140,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("Identities", systemImage: "person.crop.rectangle.stack") { IdentitiesSettings() }
+            Tab("Bundles", systemImage: "square.stack.3d.up") { BundleSettings() }
             Tab("General", systemImage: "gearshape") {
                 Form {
                     Section("Accounts") {
@@ -211,5 +212,57 @@ struct IdentityEditor: View {
         }
         .padding(.vertical, 4)
         .onChange(of: identity) { model.updateIdentity(identity, accountID: accountID) }
+    }
+}
+
+/// When each bundle arrives (SPEC §4).
+struct BundleSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(MailCategory.allCases.filter { $0 != .primary }, id: \.self) { category in
+                    BundleScheduleRow(category: category)
+                }
+            } footer: {
+                Text("Scheduled bundles gather mail and arrive in the Inbox once a day. Opening a bundle in the sidebar always shows everything.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct BundleScheduleRow: View {
+    @Environment(AppModel.self) private var model
+    let category: MailCategory
+
+    var body: some View {
+        let schedule = model.bundleSchedules[category] ?? .immediately
+        HStack {
+            Label { Text(category.title) } icon: { Image(systemName: category.symbol).foregroundStyle(category.tint) }
+            Spacer()
+            Picker("", selection: Binding(
+                get: { if case .daily = schedule { 1 } else { 0 } },
+                set: { $0 == 0 ? model.setSchedule(.immediately, for: category) : model.setSchedule(.daily(hour: 17, minute: 0), for: category) }
+            )) {
+                Text("As it arrives").tag(0)
+                Text("Once a day").tag(1)
+            }
+            .labelsHidden()
+            .fixedSize()
+            if case .daily(let hour, let minute) = schedule {
+                DatePicker("", selection: Binding(
+                    get: { Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date())! },
+                    set: { date in
+                        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                        model.setSchedule(.daily(hour: c.hour ?? 17, minute: c.minute ?? 0), for: category)
+                    }
+                ), displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .fixedSize()
+            }
+        }
     }
 }

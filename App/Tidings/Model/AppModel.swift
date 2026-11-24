@@ -14,19 +14,20 @@ enum SidebarItem: Hashable {
 /// One row in the stream: a conversation, or an Inbox-style bundle of conversations.
 enum StreamItem: Identifiable, Hashable {
     case thread(ThreadSummary)
-    case bundle(MailCategory, [ThreadSummary])
+    /// Delivered conversations of a bundle; `deliveredAt` is set for scheduled bundles.
+    case bundle(MailCategory, [ThreadSummary], deliveredAt: Date?)
 
     var id: String {
         switch self {
         case .thread(let t): t.threadID
-        case .bundle(let c, _): "bundle:\(c.rawValue)"
+        case .bundle(let c, _, _): "bundle:\(c.rawValue)"
         }
     }
 
     var date: Date {
         switch self {
         case .thread(let t): t.arrivedAt
-        case .bundle(_, let threads): threads.map(\.arrivedAt).max() ?? .distantPast
+        case .bundle(_, let threads, let deliveredAt): deliveredAt ?? threads.map(\.arrivedAt).max() ?? .distantPast
         }
     }
 }
@@ -50,6 +51,7 @@ final class AppModel {
     // Triage UI
     var toast: Toast?
     var isSnoozePickerShown = false
+    var isCategoryPickerShown = false
     var isPaletteShown = false
     var sweepCandidate: SweepRequest?
     weak var undoManager: UndoManager?
@@ -59,6 +61,14 @@ final class AppModel {
     var draftItems: [OutboxItem] = []
     @ObservationIgnored var markReadTask: Task<Void, Never>?
     @ObservationIgnored var toastTask: Task<Void, Never>?
+    /// Layers 2–3 of the classifier (on-device embeddings + Foundation Models); nil if unavailable.
+    @ObservationIgnored var refinement: Refinement?
+    @ObservationIgnored var refinementTask: Task<Void, Never>?
+    private(set) var isRefining = false
+    var bundleSchedules: [MailCategory: BundleSchedule] = BundleScheduleStorage.load()
+    /// "Now" for delivery schedules; bumped at each delivery so the stream re-renders.
+    var now = Date()
+    @ObservationIgnored var deliveryTask: Task<Void, Never>?
 
     // Data
     var accounts: [AccountConfig] = []
@@ -87,8 +97,9 @@ final class AppModel {
     init() {
         isDevServer = ProcessInfo.processInfo.arguments.contains("-TidingsDevServer")
             || ProcessInfo.processInfo.environment["TIDINGS_DEV_SERVER"] == "1"
+        let devUser = UserDefaults.standard.string(forKey: "TidingsDevUser") ?? "magnus"
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(isDevServer ? "Tidings-Dev" : "Tidings", isDirectory: true)
+            .appendingPathComponent(isDevServer ? (devUser == "magnus" ? "Tidings-Dev" : "Tidings-Dev-\(devUser)") : "Tidings", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         dataDirectory = base
         do {
@@ -97,7 +108,9 @@ final class AppModel {
             fatalError("Could not open the mail store at \(base.path): \(error)")
         }
         cache = MessageCache(directory: base.appendingPathComponent("Cache", isDirectory: true))
-        accounts = isDevServer ? [Self.devAccount] : AccountStorage.load()
+        var dev = Self.devAccount
+        dev.endpoint.username = devUser
+        accounts = isDevServer ? [dev] : AccountStorage.load()
         if !isDevServer {
             var changed = false
             for index in accounts.indices where accounts[index].identities == nil {
@@ -108,6 +121,7 @@ final class AppModel {
         }
         reload()
         reloadOutbox()
+        scheduleDeliveryRefresh()
     }
 
     static let devAccount = AccountConfig(
@@ -123,6 +137,14 @@ final class AppModel {
     // MARK: Sync
 
     func start() {
+        if refinement == nil {
+            // Loading the embedding model takes a moment: keep it off the main thread.
+            let store = self.store
+            Task.detached { [weak self] in
+                let loaded = Refinement.onDevice(store: store)
+                await MainActor.run { self?.refinement = loaded }
+            }
+        }
         for account in accounts where syncs[account.id] == nil {
             let password: String
             if account.id == "dev" {
@@ -136,11 +158,13 @@ final class AppModel {
             let sync = AccountSync(account: account, password: password, store: store, cache: cache,
                                    profile: account.id == "dev" ? .iCloudSimulation : nil)
             syncs[account.id] = sync
+            // Subscribe before starting the loop, or a fast first sync can finish (and emit
+            // everything, including "idle") before anyone is listening.
             tasks.append(Task { [weak self] in
                 let events = await sync.events()
+                self?.tasks.append(Task.detached { await sync.run() })
                 for await event in events { self?.handle(event, account: account) }
             })
-            tasks.append(Task.detached { await sync.run() })
         }
     }
 
@@ -155,6 +179,7 @@ final class AppModel {
             syncStatus[account.id] = String(localized: "Up to date")
             lastError = nil
             reload()
+            scheduleRefinement()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message
@@ -168,6 +193,19 @@ final class AppModel {
             reloadOutbox()
             lastError = message
             show(Toast(message: String(localized: "Couldn't send: \(message)"), symbol: "exclamationmark.triangle"))
+        }
+    }
+
+    /// One background sorting pass after each sync, never two at once.
+    func scheduleRefinement() {
+        guard refinementTask == nil, let refinement else { return }
+        isRefining = true
+        refinementTask = Task { [weak self] in
+            let report = try? await refinement.run()
+            guard let self else { return }
+            self.isRefining = false
+            self.refinementTask = nil
+            if (report?.changed ?? 0) > 0 { self.reload() }
         }
     }
 
@@ -202,6 +240,7 @@ final class AppModel {
     }
 
     func reload() {
+        now = Date()
         do {
             switch selection {
             case .inbox:
@@ -227,6 +266,32 @@ final class AppModel {
 
     /// The Inbox stream: primary conversations as rows, every other category collapsed into a
     /// bundle placed where its newest conversation would be.
+    /// Conversations held back until a bundle's next delivery, with when that is.
+    func waiting(_ category: MailCategory) -> (count: Int, next: Date)? {
+        guard let schedule = bundleSchedules[category], let last = schedule.lastDelivery(before: now),
+              let next = schedule.nextDelivery(after: now) else { return nil }
+        let count = threads.filter { $0.latest.category == category && $0.arrivedAt > last }.count
+        return count > 0 ? (count, next) : nil
+    }
+
+    func setSchedule(_ schedule: BundleSchedule, for category: MailCategory) {
+        bundleSchedules[category] = schedule
+        BundleScheduleStorage.save(bundleSchedules)
+        scheduleDeliveryRefresh()
+    }
+
+    /// Re-renders the stream when the next bundle is delivered.
+    func scheduleDeliveryRefresh() {
+        deliveryTask?.cancel()
+        guard let next = bundleSchedules.values.compactMap({ $0.nextDelivery(after: Date()) }).min() else { return }
+        deliveryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(1, next.timeIntervalSinceNow) + 1))
+            guard !Task.isCancelled else { return }
+            self?.now = Date()
+            self?.scheduleDeliveryRefresh()
+        }
+    }
+
     var streamItems: [StreamItem] {
         guard selection == .inbox else { return threads.map(StreamItem.thread) }
         var items: [StreamItem] = []
@@ -236,7 +301,13 @@ final class AppModel {
             else { bundles[thread.latest.category, default: []].append(thread) }
         }
         for (category, members) in bundles {
-            items.append(.bundle(category, members))
+            // Scheduled bundles show what arrived before their last delivery; the rest waits.
+            if let delivered = bundleSchedules[category]?.lastDelivery(before: now) {
+                let ready = members.filter { $0.arrivedAt <= delivered }
+                if !ready.isEmpty { items.append(.bundle(category, ready, deliveredAt: delivered)) }
+            } else {
+                items.append(.bundle(category, members, deliveredAt: nil))
+            }
         }
         return items.sorted { $0.date > $1.date }
     }
@@ -246,7 +317,7 @@ final class AppModel {
         streamItems.flatMap { item -> [String] in
             switch item {
             case .thread(let t): [t.threadID]
-            case .bundle(let c, let members): expandedBundles.contains(c) ? members.map(\.threadID) : []
+            case .bundle(let c, let members, _): expandedBundles.contains(c) ? members.map(\.threadID) : []
             }
         }
     }

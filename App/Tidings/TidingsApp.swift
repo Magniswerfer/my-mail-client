@@ -131,6 +131,7 @@ struct RootView: View {
             return .handled
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
+        .sheet(isPresented: $model.isCategoryPickerShown) { CategoryPicker() }
         .confirmationDialog(model.sweepCandidate?.title ?? "", isPresented: Binding(
             get: { model.sweepCandidate != nil }, set: { if !$0 { model.sweepCandidate = nil } }
         ), presenting: model.sweepCandidate) { request in
@@ -180,7 +181,7 @@ struct RootView: View {
 
     /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        guard !searchFocused, !model.isPaletteShown, !model.isSnoozePickerShown,
+        guard !searchFocused, !model.isPaletteShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown,
               press.modifiers.subtracting(.shift).isEmpty else { return .ignored }
         let key = press.characters
 
@@ -209,6 +210,7 @@ struct RootView: View {
         case "!": model.perform(.junk)
         case "i": model.run(commandID: "inbox")
         case "g": pendingG = Date()
+        case "m": if !model.targetThreads.isEmpty { model.isCategoryPickerShown = true }
         case "c": model.composeNew()
         case "r": model.compose(.reply)
         case "a": model.compose(.replyAll)
@@ -229,6 +231,12 @@ struct SyncStatusView: View {
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.orange)
                     .help(error)
+            }
+            if model.isRefining {
+                Label("Sorting with on-device AI…", systemImage: "sparkles")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+                    .help("Sorting with on-device AI…")
             }
             Text(model.syncStatus.values.sorted().first ?? "")
                 .font(.caption)

@@ -216,6 +216,9 @@ public actor AccountSync {
         }
         if !flagChanges.isEmpty { try store.updateFlags(accountID: account.id, mailbox: path, changes: flagChanges) }
 
+        // Domains you correspond with: protected from look-alikes, never flagged themselves.
+        let trustedDomains = (try? store.correspondentDomains(ownAddresses: Set(account.addresses))) ?? []
+
         // New messages, newest first, so the top of the stream fills in immediately.
         let new = summaries.filter { known[$0.uid] == nil && !inFlight.sourceUIDs.contains($0.uid) }.sorted { $0.uid > $1.uid }
         var done = 0
@@ -231,7 +234,8 @@ public actor AccountSync {
             for summary in batch {
                 guard let data = raw[summary.uid] else { continue }
                 let isComplete = summary.size <= largeMessageThreshold
-                items.append(try makeMessage(summary: summary, data: data, mailbox: path, validity: selected.uidValidity))
+                items.append(try makeMessage(summary: summary, data: data, mailbox: path, validity: selected.uidValidity,
+                                             trustedDomains: trustedDomains))
                 if isComplete, let date = items.last?.message.date, Date().timeIntervalSince(date) < offlineWindow {
                     try? cache.write(data, account: account.id, mailbox: path, validity: selected.uidValidity ?? 0, uid: summary.uid)
                 }
@@ -250,9 +254,10 @@ public actor AccountSync {
         emit(.mailboxSynced(mailbox: path, newMessages: new.count))
     }
 
-    func makeMessage(summary: MessageSummary, data: Data, mailbox: String, validity: UInt32?) throws -> (message: StoredMessage, plainText: String) {
+    func makeMessage(summary: MessageSummary, data: Data, mailbox: String, validity: UInt32?,
+                     trustedDomains: Set<String> = []) throws -> (message: StoredMessage, plainText: String) {
         let parsed = MIMEParser.parse(data)
-        let decision = SignalClassifier.classify(parsed, userAddresses: Set(account.addresses.map { $0.lowercased() }))
+        let (category, reason) = MessageClassifier(store: store).classify(parsed, userAddresses: Set(account.addresses.map { $0.lowercased() }))
         let from = parsed.from.first
         let threadID = try store.threadID(for: parsed, fallback: "\(account.id)/\(mailbox)/\(validity ?? 0)/\(summary.uid)")
         var message = StoredMessage(
@@ -263,11 +268,18 @@ public actor AccountSync {
             date: parsed.date ?? summary.internalDate ?? Date(),
             flags: summary.flags.sorted().joined(separator: " "), size: summary.size,
             hasAttachments: parsed.attachments.contains { !$0.isInline },
-            category: decision.category
+            category: category
         )
         message.inReplyTo = parsed.inReplyTo.first
-        message.classificationReason = decision.reason
+        message.classificationReason = reason.encoded
         (message.isSnoozed, message.snoozedUntil) = SnoozeKeywords.parse(summary.flags)
+        let sender = parsed.from.first?.address ?? ""
+        let mine = account.addresses.contains { $0.caseInsensitiveCompare(sender) == .orderedSame }
+        if !mine, !(try store.isTrustedSender(sender)) {
+            let risk = PhishingCheck.evaluate(parsed, trustedDomains: trustedDomains)
+            message.riskLevel = risk.level
+            message.riskReasons = risk.reasons.isEmpty ? nil : risk.encodedReasons
+        }
         return (message, parsed.plainText)
     }
 

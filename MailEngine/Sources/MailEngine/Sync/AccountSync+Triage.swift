@@ -125,6 +125,21 @@ extension AccountSync {
         }
     }
 
+    // MARK: Corrections
+
+    /// "This sender belongs in X": recategorizes the sender's mail now and remembers it for
+    /// future mail (layer 0 of the classifier). Local only; categories aren't on the server yet.
+    @discardableResult
+    public func moveSender(of threadIDs: [String], to category: MailCategory) throws -> Int {
+        var changed = 0
+        for thread in threadIDs {
+            guard let sender = try store.messages(inThread: thread).last(where: { !account.addresses.contains($0.fromAddress.lowercased()) })?.fromAddress
+                    ?? store.messages(inThread: thread).last?.fromAddress else { continue }
+            changed += try store.remember(category: category, forSender: sender).count
+        }
+        return changed
+    }
+
     // MARK: Undo
 
     /// Reverses a change. If it hasn't reached the server yet it is simply cancelled;

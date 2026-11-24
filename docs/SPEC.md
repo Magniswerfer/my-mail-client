@@ -42,7 +42,7 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 - **Done** (archive move), **Pin**, **Snooze** (time + "someday"), **Bundles**, **Sweep** (Done all non-pinned), **Highlights** — all v1.
 - Single stream (Inbox-style): Primary as individual rows; other categories collapse into inline bundles.
 - Categories: **Primary, Transactions, Updates, Newsletters, Advertising, Social** + custom bundles (rule- or AI-defined).
-- Bundle delivery schedules; Advertising + Newsletters default to scheduled.
+- Bundle delivery schedules (Settings → Bundles); Advertising + Newsletters default to daily at 17:00. Waiting mail shows as "N more at 17:00"; the sidebar bundle view always shows everything.
 - Conversations threaded by `References`/`In-Reply-To` with subject fallback, including Sent. Actions apply to threads. Toggle to message view.
 - Global ⌘Z undo for every action.
 
@@ -65,7 +65,8 @@ Three layers, cheapest first:
 2. **Fast classifier** — on-device multilingual embeddings → small trainable head, retrained on corrections. ms per message.
 3. **Foundation Models** — only for low-confidence messages, Highlights extraction, NL rule conditions, thread summaries.
 
-- Corrections stick per sender. Every message can show "why it's here".
+- Corrections stick per sender (`senderRule`, layer 0). Every message shows "why it's here" (stable reason codes, localized in the app).
+- **M4 implementation:** layer 2 = NLContextualEmbedding (Latin script, one model for DA+EN, ~10 ms/message, 512-d stored as Float16) + on-device softmax regression trained on corrections (×3) and confident header decisions; layer 3 = Foundation Models. Conservative: moves into/out of Primary need layer 3 to agree (or ≥95% with no model). Runs in the background after each sync.
 - Mail is mixed Danish/English; system language is Danish. **M0 verified** Foundation Models is available and supports `da_DK` (6/6 samples correct, ~0.6 s each); Danish contextual embeddings are installed.
 
 ### Highlights (v1)
@@ -95,7 +96,8 @@ System Writing Tools in the composer, one-line thread summaries, "Summarize" for
 
 - Layered on top of iCloud's server filter: Authentication-Results (SPF/DKIM/DMARC/ARC), lookalike-domain & display-name spoofing, link-text/href mismatch, local classifier trained on Junk + corrections, LLM phishing explanations. **No external lookups.**
 - Corrections move mail in/out of Junk on the server (trains iCloud's filter too). Uncertain → warning banner, stays in inbox.
-- Remote content: strip tracking pixels/links always; auto-load images only for senders you've written to or approved; "3 trackers removed" indicator.
+- Remote content: strip tracking pixels/links always; auto-load images only for senders you've written to or approved (per sender or domain); "3 trackers removed" indicator. `cid:` inline images served from the message.
+- Phishing (M4): Authentication-Results, brand-in-display-name (whole words), look-alike/punycode domains (incl. your correspondents' domains), link-text/href mismatch, Reply-To elsewhere → caution/danger banner with reasons, "Move to Junk" / "It's safe". Nothing moves automatically.
 - Avatars: Contacts photo → BIMI logo → domain favicon → monogram. Cached per domain, toggle to disable network avatars.
 
 ## 9. Compose & send
@@ -169,7 +171,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M1 · Read-only client** ✅ | sync, stream, threads, reading pane, instant faceted search |
 | **M2 · Triage** ✅ (verified on local server) | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
 | **M3 · Compose** ✅ (verified on local servers) | SMTP, outbox/undo send, identities, signatures — **daily driver** |
-| **M4 · Sorting** | AI categories, bundles + schedules, spam layers, remote-content protection |
+| **M4 · Sorting** ✅ (verified on local servers) | AI categories, bundles + schedules, spam layers, remote-content protection |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |

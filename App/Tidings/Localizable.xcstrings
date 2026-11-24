@@ -393,10 +393,40 @@
     },
     "%lld new": {
       "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld new"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld new"
+                }
+              }
+            }
+          }
+        },
         "da": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld nye"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ny"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld nye"
+                }
+              }
+            }
           }
         }
       }
@@ -773,10 +803,40 @@
     },
     "%lld conversations done": {
       "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld conversation done"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld conversations done"
+                }
+              }
+            }
+          }
+        },
         "da": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld samtaler færdige"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld samtale færdig"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld samtaler færdige"
+                }
+              }
+            }
           }
         }
       }
@@ -1627,6 +1687,526 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adresser på eget domæne skal være sat op i iCloud+ (Indstillinger → Apple-konto → iCloud → Eget e-maildomæne)."
+          }
+        }
+      }
+    },
+    "You sent it": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du sendte den"
+          }
+        }
+      }
+    },
+    "You moved this sender to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du flyttede denne afsender til %@"
+          }
+        }
+      }
+    },
+    "Notification from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifikation fra %@"
+          }
+        }
+      }
+    },
+    "Automated message about an order, payment or booking": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisk besked om en ordre, betaling eller booking"
+          }
+        }
+      }
+    },
+    "Bulk mail with a promotional subject": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Massemail med et reklameemne"
+          }
+        }
+      }
+    },
+    "Mailing list with an unsubscribe link": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mailingliste med afmeldingslink"
+          }
+        }
+      }
+    },
+    "Sent to a mailing list": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendt til en mailingliste"
+          }
+        }
+      }
+    },
+    "Automated sender (%@@)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisk afsender (%@@)"
+          }
+        }
+      }
+    },
+    "From a person": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra en person"
+          }
+        }
+      }
+    },
+    "Learned from your choices (%lld%% sure)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lært af dine valg (%lld %% sikker)"
+          }
+        }
+      }
+    },
+    "On-device AI: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI på enheden: %@"
+          }
+        }
+      }
+    },
+    "%@ → %@, now and in future": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ → %2$@, nu og fremover"
+          }
+        }
+      }
+    },
+    "Always put mail from %@ in…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læg altid mail fra %@ i…"
+          }
+        }
+      }
+    },
+    "Move Sender to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt afsender til %@"
+          }
+        }
+      }
+    },
+    "Why this is here. Click to move this sender to another bundle (M).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvorfor den er her. Klik for at flytte afsenderen til en anden bundt (M)."
+          }
+        }
+      }
+    },
+    "%lld trackers removed": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld tracker removed"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld trackers removed"
+                }
+              }
+            }
+          }
+        },
+        "da": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sporingspixel fjernet"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sporingspixels fjernet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld links cleaned": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld link cleaned"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld links cleaned"
+                }
+              }
+            }
+          }
+        },
+        "da": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld link renset"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld links renset"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld images hidden": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld image hidden"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld images hidden"
+                }
+              }
+            }
+          }
+        },
+        "da": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld billede skjult"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld billeder skjult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Load images": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indlæs billeder"
+          }
+        }
+      }
+    },
+    "Always": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altid"
+          }
+        }
+      }
+    },
+    "Always from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altid fra %@"
+          }
+        }
+      }
+    },
+    "Always from @%@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altid fra @%@"
+          }
+        }
+      }
+    },
+    "Tracking pixels are always removed. Images from people you haven't written to stay hidden until you allow them.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sporingspixels fjernes altid. Billeder fra folk, du ikke har skrevet til, forbliver skjulte, indtil du tillader dem."
+          }
+        }
+      }
+    },
+    "The sender's domain did not vouch for this message (DMARC failed).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsenderens domæne går ikke god for denne besked (DMARC fejlede)."
+          }
+        }
+      }
+    },
+    "The message's signature didn't check out (DKIM failed).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskedens signatur passede ikke (DKIM fejlede)."
+          }
+        }
+      }
+    },
+    "It came from a server the sender's domain doesn't use (SPF failed).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den kom fra en server, som afsenderens domæne ikke bruger (SPF fejlede)."
+          }
+        }
+      }
+    },
+    "It claims to be %@, but comes from %@.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den udgiver sig for at være %1$@, men kommer fra %2$@."
+          }
+        }
+      }
+    },
+    "The name shows %@, which isn't the real sender.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navnet viser %@, som ikke er den rigtige afsender."
+          }
+        }
+      }
+    },
+    "%@ looks like %@, but isn't.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ ligner %2$@, men er det ikke."
+          }
+        }
+      }
+    },
+    "%@ uses look-alike characters.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ bruger tegn, der ligner andre tegn."
+          }
+        }
+      }
+    },
+    "A link shows %@ but goes to %@.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et link viser %1$@, men går til %2$@."
+          }
+        }
+      }
+    },
+    "Replies would go to %@.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar ville gå til %@."
+          }
+        }
+      }
+    },
+    "This looks like a phishing attempt": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det her ligner et phishingforsøg"
+          }
+        }
+      }
+    },
+    "Be careful with this message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vær forsigtig med denne besked"
+          }
+        }
+      }
+    },
+    "It's safe": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den er sikker"
+          }
+        }
+      }
+    },
+    "Don't click links or open attachments unless you're sure.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klik ikke på links eller åbn vedhæftninger, medmindre du er sikker."
+          }
+        }
+      }
+    },
+    "Looks like phishing": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ligner phishing"
+          }
+        }
+      }
+    },
+    "Be careful": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vær forsigtig"
+          }
+        }
+      }
+    },
+    "Sorting with on-device AI…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sorterer med AI på enheden…"
+          }
+        }
+      }
+    },
+    "As it arrives": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når den kommer"
+          }
+        }
+      }
+    },
+    "Once a day": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Én gang om dagen"
+          }
+        }
+      }
+    },
+    "%lld more at %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld mere kl. %@"
+          }
+        }
+      }
+    },
+    "Scheduled bundles gather mail and arrive in the Inbox once a day. Opening a bundle in the sidebar always shows everything.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planlagte bundter samler mail og ankommer til indbakken én gang om dagen. Åbner du en bundt i sidepanelet, ser du altid alt."
           }
         }
       }

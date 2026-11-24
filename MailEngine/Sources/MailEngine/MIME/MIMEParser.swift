@@ -621,12 +621,14 @@ extension MIMEParser {
         func walk(_ entity: Entity) {
             let type = entity.contentType
             if type.type == "multipart" { entity.children.forEach(walk); return }
+            let contentID = entity.header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) }
             let isAttachment = entity.disposition == "attachment" || entity.filename != nil
-            guard isAttachment else { return }
+            // Inline images are often just a part with a Content-ID (no filename, no disposition).
+            let isInlineResource = contentID != nil && entity.disposition != "attachment" && type.type != "text"
+            guard isAttachment || isInlineResource else { return }
             result.append(OutgoingAttachment(
                 filename: entity.filename ?? "attachment", mimeType: type.full, data: Data(entity.decodedBody),
-                contentID: entity.disposition == "inline"
-                    ? entity.header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) } : nil))
+                contentID: entity.disposition == "attachment" ? nil : contentID))
         }
         walk(Entity.parse([UInt8](data)[...]))
         return result

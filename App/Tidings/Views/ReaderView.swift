@@ -17,11 +17,9 @@ struct ReaderView: View {
                             .font(.title2.weight(.semibold))
                             .textSelection(.enabled)
                             .padding(.bottom, 4)
-                        if let reason = first.classificationReason {
-                            Label("\(first.category.title) · \(reason)", systemImage: first.category.symbol)
-                                .font(.caption)
-                                .foregroundStyle(first.category.tint)
-                                .help("Why this conversation is in \(first.category.title)")
+                        CategoryLine(message: first)
+                        if let risky = messages.last(where: { $0.riskLevel > .none }) {
+                            RiskBanner(message: risky)
                         }
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
@@ -46,6 +44,7 @@ struct MessageCard: View {
     @State var expanded: Bool
     @State private var body_: LoadedBody?
     @State private var loadError: String?
+    @State private var showImages = false
 
     init(message: StoredMessage, startsExpanded: Bool) {
         self.message = message
@@ -53,10 +52,11 @@ struct MessageCard: View {
     }
 
     struct LoadedBody {
-        var html: String?
+        var html: PreparedHTML?
         var text: String
         var attachments: [AttachmentInfo]
         var to: String
+        var inline: [String: (data: Data, mimeType: String)]
     }
 
     var body: some View {
@@ -98,16 +98,24 @@ struct MessageCard: View {
     @ViewBuilder private var content: some View {
         if let loaded = body_ {
             if let html = loaded.html {
-                MessageWebView(html: html)
+                PrivacyBar(prepared: html, imagesShown: showImages, sender: message.fromAddress,
+                           loadImages: { showImages = true },
+                           alwaysLoad: { scope in
+                               model.trustImages(from: scope)
+                               showImages = true
+                           })
+                MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline)
+                    .id(showImages)   // rebuild with the new policy
             } else {
                 Text(loaded.text)
                     .font(.body)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if !loaded.attachments.isEmpty {
+            let files = loaded.attachments.filter { !$0.isInline }
+            if !files.isEmpty {
                 HStack {
-                    ForEach(loaded.attachments.filter { !$0.isInline }, id: \.self) { a in
+                    ForEach(files, id: \.self) { a in
                         Label(a.filename ?? a.mimeType, systemImage: "doc")
                             .font(.caption)
                             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -128,9 +136,11 @@ struct MessageCard: View {
         do {
             let raw = try await model.rawMessage(message)
             let parsed = MIMEParser.parse(raw)
+            showImages = model.allowsRemoteImages(from: message.fromAddress)
             body_ = LoadedBody(
-                html: parsed.html, text: parsed.plainText, attachments: parsed.attachments,
-                to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", ")
+                html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
+                to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
+                inline: MIMEParser.inlineParts(in: raw)
             )
         } catch {
             loadError = String(localized: "Couldn't load the full message. Showing the stored text.")
@@ -138,10 +148,57 @@ struct MessageCard: View {
     }
 }
 
-/// HTML mail in a locked-down web view: no JavaScript, no remote loads (tracking pixels, remote
-/// images and fonts are blocked; SPEC §8), links open in the browser. Height follows content.
+/// "🛡 3 trackers removed · 2 images hidden · Load images · Always from …" (SPEC §8).
+struct PrivacyBar: View {
+    let prepared: PreparedHTML
+    let imagesShown: Bool
+    let sender: String
+    let loadImages: () -> Void
+    let alwaysLoad: (String) -> Void
+
+    var body: some View {
+        let hidden = imagesShown ? 0 : prepared.remoteImages
+        if prepared.trackersRemoved > 0 || hidden > 0 || prepared.linksCleaned > 0 {
+            HStack(spacing: 10) {
+                Image(systemName: "hand.raised.fill").foregroundStyle(.teal)
+                if prepared.trackersRemoved > 0 {
+                    Text("\(prepared.trackersRemoved) trackers removed")
+                }
+                if prepared.linksCleaned > 0 {
+                    Text("\(prepared.linksCleaned) links cleaned").foregroundStyle(.secondary)
+                }
+                if hidden > 0 {
+                    Text("\(hidden) images hidden").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Load images", action: loadImages).buttonStyle(.borderless)
+                    Menu("Always") {
+                        Button("Always from \(sender)") { alwaysLoad(sender) }
+                        if let domain = sender.split(separator: "@").last {
+                            Button("Always from @\(domain)") { alwaysLoad("@\(domain)") }
+                        }
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                } else {
+                    Spacer()
+                }
+            }
+            .font(.caption)
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .glassEffect(.regular, in: .capsule)
+            .help("Tracking pixels are always removed. Images from people you haven't written to stay hidden until you allow them.")
+        }
+    }
+}
+
+/// HTML mail in a locked-down web view: no JavaScript, links open in the browser, height follows
+/// content. Remote loads are blocked except images when allowed (SPEC §8); `cid:` parts are
+/// served from the message itself.
 struct MessageWebView: NSViewRepresentable {
     let html: String
+    var allowRemoteImages = false
+    var inlineParts: [String: (data: Data, mimeType: String)] = [:]
     @State private var height: CGFloat = 120
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
@@ -150,12 +207,14 @@ struct MessageWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = false
         config.websiteDataStore = .nonPersistent()
+        config.setURLSchemeHandler(CIDSchemeHandler(parts: inlineParts), forURLScheme: "cid")
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
-        Coordinator.withBlockList { list in
+        let page = Self.wrap(html, allowRemoteImages: allowRemoteImages)
+        Coordinator.withRuleList(allowImages: allowRemoteImages) { list in
             if let list { view.configuration.userContentController.add(list) }
-            view.loadHTMLString(Self.wrap(html), baseURL: nil)
+            view.loadHTMLString(page, baseURL: nil)
         }
         return view
     }
@@ -166,10 +225,11 @@ struct MessageWebView: NSViewRepresentable {
         CGSize(width: proposal.width ?? 600, height: height)
     }
 
-    static func wrap(_ html: String) -> String {
-        """
+    static func wrap(_ html: String, allowRemoteImages: Bool) -> String {
+        let images = allowRemoteImages ? "data: cid: https: http:" : "data: cid:"
+        return """
         <!doctype html><html><head><meta charset="utf-8">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src \(images); style-src 'unsafe-inline'; font-src data:">
         <style>
           :root { color-scheme: light; }
           html, body { margin: 0; padding: 12px; background: white; color: #1d1d1f;
@@ -180,19 +240,44 @@ struct MessageWebView: NSViewRepresentable {
         """
     }
 
+    /// Serves `cid:` URLs from the message's own parts.
+    final class CIDSchemeHandler: NSObject, WKURLSchemeHandler {
+        let parts: [String: (data: Data, mimeType: String)]
+        init(parts: [String: (data: Data, mimeType: String)]) { self.parts = parts }
+
+        func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
+            let id = task.request.url.map { String($0.absoluteString.dropFirst("cid:".count)) }?.removingPercentEncoding ?? ""
+            guard let url = task.request.url, let part = parts[id] else {
+                task.didFailWithError(URLError(.fileDoesNotExist))
+                return
+            }
+            task.didReceive(URLResponse(url: url, mimeType: part.mimeType, expectedContentLength: part.data.count, textEncodingName: nil))
+            task.didReceive(part.data)
+            task.didFinish()
+        }
+
+        func webView(_ webView: WKWebView, stop task: any WKURLSchemeTask) {}
+    }
+
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate {
         var height: Binding<CGFloat>
         init(height: Binding<CGFloat>) { self.height = height }
 
-        static var cachedList: WKContentRuleList?
+        static var cached: [Bool: WKContentRuleList] = [:]
 
-        /// Blocks every http(s) subresource. The CSP above already does; this is belt and braces.
-        static func withBlockList(_ body: @escaping @MainActor (WKContentRuleList?) -> Void) {
-            if let cachedList { body(cachedList); return }
-            let rules = #"[{"trigger":{"url-filter":"^https?://","resource-type":["image","style-sheet","font","media","raw","svg-document","script","fetch","websocket","other"]},"action":{"type":"block"}}]"#
-            WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "tidings-block-remote", encodedContentRuleList: rules) { list, _ in
+        /// Blocks every http(s) subresource, except images when they're allowed. The CSP does the
+        /// same; this is belt and braces.
+        static func withRuleList(allowImages: Bool, _ body: @escaping @MainActor (WKContentRuleList?) -> Void) {
+            if let list = cached[allowImages] { body(list); return }
+            var types = ["style-sheet", "font", "media", "raw", "svg-document", "script", "fetch", "websocket", "other"]
+            if !allowImages { types.append("image") }
+            let rules = #"[{"trigger":{"url-filter":"^https?://","resource-type":["# + types.map { "\"\($0)\"" }.joined(separator: ",") + #"]},"action":{"type":"block"}}]"#
+            WKContentRuleListStore.default().compileContentRuleList(
+                forIdentifier: allowImages ? "tidings-block-remote-allow-images" : "tidings-block-remote",
+                encodedContentRuleList: rules
+            ) { list, _ in
                 MainActor.assumeIsolated {
-                    cachedList = list
+                    cached[allowImages] = list
                     body(list)
                 }
             }
@@ -212,6 +297,112 @@ struct MessageWebView: NSViewRepresentable {
                     "return document.documentElement.scrollHeight", contentWorld: .defaultClient)
                 if let h = result as? Double { height.wrappedValue = max(60, CGFloat(h)) }
             }
+        }
+    }
+}
+
+/// "Primær · From a person ▾": why the conversation is here, and the place to correct it.
+struct CategoryLine: View {
+    @Environment(AppModel.self) private var model
+    let message: StoredMessage
+
+    var body: some View {
+        Menu {
+            Section("Always put mail from \(message.senderDisplay) in…") {
+                ForEach(MailCategory.allCases, id: \.self) { category in
+                    Button(category.title, systemImage: category.symbol) {
+                        if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
+                            model.moveSender(to: category, thread: thread)
+                        } else {
+                            model.moveSender(to: category)
+                        }
+                    }
+                    .disabled(category == message.category)
+                }
+            }
+        } label: {
+            Label("\(message.category.title) · \(message.reasonText ?? "")", systemImage: message.category.symbol)
+                .font(.caption)
+                .foregroundStyle(message.category.tint)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("Why this is here. Click to move this sender to another bundle (M).")
+    }
+}
+
+/// M: move the selected conversation's sender to a bundle (1–6).
+struct CategoryPicker: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Always put mail from \(model.targetThreads.first?.latest.senderDisplay ?? "") in…").font(.headline)
+            ForEach(Array(MailCategory.allCases.enumerated()), id: \.element) { index, category in
+                Button { model.moveSender(to: category) } label: {
+                    HStack {
+                        Image(systemName: category.symbol).foregroundStyle(category.tint).frame(width: 22)
+                        Text(category.title)
+                        Spacer()
+                        Text("\(index + 1)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
+            }
+            HStack { Spacer(); Button("Cancel") { model.isCategoryPickerShown = false }.keyboardShortcut(.cancelAction) }
+        }
+        .padding(20)
+        .frame(width: 340)
+    }
+}
+
+/// A phishing/spoofing warning with its reasons (SPEC §8). Nothing is moved automatically.
+struct RiskBanner: View {
+    @Environment(AppModel.self) private var model
+    let message: StoredMessage
+
+    var body: some View {
+        let danger = message.riskLevel == .danger
+        VStack(alignment: .leading, spacing: 8) {
+            Label(danger ? "This looks like a phishing attempt" : "Be careful with this message",
+                  systemImage: danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(danger ? .red : .orange)
+            ForEach(RiskAssessment.decode(message.riskReasons), id: \.self) { reason in
+                Label(reason.localized, systemImage: "circle.fill")
+                    .labelStyle(BulletLabelStyle())
+                    .font(.callout)
+            }
+            HStack {
+                Button("Move to Junk", systemImage: "xmark.bin") {
+                    if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
+                        model.perform(.junk, on: [thread])
+                    }
+                }
+                .buttonStyle(.glassProminent)
+                .tint(danger ? .red : .orange)
+                Button("It's safe") { model.markSafe(message) }
+                    .buttonStyle(.glass)
+                Spacer()
+                Text("Don't click links or open attachments unless you're sure.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((danger ? Color.red : Color.orange).opacity(0.08), in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder((danger ? Color.red : Color.orange).opacity(0.4)))
+    }
+}
+
+struct BulletLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("•").foregroundStyle(.secondary)
+            configuration.title
         }
     }
 }

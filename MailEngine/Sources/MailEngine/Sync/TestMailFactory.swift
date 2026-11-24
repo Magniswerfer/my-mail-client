@@ -70,6 +70,12 @@ public enum TestMailFactory {
                 date: ago(Double(5 + i * 17)), id: id(), html: "<p>\(subject)</p><img src=\"https://tracker.example/pixel.gif\" width=1 height=1>", bulk: true), flags: []))
         }
 
+        // A phishing attempt: brand in the display name, look-alike domain, a link that lies.
+        seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: "Apple Support", address: "security@app1e-id.com"),
+            subject: "Din Apple-konto er låst", date: ago(2), id: id(),
+            html: "<p>Vi har registreret usædvanlig aktivitet. Bekræft din identitet inden 24 timer:</p><p><a href=\"https://app1e-id.com/verify\">https://appleid.apple.com/verify</a></p>",
+            bulk: false), flags: []))
+
         // Social.
         seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "LinkedIn", address: "messages-noreply@linkedin.com"), to: [me],
             subject: "You have 3 new connection requests", date: ago(12), id: id(), body: "Lars, Mette and Jonas want to connect."), flags: []))

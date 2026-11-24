@@ -63,6 +63,8 @@ extension AppModel {
         for category in MailCategory.allCases {
             list.append(AppCommand(id: "bundle-\(category.rawValue)", title: String(localized: "Go to \(category.title)"),
                                    symbol: category.symbol, keys: nil) { self.selection = .category(category) })
+            list.append(AppCommand(id: "move-\(category.rawValue)", title: String(localized: "Move Sender to \(category.title)"),
+                                   symbol: category.symbol, keys: "M", isEnabled: hasSelection) { self.moveSender(to: category) })
         }
         return list
     }
