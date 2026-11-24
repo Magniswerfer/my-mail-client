@@ -1,0 +1,225 @@
+import Foundation
+import GRDB
+
+/// Categories from SPEC §4.
+public enum MailCategory: String, Sendable, Codable, CaseIterable, DatabaseValueConvertible {
+    case primary, transactions, updates, newsletters, advertising, social
+}
+
+/// A message as kept in the always-local tier (SPEC §3, ADR 0001).
+public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, MutablePersistableRecord {
+    public static let databaseTableName = "message"
+
+    public var id: Int64?
+    /// Date-ordered key that is also the FTS rowid. See `SortKey`.
+    public var sortKey: Int64 = 0
+    public var accountID: String
+    public var mailbox: String
+    public var uid: UInt32
+    public var messageID: String?
+    public var threadID: String?
+    public var subject: String
+    public var fromName: String?
+    public var fromAddress: String
+    public var recipients: String
+    public var date: Date
+    public var flags: String
+    public var size: Int
+    public var hasAttachments: Bool
+    public var category: MailCategory
+    public var preview: String
+    /// LZFSE-compressed UTF-8 plain-text body.
+    public var bodyText: Data?
+
+    public init(
+        id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
+        threadID: String? = nil, subject: String, fromName: String? = nil, fromAddress: String,
+        recipients: String = "", date: Date, flags: String = "", size: Int = 0, hasAttachments: Bool = false,
+        category: MailCategory = .primary, preview: String = "", bodyText: Data? = nil
+    ) {
+        self.id = id; self.accountID = accountID; self.mailbox = mailbox; self.uid = uid
+        self.messageID = messageID; self.threadID = threadID; self.subject = subject
+        self.fromName = fromName; self.fromAddress = fromAddress; self.recipients = recipients
+        self.date = date; self.flags = flags; self.size = size; self.hasAttachments = hasAttachments
+        self.category = category; self.preview = preview; self.bodyText = bodyText
+    }
+
+    public mutating func didInsert(_ inserted: InsertionSuccess) { id = inserted.rowID }
+
+    public var plainText: String? { bodyText.flatMap(TextCompression.decompress) }
+}
+
+/// The always-local tier: metadata, compressed plain text and the full-text index.
+///
+/// The FTS5 table is *contentless* (`content=''`): it stores only the inverted index,
+/// never a second copy of the text. Snippets are cut from the compressed body on demand.
+public final class MailStore: Sendable {
+    public let db: DatabasePool
+
+    public init(path: String) throws {
+        var config = Configuration()
+        config.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA synchronous = NORMAL")
+        }
+        db = try DatabasePool(path: path, configuration: config)
+        try Self.migrator.migrate(db)
+    }
+
+    static var migrator: DatabaseMigrator {
+        var m = DatabaseMigrator()
+        m.registerMigration("v1") { db in
+            try db.create(table: "message") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("sortKey", .integer).notNull().unique()
+                t.column("accountID", .text).notNull()
+                t.column("mailbox", .text).notNull()
+                t.column("uid", .integer).notNull()
+                t.column("messageID", .text)
+                t.column("threadID", .text)
+                t.column("subject", .text).notNull()
+                t.column("fromName", .text)
+                t.column("fromAddress", .text).notNull()
+                t.column("recipients", .text).notNull()
+                t.column("date", .datetime).notNull()
+                t.column("flags", .text).notNull()
+                t.column("size", .integer).notNull()
+                t.column("hasAttachments", .boolean).notNull()
+                t.column("category", .text).notNull()
+                t.column("preview", .text).notNull()
+                t.column("bodyText", .blob)
+                t.uniqueKey(["accountID", "mailbox", "uid"])
+            }
+            try db.create(index: "message_date", on: "message", columns: ["date"])
+            try db.create(index: "message_from", on: "message", columns: ["fromAddress"])
+            try db.create(index: "message_category_date", on: "message", columns: ["category", "date"])
+            try db.create(index: "message_thread", on: "message", columns: ["threadID"])
+            // Prefix indexes make as-you-type queries ("fak", "fakt") cheap; unicode61 with
+            // diacritic folding keeps "æøå" searchable and folds "é" → "e".
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE message_fts USING fts5(
+                    subject, sender, recipients, body,
+                    content='', contentless_delete=1,
+                    tokenize='unicode61 remove_diacritics 2',
+                    prefix='1 2 3'
+                )
+                """)
+        }
+        return m
+    }
+
+    // MARK: Writing
+
+    /// Inserts or replaces messages and keeps the index in step. `plainText` is the
+    /// extracted body; it is compressed for storage and indexed in full.
+    public func upsert(_ items: [(message: StoredMessage, plainText: String)]) throws {
+        try db.write { db in
+            for var (message, text) in items {
+                if message.bodyText == nil, !text.isEmpty { message.bodyText = TextCompression.compress(text) }
+                if message.preview.isEmpty { message.preview = Self.makePreview(text) }
+                if let existing = try Row.fetchOne(db, sql: """
+                    SELECT id, sortKey FROM message WHERE accountID = ? AND mailbox = ? AND uid = ?
+                    """, arguments: [message.accountID, message.mailbox, message.uid]) {
+                    message.id = existing["id"]
+                    try db.execute(sql: "DELETE FROM message_fts WHERE rowid = ?", arguments: [existing["sortKey"] as Int64])
+                    message.sortKey = try Self.freeSortKey(db, SortKey.make(for: message, id: message.id!), excluding: message.id)
+                    try message.update(db)
+                } else {
+                    message.sortKey = try Self.freeSortKey(db, SortKey.make(for: message, id: try Self.nextID(db)), excluding: nil)
+                    try message.insert(db)
+                }
+                try db.execute(sql: """
+                    INSERT INTO message_fts(rowid, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?)
+                    """, arguments: [
+                        message.sortKey, message.subject,
+                        [message.fromName, message.fromAddress].compactMap { $0 }.joined(separator: " "),
+                        message.recipients, text,
+                    ])
+            }
+        }
+    }
+
+    static func nextID(_ db: Database) throws -> Int64 {
+        (try Int64.fetchOne(db, sql: "SELECT seq FROM sqlite_sequence WHERE name = 'message'") ?? 0) + 1
+    }
+
+    /// Sort keys must be unique; on the (rare) collision, nudge the low bits.
+    static func freeSortKey(_ db: Database, _ key: Int64, excluding id: Int64?) throws -> Int64 {
+        var candidate = key
+        while let owner = try Int64.fetchOne(db, sql: "SELECT id FROM message WHERE sortKey = ?", arguments: [candidate]),
+              owner != id {
+            candidate = SortKey.withLowBits(candidate, SortKey.lowBits(candidate) &+ 1)
+        }
+        return candidate
+    }
+
+    public func delete(ids: [Int64]) throws {
+        try db.write { db in
+            for id in ids {
+                guard let key = try Int64.fetchOne(db, sql: "SELECT sortKey FROM message WHERE id = ?", arguments: [id]) else { continue }
+                try db.execute(sql: "DELETE FROM message_fts WHERE rowid = ?", arguments: [key])
+                try db.execute(sql: "DELETE FROM message WHERE id = ?", arguments: [id])
+            }
+        }
+    }
+
+    public func count() throws -> Int {
+        try db.read { try StoredMessage.fetchCount($0) }
+    }
+
+    static func makePreview(_ text: String) -> String {
+        let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return String(collapsed.prefix(160))
+    }
+}
+
+enum TextCompression {
+    static func compress(_ text: String) -> Data? {
+        try? (Data(text.utf8) as NSData).compressed(using: .lzfse) as Data
+    }
+
+    static func decompress(_ data: Data) -> String? {
+        guard let raw = try? (data as NSData).decompressed(using: .lzfse) as Data else { return nil }
+        return String(data: raw, encoding: .utf8)
+    }
+}
+
+/// The FTS rowid layout. Newest-first iteration of the index is then just `ORDER BY rowid DESC`,
+/// which FTS5 streams without sorting, and category/attachment/date filters and facets can be read
+/// from the rowid alone, with no join (SPEC §15: < 30 ms per keystroke).
+///
+///     bit 63      sign (always 0)
+///     bits 24–62  seconds since 1970 (39 bits, good until year ~19400)
+///     bits 21–23  category (3 bits)
+///     bit  20     has attachments
+///     bits 0–19   disambiguator (message id low bits)
+public enum SortKey {
+    static let secondsShift: Int64 = 24
+    static let categoryShift: Int64 = 21
+    static let attachmentShift: Int64 = 20
+    static let lowMask: Int64 = (1 << 20) - 1
+
+    static let categoryCodes: [MailCategory: Int64] = [
+        .primary: 0, .transactions: 1, .updates: 2, .newsletters: 3, .advertising: 4, .social: 5,
+    ]
+    static let categoriesByCode: [Int64: MailCategory] =
+        Dictionary(uniqueKeysWithValues: categoryCodes.map { ($1, $0) })
+
+    public static func make(for message: StoredMessage, id: Int64) -> Int64 {
+        let seconds = max(0, Int64(message.date.timeIntervalSince1970))
+        return (seconds << secondsShift)
+            | (categoryCodes[message.category]! << categoryShift)
+            | ((message.hasAttachments ? 1 : 0) << attachmentShift)
+            | (id & lowMask)
+    }
+
+    /// Smallest key for messages at or after `date`.
+    public static func lowerBound(_ date: Date) -> Int64 { max(0, Int64(date.timeIntervalSince1970)) << secondsShift }
+
+    static func lowBits(_ key: Int64) -> Int64 { key & lowMask }
+    static func withLowBits(_ key: Int64, _ bits: Int64) -> Int64 { (key & ~lowMask) | (bits & lowMask) }
+
+    /// SQL fragments over a rowid column.
+    static func categorySQL(_ column: String) -> String { "((\(column) >> \(categoryShift)) & 7)" }
+    static func attachmentSQL(_ column: String) -> String { "((\(column) >> \(attachmentShift)) & 1)" }
+    static func yearSQL(_ column: String) -> String { "strftime('%Y', \(column) >> \(secondsShift), 'unixepoch')" }
+}

@@ -1,0 +1,11 @@
+# Local IMAP server for integration tests. Never use real credentials here.
+# Dovecot's official image accepts any username with the password from USER_PASSWORD.
+services:
+  dovecot:
+    image: dovecot/dovecot:latest
+    environment:
+      USER_PASSWORD: tidings-test
+    volumes:
+      - ./tidings.conf:/etc/dovecot/conf.d/tidings.conf:ro
+    ports:
+      - "127.0.0.1:31143:31143"   # IMAP, plaintext, localhost only

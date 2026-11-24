@@ -1,0 +1,117 @@
+import Foundation
+
+/// Guards live tests against a real mailbox.
+///
+/// Every mutation goes through the fence, which only allows it when
+/// 1. the mailbox is `Tidings-Test` or one of its children, and
+/// 2. every target UID was found by searching for this run's `X-Tidings-Test` header.
+///
+/// Real mail can therefore never be flagged, moved or expunged by a test, even if a test has a bug.
+public struct TestFence: Sendable {
+    public static let rootMailbox = "Tidings-Test"
+    public static let markerHeader = "X-Tidings-Test"
+
+    public let runID: String
+    public let session: MailSession
+
+    public init(session: MailSession, runID: String = UUID().uuidString) {
+        self.session = session
+        self.runID = runID
+    }
+
+    public enum Violation: Error, CustomStringConvertible {
+        case mailboxOutsideFence(String)
+        case unmarkedMessages([UInt32])
+
+        public var description: String {
+            switch self {
+            case .mailboxOutsideFence(let box): "Refusing to touch mailbox '\(box)': outside \(TestFence.rootMailbox)."
+            case .unmarkedMessages(let uids): "Refusing to touch UIDs \(uids): not created by this test run."
+            }
+        }
+    }
+
+    public func path(_ child: String? = nil) -> String {
+        guard let child else { return Self.rootMailbox }
+        return "\(Self.rootMailbox)/\(child)"
+    }
+
+    public static func isInsideFence(_ path: String) -> Bool {
+        path == rootMailbox || path.hasPrefix(rootMailbox + "/") || path.hasPrefix(rootMailbox + ".")
+    }
+
+    func checkMailbox(_ path: String) throws {
+        guard Self.isInsideFence(path) else { throw Violation.mailboxOutsideFence(path) }
+    }
+
+    /// Creates the fence mailbox (and an optional child), selects it, and returns its state.
+    public func prepare(child: String? = nil) async throws -> SelectedMailbox {
+        try await session.ensureMailbox(path())
+        if let child { try await session.ensureMailbox(path(child)) }
+        return try await session.select(path())
+    }
+
+    /// Builds a synthetic message carrying this run's marker.
+    public func syntheticMessage(subject: String, body: String = "Synthetic test message created by tidings-probe. Safe to delete.") -> Data {
+        let date = Self.rfc5322Date.string(from: Date())
+        let messageID = "<\(UUID().uuidString)@tidings.invalid>"
+        let raw = [
+            "From: Tidings Probe <probe@tidings.invalid>",
+            "To: Tidings Probe <probe@tidings.invalid>",
+            "Subject: \(subject)",
+            "Date: \(date)",
+            "Message-ID: \(messageID)",
+            "\(Self.markerHeader): \(runID)",
+            "MIME-Version: 1.0",
+            "Content-Type: text/plain; charset=utf-8",
+            "",
+            body,
+            "",
+        ].joined(separator: "\r\n")
+        return Data(raw.utf8)
+    }
+
+    public func append(subject: String, to child: String? = nil) async throws -> UInt32? {
+        let target = path(child)
+        try checkMailbox(target)
+        return try await session.append(to: target, message: syntheticMessage(subject: subject))
+    }
+
+    /// UIDs in the currently selected (fenced) mailbox that carry this run's marker.
+    public func markedUIDs() async throws -> [UInt32] {
+        try await session.uidSearch(header: Self.markerHeader, contains: runID)
+    }
+
+    private func checkMarked(_ uids: [UInt32], selected mailbox: String) async throws {
+        try checkMailbox(mailbox)
+        let marked = Set(try await markedUIDs())
+        let unmarked = uids.filter { !marked.contains($0) }
+        if !unmarked.isEmpty { throw Violation.unmarkedMessages(unmarked) }
+    }
+
+    public func store(uids: [UInt32], in mailbox: String, _ change: MailSession.FlagChange, flags: [String]) async throws {
+        try await checkMarked(uids, selected: mailbox)
+        try await session.store(uids: uids, change, flags: flags)
+    }
+
+    public func move(uids: [UInt32], from mailbox: String, to destination: String) async throws {
+        try checkMailbox(destination)
+        try await checkMarked(uids, selected: mailbox)
+        try await session.move(uids: uids, to: destination)
+    }
+
+    /// Removes every message this run created from the given fenced mailbox.
+    public func cleanUp(mailbox: String) async throws {
+        try checkMailbox(mailbox)
+        _ = try await session.select(mailbox)
+        let uids = try await markedUIDs()
+        if !uids.isEmpty { try await session.expunge(uids: uids) }
+    }
+
+    static let rfc5322Date: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        return f
+    }()
+}
