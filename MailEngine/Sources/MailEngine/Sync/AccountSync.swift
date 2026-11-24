@@ -41,6 +41,17 @@ public actor AccountSync {
     public var batchSize = 25
 
     private var listeners: [UUID: AsyncStream<Event>.Continuation] = [:]
+    /// Set when a triage action is queued; the loop drains before its next IDLE.
+    var hasPendingWork = false
+    private var wakeContinuation: AsyncStream<Void>.Continuation?
+
+    /// Ends an IDLE in progress so queued work reaches the server now.
+    func signalWork() {
+        hasPendingWork = true
+        wakeContinuation?.yield()
+    }
+
+    private func setWake(_ continuation: AsyncStream<Void>.Continuation?) { wakeContinuation = continuation }
 
     public init(account: AccountConfig, password: String, store: MailStore, cache: MessageCache, profile: ServerProfile? = nil) {
         self.account = account
@@ -62,7 +73,7 @@ public actor AccountSync {
 
     private func removeListener(_ id: UUID) { listeners[id] = nil }
 
-    private func emit(_ event: Event) {
+    func emit(_ event: Event) {
         for continuation in listeners.values { continuation.yield(event) }
     }
 
@@ -79,9 +90,19 @@ public actor AccountSync {
                     backoff = .seconds(5)
                     var lastFullSync = ContinuousClock.now
                     while !Task.isCancelled {
+                        try self.wakeDueSnoozes()
+                        try await self.drain(session)
                         _ = try await session.select("INBOX", readOnly: true)
-                        self.emit(.idle)
-                        let changed = try await session.idle(timeout: self.profile.idleRefresh)
+                        var changed = false
+                        if !self.hasPendingWork {
+                            self.emit(.idle)
+                            let (wake, continuation) = AsyncStream<Void>.makeStream()
+                            self.setWake(continuation)
+                            changed = try await session.idle(timeout: self.idleTimeout(), wake: wake)
+                            self.setWake(nil)
+                        }
+                        try self.wakeDueSnoozes()
+                        try await self.drain(session)
                         if changed {
                             try await self.syncMailbox(session, path: "INBOX", role: .inbox)
                         }
@@ -108,8 +129,15 @@ public actor AccountSync {
         }
     }
 
+    /// IDLE until the next snooze is due or the server's refresh interval, whichever is sooner.
+    func idleTimeout() -> Duration {
+        guard let next = try? store.nextSnoozeWake(accountID: account.id) else { return profile.idleRefresh }
+        return min(profile.idleRefresh, .seconds(max(1, next.timeIntervalSinceNow)))
+    }
+
     func syncAll(_ session: MailSession) async throws {
         emit(.started)
+        try await drain(session)
         let listing = try await session.listMailboxes()
         let roles = MailboxRoleResolver.resolve(listing)
         let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts]
@@ -145,19 +173,23 @@ public actor AccountSync {
         let summaries = try await session.fetchSummaries()
         let known = try store.knownFlags(accountID: account.id, mailbox: path)
         let serverUIDs = Set(summaries.map(\.uid))
+        // Leave alone whatever a queued triage action is about to change: its source message is
+        // still on the server here, and its local row already shows the result.
+        let inFlight = try store.inFlight(accountID: account.id, mailbox: path)
+        let inFlightUIDs = try store.uids(localIDs: inFlight.localIDs, mailbox: path)
 
-        let vanished = known.keys.filter { !serverUIDs.contains($0) }
+        let vanished = known.keys.filter { !serverUIDs.contains($0) && $0 < provisionalUIDBase && !inFlightUIDs.contains($0) }
         if !vanished.isEmpty { try store.deleteMessages(accountID: account.id, mailbox: path, uids: vanished) }
 
         var flagChanges: [UInt32: String] = [:]
-        for s in summaries {
+        for s in summaries where !inFlightUIDs.contains(s.uid) {
             let flags = s.flags.sorted().joined(separator: " ")
             if let old = known[s.uid], old != flags { flagChanges[s.uid] = flags }
         }
         if !flagChanges.isEmpty { try store.updateFlags(accountID: account.id, mailbox: path, changes: flagChanges) }
 
         // New messages, newest first, so the top of the stream fills in immediately.
-        let new = summaries.filter { known[$0.uid] == nil }.sorted { $0.uid > $1.uid }
+        let new = summaries.filter { known[$0.uid] == nil && !inFlight.sourceUIDs.contains($0.uid) }.sorted { $0.uid > $1.uid }
         var done = 0
         for batch in stride(from: 0, to: new.count, by: batchSize).map({ Array(new[$0..<min($0 + batchSize, new.count)]) }) {
             try Task.checkCancellation()
@@ -207,6 +239,7 @@ public actor AccountSync {
         )
         message.inReplyTo = parsed.inReplyTo.first
         message.classificationReason = decision.reason
+        (message.isSnoozed, message.snoozedUntil) = SnoozeKeywords.parse(summary.flags)
         return (message, parsed.plainText)
     }
 

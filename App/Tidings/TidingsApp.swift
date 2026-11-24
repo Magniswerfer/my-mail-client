@@ -16,10 +16,35 @@ struct TidingsApp: App {
             CommandGroup(after: .sidebar) {
                 Button("Go to Inbox") { model.selection = .inbox }
                     .keyboardShortcut("1", modifiers: .command)
+                Button("Go to Snoozed") { model.selection = .snoozed }
+                    .keyboardShortcut("2", modifiers: .command)
                 Button("Next Conversation") { model.moveSelection(1) }
                     .keyboardShortcut(.downArrow, modifiers: .command)
                 Button("Previous Conversation") { model.moveSelection(-1) }
                     .keyboardShortcut(.upArrow, modifiers: .command)
+            }
+            // Single-letter shortcuts are handled in RootView (so they never fire while typing);
+            // the menu carries ⌘ equivalents and makes every action discoverable.
+            CommandMenu("Message") {
+                Button("Command Palette…") { model.isPaletteShown.toggle() }
+                    .keyboardShortcut("k", modifiers: .command)
+                Divider()
+                Button("Mark Done") { model.perform(.done) }
+                    .keyboardShortcut("e", modifiers: [.command, .option])
+                Button("Pin / Unpin") { model.togglePin() }
+                    .keyboardShortcut("p", modifiers: [.command, .option])
+                Button("Snooze…") { model.isSnoozePickerShown = true }
+                    .keyboardShortcut("b", modifiers: [.command, .option])
+                Button("Mark as Read / Unread") { model.toggleRead() }
+                    .keyboardShortcut("u", modifiers: [.command, .shift])
+                Button("Move to Trash") { model.perform(.trash) }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                Button("Move to Junk") { model.perform(.junk) }
+                    .keyboardShortcut("j", modifiers: [.command, .shift])
+                Divider()
+                Button("Sweep Inbox") { model.requestSweep() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
             }
         }
 
@@ -32,8 +57,11 @@ struct TidingsApp: App {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.undoManager) private var undoManager
     @FocusState private var searchFocused: Bool
     @FocusState private var streamFocused: Bool
+    /// Set after "g" for two-key navigation (G I, G S, G A, G P).
+    @State private var pendingG: Date?
 
     var body: some View {
         @Bindable var model = model
@@ -50,39 +78,115 @@ struct RootView: View {
             }
             .focused($streamFocused)
             .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 560)
+            .overlay(alignment: .bottom) {
+                if let toast = model.toast {
+                    ToastView(toast: toast).padding(.bottom, 16)
+                }
+            }
+            .animation(.snappy, value: model.toast)
         } detail: {
             ReaderView(threadID: model.selectedThreadID)
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
         .searchFocused($searchFocused)
-        .toolbar {
-            ToolbarItem(placement: .status) {
-                SyncStatusView()
-            }
-        }
+        .toolbar { toolbar }
         .navigationTitle(model.currentMailboxTitle)
-        // Gmail-style single keys while the stream has focus (SPEC §12); ⌘ equivalents live in the menu.
-        .onKeyPress(characters: .init(charactersIn: "jk/"), phases: .down) { press in
-            guard !searchFocused else { return .ignored }
-            switch press.characters {
-            case "j": model.moveSelection(1)
-            case "k": model.moveSelection(-1)
-            case "/": searchFocused = true
-            default: return .ignored
+        .overlay(alignment: .top) {
+            if model.isPaletteShown {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(0.08).ignoresSafeArea()
+                        .onTapGesture { model.isPaletteShown = false }
+                    CommandPalette().padding(.top, 80)
+                }
             }
-            return .handled
         }
+        .onKeyPress(phases: .down) { press in handleKey(press) }
         .onKeyPress(.escape) {
+            if model.isPaletteShown { model.isPaletteShown = false; return .handled }
             guard model.isSearching else { return .ignored }
             model.searchText = ""
             searchFocused = false
             streamFocused = true
             return .handled
         }
+        .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
+        .confirmationDialog(model.sweepCandidate?.title ?? "", isPresented: Binding(
+            get: { model.sweepCandidate != nil }, set: { if !$0 { model.sweepCandidate = nil } }
+        ), presenting: model.sweepCandidate) { request in
+            Button("Mark \(request.threadIDs.count) Done") { model.confirmSweep(request) }
+                .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) { model.sweepCandidate = nil }
+        } message: { _ in
+            Text("Pinned conversations stay. You can undo this.")
+        }
         .sheet(isPresented: .constant(model.needsAccountSetup)) {
             AccountSetupView()
                 .interactiveDismissDisabled()
         }
+        .onAppear { model.undoManager = undoManager }
+        .onChange(of: undoManager) { _, manager in model.undoManager = manager }
+    }
+
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button { model.perform(.done) } label: { Label("Done", systemImage: "checkmark") }
+                .help("Mark Done (E)")
+                .disabled(model.targetThreads.isEmpty)
+            Button { model.isSnoozePickerShown = true } label: { Label("Snooze", systemImage: "clock") }
+                .help("Snooze (B)")
+                .disabled(model.targetThreads.isEmpty)
+            Button { model.togglePin() } label: {
+                Label("Pin", systemImage: model.targetThreads.first?.isPinned == true ? "pin.fill" : "pin")
+            }
+            .help("Pin (P)")
+            .disabled(model.targetThreads.isEmpty)
+        }
+        ToolbarItemGroup(placement: .navigation) {
+            if model.selection == .inbox {
+                Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
+                    Label("Pinned only", systemImage: "pin.circle")
+                }
+                .help("Show only pinned (G P)")
+                Button { model.requestSweep() } label: { Label("Sweep", systemImage: "checkmark.rectangle.stack") }
+                    .help("Mark everything that isn't pinned done (⌘⇧E)")
+            }
+        }
+        ToolbarItem(placement: .status) { SyncStatusView() }
+    }
+
+    /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        guard !searchFocused, !model.isPaletteShown, !model.isSnoozePickerShown,
+              press.modifiers.subtracting(.shift).isEmpty else { return .ignored }
+        let key = press.characters
+
+        if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {
+            pendingG = nil
+            switch key {
+            case "i": model.selection = .inbox
+            case "s": model.selection = .snoozed
+            case "a": model.goToArchive()
+            case "p": model.pinnedOnly.toggle()
+            default: return .ignored
+            }
+            return .handled
+        }
+
+        switch key {
+        case "j": model.moveSelection(1)
+        case "k": model.moveSelection(-1)
+        case "/": searchFocused = true
+        case "e": model.perform(.done)
+        case "p": model.togglePin()
+        case "b": if !model.targetThreads.isEmpty { model.isSnoozePickerShown = true }
+        case "u": model.toggleRead()
+        case "#": model.perform(.trash)
+        case "!": model.perform(.junk)
+        case "i": model.run(commandID: "inbox")
+        case "g": pendingG = Date()
+        default: return .ignored
+        }
+        return .handled
     }
 }
 

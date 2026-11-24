@@ -4,6 +4,7 @@ import Observation
 
 enum SidebarItem: Hashable {
     case inbox
+    case snoozed
     case category(MailCategory)
     case mailbox(accountID: String, path: String)
 }
@@ -22,8 +23,8 @@ enum StreamItem: Identifiable, Hashable {
 
     var date: Date {
         switch self {
-        case .thread(let t): t.latest.date
-        case .bundle(_, let threads): threads.first?.latest.date ?? .distantPast
+        case .thread(let t): t.arrivedAt
+        case .bundle(_, let threads): threads.map(\.arrivedAt).max() ?? .distantPast
         }
     }
 }
@@ -31,16 +32,27 @@ enum StreamItem: Identifiable, Hashable {
 @MainActor @Observable
 final class AppModel {
     // Navigation
-    var selection: SidebarItem = .inbox { didSet { reload() } }
-    var selectedThreadID: String?
+    var selection: SidebarItem = .inbox { didSet { if selection != oldValue { selectedThreadID = nil }; reload() } }
+    var selectedThreadID: String? { didSet { scheduleMarkRead() } }
     var expandedBundles: Set<MailCategory> = []
+    /// Show only pinned conversations (Google Inbox's pin toggle).
+    var pinnedOnly = false { didSet { reload() } }
+
+    // Triage UI
+    var toast: Toast?
+    var isSnoozePickerShown = false
+    var isPaletteShown = false
+    var sweepCandidate: SweepRequest?
+    weak var undoManager: UndoManager?
+    @ObservationIgnored var markReadTask: Task<Void, Never>?
+    @ObservationIgnored var toastTask: Task<Void, Never>?
 
     // Data
     private(set) var accounts: [AccountConfig] = []
     private(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
     private(set) var syncStatus: [String: String] = [:]
-    private(set) var lastError: String?
+    var lastError: String?
 
     // Search
     var searchText = "" { didSet { runSearch() } }
@@ -55,7 +67,7 @@ final class AppModel {
     let cache: MessageCache
     let dataDirectory: URL
     let isDevServer: Bool
-    private var syncs: [String: AccountSync] = [:]
+    var syncs: [String: AccountSync] = [:]
     private var tasks: [Task<Void, Never>] = []
 
     init() {
@@ -143,6 +155,7 @@ final class AppModel {
     var currentMailboxTitle: String {
         switch selection {
         case .inbox: String(localized: "Inbox")
+        case .snoozed: String(localized: "Snoozed")
         case .category(let c): c.title
         case .mailbox(_, let path): path
         }
@@ -153,6 +166,10 @@ final class AppModel {
             switch selection {
             case .inbox:
                 threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+                if pinnedOnly { threads = threads.filter(\.isPinned) }
+            case .snoozed:
+                threads = try store.threads(mailbox: AccountSync.snoozedMailbox, ownAddresses: ownAddresses)
+                    .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
             case .category(let category):
                 threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses).filter { $0.latest.category == category }
             case .mailbox(let accountID, let path):

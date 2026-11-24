@@ -490,6 +490,676 @@
           }
         }
       }
+    },
+    "Snoozed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsat"
+          }
+        }
+      }
+    },
+    "Mark Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker som færdig"
+          }
+        }
+      }
+    },
+    "Pin": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgør"
+          }
+        }
+      }
+    },
+    "Unpin": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frigør"
+          }
+        }
+      }
+    },
+    "Snooze…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt…"
+          }
+        }
+      }
+    },
+    "Mark as Read": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker som læst"
+          }
+        }
+      }
+    },
+    "Mark as Unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker som ulæst"
+          }
+        }
+      }
+    },
+    "Move to Trash": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til papirkurv"
+          }
+        }
+      }
+    },
+    "Move to Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til uønsket"
+          }
+        }
+      }
+    },
+    "Move to Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til indbakke"
+          }
+        }
+      }
+    },
+    "Sweep Inbox (Done for all unpinned)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryd indbakken (færdig for alle ikke-fastgjorte)"
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortryd"
+          }
+        }
+      }
+    },
+    "Show All Conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis alle samtaler"
+          }
+        }
+      }
+    },
+    "Show Only Pinned": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis kun fastgjorte"
+          }
+        }
+      }
+    },
+    "Go to Snoozed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til udsatte"
+          }
+        }
+      }
+    },
+    "Go to Archive": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til arkiv"
+          }
+        }
+      }
+    },
+    "Go to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til %@"
+          }
+        }
+      }
+    },
+    "Type a command": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv en kommando"
+          }
+        }
+      }
+    },
+    "Snooze until…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt til…"
+          }
+        }
+      }
+    },
+    "Pick a date": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg en dato"
+          }
+        }
+      }
+    },
+    "Snooze": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt"
+          }
+        }
+      }
+    },
+    "Later today": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senere i dag"
+          }
+        }
+      }
+    },
+    "Tomorrow": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I morgen"
+          }
+        }
+      }
+    },
+    "This weekend": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I weekenden"
+          }
+        }
+      }
+    },
+    "Next week": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Næste uge"
+          }
+        }
+      }
+    },
+    "Someday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En dag"
+          }
+        }
+      }
+    },
+    "No reminder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen påmindelse"
+          }
+        }
+      }
+    },
+    "Marked done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeret som færdig"
+          }
+        }
+      }
+    },
+    "%lld conversations done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld samtaler færdige"
+          }
+        }
+      }
+    },
+    "Moved to Trash": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttet til papirkurv"
+          }
+        }
+      }
+    },
+    "Moved to Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttet til uønsket"
+          }
+        }
+      }
+    },
+    "Moved to Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttet til indbakke"
+          }
+        }
+      }
+    },
+    "Snoozed until %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsat til %@"
+          }
+        }
+      }
+    },
+    "Snoozed for someday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsat til en dag"
+          }
+        }
+      }
+    },
+    "Back in the Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbage i indbakken"
+          }
+        }
+      }
+    },
+    "Pinned": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgjort"
+          }
+        }
+      }
+    },
+    "Unpinned": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frigjort"
+          }
+        }
+      }
+    },
+    "Marked read": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeret som læst"
+          }
+        }
+      }
+    },
+    "Marked unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeret som ulæst"
+          }
+        }
+      }
+    },
+    "Mark all %@ done?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker alle %@ som færdige?"
+          }
+        }
+      }
+    },
+    "Sweep the Inbox?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryd indbakken?"
+          }
+        }
+      }
+    },
+    "Mark %lld Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker %lld som færdige"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuller"
+          }
+        }
+      }
+    },
+    "Pinned conversations stay. You can undo this.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgjorte samtaler bliver. Du kan fortryde."
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Færdig"
+          }
+        }
+      }
+    },
+    "Sweep": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryd"
+          }
+        }
+      }
+    },
+    "Pinned only": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun fastgjorte"
+          }
+        }
+      }
+    },
+    "Command Palette…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommandopalet…"
+          }
+        }
+      }
+    },
+    "Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besked"
+          }
+        }
+      }
+    },
+    "Pin / Unpin": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgør / frigør"
+          }
+        }
+      }
+    },
+    "Mark as Read / Unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker som læst / ulæst"
+          }
+        }
+      }
+    },
+    "Mark All %@ Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker alle %@ som færdige"
+          }
+        }
+      }
+    },
+    "Mark Done (E)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker som færdig (E)"
+          }
+        }
+      }
+    },
+    "Snooze (B)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt (B)"
+          }
+        }
+      }
+    },
+    "Pin (P)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgør (P)"
+          }
+        }
+      }
+    },
+    "Show only pinned (G P)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis kun fastgjorte (G P)"
+          }
+        }
+      }
+    },
+    "Mark everything that isn't pinned done (⌘⇧E)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marker alt, der ikke er fastgjort, som færdigt (⌘⇧E)"
+          }
+        }
+      }
+    },
+    "Create a password at Apple": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opret en adgangskode hos Apple"
+          }
+        }
+      }
+    },
+    "Paste it here": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indsæt den her"
+          }
+        }
+      }
+    },
+    "Paste": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indsæt"
+          }
+        }
+      }
+    },
+    "Open account.apple.com": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn account.apple.com"
+          }
+        }
+      }
+    },
+    "Sign-In and Security → App-Specific Passwords → +. Name it \"Tidings\", then copy it.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ind og sikkerhed → App-specifikke adgangskoder → +. Kald den \"Tidings\", og kopiér den."
+          }
+        }
+      }
+    },
+    "Tidings only reads the clipboard when you press Paste.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings læser kun udklipsholderen, når du trykker Indsæt."
+          }
+        }
+      }
+    },
+    "Apple doesn't offer \"Sign in with Apple\" to mail apps other than its own, so iCloud asks for an app-specific password. It only takes a moment, and you can revoke it anytime.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple tilbyder ikke \"Log ind med Apple\" til andre mailapps end sin egen, så iCloud beder om en app-specifik adgangskode. Det tager kun et øjeblik, og du kan tilbagekalde den når som helst."
+          }
+        }
+      }
+    },
+    "Use your primary @icloud.com address. Custom-domain addresses come later as sending identities.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug din primære @icloud.com-adresse. Adresser på eget domæne kommer senere som afsenderidentiteter."
+          }
+        }
+      }
+    },
+    "The clipboard is empty. Copy the password at account.apple.com first.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udklipsholderen er tom. Kopiér adgangskoden på account.apple.com først."
+          }
+        }
+      }
+    },
+    "That doesn't look like an app-specific password (four groups of four letters).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det ligner ikke en app-specifik adgangskode (fire grupper med fire bogstaver)."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

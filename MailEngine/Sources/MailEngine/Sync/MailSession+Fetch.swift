@@ -76,11 +76,18 @@ extension MailSession {
         return result
     }
 
-    /// IDLEs on the selected mailbox until the server reports a change or `timeout` passes.
-    /// Returns true when something changed.
-    public func idle(timeout: Duration) async throws -> Bool {
+    /// IDLEs on the selected mailbox until the server reports a change, `wake` fires, or
+    /// `timeout` passes. Returns true when something changed or local work is waiting.
+    public func idle(timeout: Duration, wake: AsyncStream<Void>? = nil) async throws -> Bool {
         try await connection.sendIdle { _, responses in
             try await withThrowingTaskGroup(of: Bool.self) { group in
+                if let wake {
+                    // Local work (a triage action) ends IDLE early so it reaches the server promptly.
+                    group.addTask {
+                        for await _ in wake { return true }
+                        return false
+                    }
+                }
                 group.addTask {
                     for try await response in responses {
                         switch response {

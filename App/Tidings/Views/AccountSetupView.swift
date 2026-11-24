@@ -1,45 +1,65 @@
 import MailEngine
+import AppKit
 import SwiftUI
 
-/// Onboarding (SPEC §16): iCloud address + app-specific password, validated live before saving.
+/// Onboarding (SPEC §16). iCloud has no third-party OAuth (docs/research/icloud-imap.md), so an
+/// app-specific password is the only way in; this makes that a two-click step:
+/// open Apple's page → generate → come back and press Paste. A valid password connects at once.
 struct AccountSetupView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     @State private var address = ""
     @State private var password = ""
     @State private var isConnecting = false
+    @State private var openedApple = false
     @State private var error: String?
 
+    static let appleURL = URL(string: "https://account.apple.com/account/manage/section/security")!
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             Label("Add your iCloud Mail account", systemImage: "envelope.badge.person.crop")
                 .font(.title2.weight(.semibold))
-
-            Text("Tidings connects directly to iCloud over IMAP. Your mail stays on this Mac and with Apple.")
+            Text("Apple doesn't offer \"Sign in with Apple\" to mail apps other than its own, so iCloud asks for an app-specific password. It only takes a moment, and you can revoke it anytime.")
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Form {
-                TextField("iCloud address", text: $address, prompt: Text(verbatim: "name@icloud.com"))
-                    .textContentType(.username)
-                SecureField("App-specific password", text: $password, prompt: Text(verbatim: "xxxx-xxxx-xxxx-xxxx"))
-                    .textContentType(.password)
-            }
-            .formStyle(.grouped)
+            TextField("iCloud address", text: $address, prompt: Text(verbatim: "name@icloud.com"))
+                .textContentType(.username)
+                .textFieldStyle(.roundedBorder)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Use your primary @icloud.com address, not a custom-domain address. You can send from custom domains later.")
-                Link("Create an app-specific password at account.apple.com →",
-                     destination: URL(string: "https://account.apple.com/account/manage")!)
+            step(1, done: openedApple, title: "Create a password at Apple",
+                 detail: "Sign-In and Security → App-Specific Passwords → +. Name it \"Tidings\", then copy it.") {
+                Button("Open account.apple.com") {
+                    openURL(Self.appleURL)
+                    openedApple = true
+                }
+                .buttonStyle(.glass)
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
+
+            step(2, done: AppPassword.isValid(password), title: "Paste it here",
+                 detail: "Tidings only reads the clipboard when you press Paste.") {
+                HStack {
+                    SecureField("App-specific password", text: $password, prompt: Text(verbatim: "xxxx-xxxx-xxxx-xxxx"))
+                        .textContentType(.password)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { Task { await connect() } }
+                    Button("Paste") { paste() }
+                        .buttonStyle(.glass)
+                }
+            }
 
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                     .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
+                Text("Use your primary @icloud.com address. Custom-domain addresses come later as sending identities.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     Task { await connect() }
@@ -48,22 +68,51 @@ struct AccountSetupView: View {
                 }
                 .buttonStyle(.glassProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(isConnecting || !address.contains("@") || password.count < 16)
+                .disabled(isConnecting || !address.contains("@") || !AppPassword.isValid(password))
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: 520)
+    }
+
+    private func step(_ n: Int, done: Bool, title: LocalizedStringKey, detail: LocalizedStringKey,
+                      @ViewBuilder content: () -> some View) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: done ? "checkmark.circle.fill" : "\(n).circle")
+                .font(.title2)
+                .foregroundStyle(done ? Color.green : Color.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.headline)
+                Text(detail).font(.callout).foregroundStyle(.secondary)
+                content()
+            }
+        }
+    }
+
+    private func paste() {
+        guard let text = NSPasteboard.general.string(forType: .string) else {
+            error = String(localized: "The clipboard is empty. Copy the password at account.apple.com first.")
+            return
+        }
+        guard let normalized = AppPassword.normalize(text) else {
+            error = String(localized: "That doesn't look like an app-specific password (four groups of four letters).")
+            return
+        }
+        error = nil
+        password = normalized
+        if address.contains("@") { Task { await connect() } }
     }
 
     private func connect() async {
+        guard !isConnecting, AppPassword.isValid(password) else { return }
         isConnecting = true
         error = nil
         defer { isConnecting = false }
         do {
-            try await model.addAccount(address: address, password: password.trimmingCharacters(in: .whitespaces))
+            try await model.addAccount(address: address, password: password)
         } catch let e as MailSessionError {
             if case .authenticationFailed = e {
-                error = String(localized: "iCloud rejected the login. Check that the address is your @icloud.com address and the password is an app-specific password.")
+                error = String(localized: "iCloud rejected the login. Check that the address is your @icloud.com address and the password is a fresh app-specific password.")
             } else {
                 error = e.description
             }
@@ -71,6 +120,18 @@ struct AccountSetupView: View {
             self.error = error.localizedDescription
         }
     }
+}
+
+/// Apple's app-specific password format: four groups of four lowercase letters.
+enum AppPassword {
+    static func normalize(_ raw: String) -> String? {
+        let letters = raw.lowercased().filter(\.isLetter)
+        guard letters.count == 16, letters.allSatisfy({ $0.isASCII }) else { return nil }
+        let chars = Array(letters)
+        return stride(from: 0, to: 16, by: 4).map { String(chars[$0..<$0 + 4]) }.joined(separator: "-")
+    }
+
+    static func isValid(_ s: String) -> Bool { normalize(s) == s }
 }
 
 struct SettingsView: View {

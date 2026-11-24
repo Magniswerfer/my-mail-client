@@ -11,6 +11,8 @@ struct SidebarView: View {
                 Label("Inbox", systemImage: "tray")
                     .tag(SidebarItem.inbox)
                     .badge(model.threads.isEmpty ? 0 : inboxUnread)
+                Label("Snoozed", systemImage: "clock")
+                    .tag(SidebarItem.snoozed)
             }
 
             Section("Bundles") {
@@ -43,7 +45,7 @@ struct SidebarView: View {
     private func folders(for accountID: String) -> [MailboxState] {
         let order: [MailboxRole?] = [.archive, .sent, .drafts]
         return model.mailboxes
-            .filter { $0.accountID == accountID && $0.role != .inbox }
+            .filter { $0.accountID == accountID && $0.role != .inbox && $0.path != AccountSync.snoozedMailbox }
             .sorted { a, b in
                 let ia = order.firstIndex(of: a.role) ?? order.count
                 let ib = order.firstIndex(of: b.role) ?? order.count

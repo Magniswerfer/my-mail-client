@@ -33,6 +33,10 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     public var inReplyTo: String?
     /// Why the message got its category ("why is this here?", SPEC §5).
     public var classificationReason: String?
+    /// When a snoozed message came back: it sorts as new mail from then on.
+    public var surfacedAt: Date?
+    public var snoozedUntil: Date?
+    public var isSnoozed: Bool = false
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -108,6 +112,7 @@ public final class MailStore: Sendable {
                 """)
         }
         registerSyncMigrations(&m)
+        registerTriageMigrations(&m)
         return m
     }
 

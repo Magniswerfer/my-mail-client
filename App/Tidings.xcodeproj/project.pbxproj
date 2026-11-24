@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
 		186630237B178EECA7307A27 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
 		2AC9A6C048CC776ABD2445AE /* TidingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF92DF43EE36D90347135F4 /* TidingsApp.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
@@ -15,12 +16,15 @@
 		4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
 		79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */; };
 		A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06689F64AABF98230DE8B430 /* ReaderView.swift */; };
+		AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
 		B1A2B5DD989C49C4146CCB83 /* MailEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 187850F5704A0255AB5BF953 /* MailEngine */; };
 		C2F0CBE3DCB00FD1D3C8EEA3 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07FA70D74524437B7FC3417 /* SearchResultsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
 		06689F64AABF98230DE8B430 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
+		067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Triage.swift"; sourceTree = "<group>"; };
 		0ACC86ABC03818BEDC665920 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
 		0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		1EEBA246801CACDF96D1538A /* MailEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MailEngine; path = ../MailEngine; sourceTree = SOURCE_ROOT; };
@@ -51,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */,
+				02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */,
 				06689F64AABF98230DE8B430 /* ReaderView.swift */,
 				B07FA70D74524437B7FC3417 /* SearchResultsView.swift */,
 				F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */,
@@ -63,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */,
+				067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -191,7 +197,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */,
+				AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */,
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
+				052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */,
 				A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */,
 				C2F0CBE3DCB00FD1D3C8EEA3 /* SearchResultsView.swift in Sources */,
 				79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */,

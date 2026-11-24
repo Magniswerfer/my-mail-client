@@ -48,6 +48,9 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 
 ### Where state lives — [ADR 0002](adr/0002-inbox-state-cloudkit-plus-imap.md)
 - Things with IMAP meaning are IMAP: Done → Archive folder, Snooze → `Snoozed` folder, spam → Junk, read/flag → system flags. Other clients stay consistent.
+- **Pin = `\Flagged`** (decided in M2): flagging in Apple Mail pins in Tidings and vice versa.
+- **Snooze wake time travels as keywords** (`$TidingsSnoozed`, `$TidingsWake-<unix>`) on the message in `Snoozed`, so a fresh install or another device knows when it returns.
+- Triage actions are **optimistic + queued** (`pendingAction` table): the UI updates at once, the queue drains in order on the sync connection, sync never touches in-flight messages, and every action is undoable (cancel if not yet sent, inverse if sent).
 - Rich app state (category, pin, snooze-until, bundle, Highlights, rule history, classifier corrections) → **CloudKit private DB**, keyed by `Message-ID` + account.
 - Custom IMAP keywords (e.g. `$Pinned`) mirror simple state for other clients. **Verified usable on iCloud in M0.** CloudKit remains the source of truth.
 
@@ -143,7 +146,7 @@ Swift 6 (strict concurrency) · SwiftUI shell · AppKit `NSTableView` for the st
 
 ## 16. Onboarding
 
-App-specific-password walkthrough (link to account.apple.com, live validation, iCloud auto-config) → sync order: INBOX headers last 30 days (usable in ~5–10 s) → those bodies + classification → older mail/folders in background with sidebar progress → optional 60-second "teach me" on ~20 ambiguous messages.
+App-specific-password walkthrough (iCloud has no third-party OAuth/SSO: Sign in with Apple only gives identity, `XOAUTH2` is partner-only, `ATOKEN` is private). Two steps: open account.apple.com, then Paste (clipboard read only on click, format-validated, auto-connect) → sync order: INBOX headers last 30 days (usable in ~5–10 s) → those bodies + classification → older mail/folders in background with sidebar progress → optional 60-second "teach me" on ~20 ambiguous messages.
 
 ## 17. Distribution
 
@@ -160,8 +163,8 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | | Scope |
 |---|---|
 | **M0 · Engine spike** ✅ | iCloud IMAP connect + quirks, fenced live keyword test, tier-1 store + FTS, Foundation Models/Danish check |
-| **M1 · Read-only client** | sync, stream, threads, reading pane, instant faceted search |
-| **M2 · Triage** | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
+| **M1 · Read-only client** ✅ | sync, stream, threads, reading pane, instant faceted search |
+| **M2 · Triage** ✅ (verified on local server) | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
 | **M3 · Compose** | SMTP, outbox/undo send, identities, signatures — **daily driver** |
 | **M4 · Sorting** | AI categories, bundles + schedules, spam layers, remote-content protection |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |

@@ -13,15 +13,22 @@ struct StreamView: View {
                 case .thread(let thread):
                     ThreadRow(thread: thread)
                         .tag(thread.threadID)
+                        .contextMenu { ThreadActions(thread: thread) }
                 case .bundle(let category, let members):
                     BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category))
                         .contentShape(Rectangle())
                         .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
                         .selectionDisabled()
+                        .contextMenu {
+                            Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
+                                model.requestSweep(bundle: category)
+                            }
+                        }
                     if model.expandedBundles.contains(category) {
                         ForEach(members) { thread in
                             ThreadRow(thread: thread, inBundle: true)
                                 .tag(thread.threadID)
+                                .contextMenu { ThreadActions(thread: thread) }
                         }
                     }
                 }
@@ -64,13 +71,20 @@ struct ThreadRow: View {
                         Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)
                             .accessibilityLabel("Has attachment")
                     }
-                    if m.isFlagged {
-                        Image(systemName: "flag.fill").font(.caption).foregroundStyle(.orange)
-                            .accessibilityLabel("Flagged")
+                    if thread.isPinned {
+                        Image(systemName: "pin.fill").font(.caption).foregroundStyle(.orange)
+                            .accessibilityLabel("Pinned")
                     }
-                    Text(MailDate.short(m.date))
-                        .font(.caption)
-                        .foregroundStyle(thread.unreadCount > 0 ? .primary : .secondary)
+                    if let wake = thread.snoozedUntil {
+                        Label(MailDate.short(wake), systemImage: "clock")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel("Snoozed until \(MailDate.long(wake))")
+                    } else {
+                        Text(MailDate.short(thread.arrivedAt))
+                            .font(.caption)
+                            .foregroundStyle(thread.unreadCount > 0 ? .primary : .secondary)
+                    }
                 }
                 Text(m.subject)
                     .font(.subheadline.weight(thread.unreadCount > 0 ? .medium : .regular))
@@ -148,5 +162,26 @@ struct BundleRow: View {
             if seen.count == 4 { break }
         }
         return seen.joined(separator: ", ")
+    }
+}
+
+/// Right-click actions for a conversation; same actions as the keys and the ⌘K palette.
+struct ThreadActions: View {
+    @Environment(AppModel.self) private var model
+    let thread: ThreadSummary
+
+    var body: some View {
+        Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
+        Button(thread.isPinned ? "Unpin" : "Pin", systemImage: "pin") { model.perform(thread.isPinned ? .unpin : .pin, on: [thread]) }
+        Button("Snooze…", systemImage: "clock") {
+            model.selectedThreadID = thread.threadID
+            model.isSnoozePickerShown = true
+        }
+        Button(thread.unreadCount > 0 ? "Mark as Read" : "Mark as Unread", systemImage: "envelope.open") {
+            model.perform(thread.unreadCount > 0 ? .markRead : .markUnread, on: [thread])
+        }
+        Divider()
+        Button("Move to Trash", systemImage: "trash") { model.perform(.trash, on: [thread]) }
+        Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk, on: [thread]) }
     }
 }

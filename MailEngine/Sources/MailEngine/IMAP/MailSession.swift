@@ -193,6 +193,11 @@ public final class MailSession: Sendable {
     /// Sends a command, collecting all responses, and throws if the tagged response is not OK.
     @discardableResult
     func run(_ command: Command, name: String) async throws -> [Response] {
+        try await runWithStatus(command, name: name).responses
+    }
+
+    /// Like `run`, but also returns the tagged OK's response text (for codes like COPYUID).
+    func runWithStatus(_ command: Command, name: String) async throws -> (responses: [Response], text: ResponseText) {
         var collected: [Response] = []
         let tagged = try await connection.send(command) { _, responses in
             var result: TaggedResponse?
@@ -204,10 +209,10 @@ public final class MailSession: Sendable {
         guard let tagged else {
             throw MailSessionError.commandFailed(command: name, detail: "no tagged response")
         }
-        guard case .ok = tagged.state else {
+        guard case .ok(let text) = tagged.state else {
             throw MailSessionError.commandFailed(command: name, detail: String(describing: tagged.state))
         }
-        return collected
+        return (collected, text)
     }
 
     /// `LIST "" "*"`. Must use the single-pattern form: `.pattern([...])` encodes as `("*")`,
@@ -413,24 +418,58 @@ public final class MailSession: Sendable {
         try await run(.uidStore(set, [], data), name: "UID STORE")
     }
 
-    /// Moves messages. iCloud has no MOVE, so this falls back to COPY + \Deleted + UID EXPUNGE,
-    /// which is safe to re-run: a crash after COPY leaves a duplicate, never a loss.
-    public func move(uids: [UInt32], to destination: String) async throws {
-        guard let set = Self.uidSet(uids) else { return }
+    /// Moves messages from the selected mailbox and returns old UID → new UID (from COPYUID,
+    /// when the server reports it).
+    ///
+    /// iCloud has no MOVE, so this falls back to COPY + \\Deleted + UID EXPUNGE. That sequence
+    /// is resumable: messages already marked \\Deleted by an interrupted earlier attempt are not
+    /// copied again, only expunged. A crash between COPY and STORE can still leave a duplicate,
+    /// never a loss.
+    @discardableResult
+    public func move(uids: [UInt32], to destination: String) async throws -> [UInt32: UInt32] {
+        guard !uids.isEmpty else { return [:] }
         let target = MailboxName(ByteBuffer(string: destination))
-        if supports("MOVE") {
-            try await run(.uidMove(set, target), name: "UID MOVE")
-            return
+        if supports("MOVE"), let set = Self.uidSet(uids) {
+            let (responses, text) = try await runWithStatus(.uidMove(set, target), name: "UID MOVE")
+            var mapping = Self.copyUIDMapping(text.code)
+            for response in responses {
+                if case .untagged(.conditionalState(.ok(let t))) = response {
+                    mapping.merge(Self.copyUIDMapping(t.code)) { a, _ in a }
+                }
+            }
+            return mapping
         }
-        try await run(.uidCopy(set, target), name: "UID COPY")
-        try await store(uids: uids, .add, flags: ["\\Deleted"])
-        if supports("UIDPLUS") {
-            try await run(.uidExpunge(set), name: "UID EXPUNGE")
-        } else {
+        guard supports("UIDPLUS") else {
             throw MailSessionError.commandFailed(
                 command: "MOVE", detail: "server has neither MOVE nor UIDPLUS; refusing a blanket EXPUNGE"
             )
         }
+        let current = try await fetchFlags(uids: uids)
+        let alreadyCopied = Set(uids.filter { current[$0]?.flags.contains("\\Deleted") == true })
+        let toCopy = uids.filter { !alreadyCopied.contains($0) && current[$0] != nil }
+        var mapping: [UInt32: UInt32] = [:]
+        if let set = Self.uidSet(toCopy) {
+            let (_, text) = try await runWithStatus(.uidCopy(set, target), name: "UID COPY")
+            mapping = Self.copyUIDMapping(text.code)
+            try await store(uids: toCopy, .add, flags: ["\\Deleted"])
+        }
+        let present = uids.filter { current[$0] != nil }
+        if let set = Self.uidSet(present) {
+            try await run(.uidExpunge(set), name: "UID EXPUNGE")
+        }
+        return mapping
+    }
+
+    /// Expands `[COPYUID validity src dst]` into an ordered old → new UID map.
+    static func copyUIDMapping(_ code: ResponseTextCode?) -> [UInt32: UInt32] {
+        guard case .uidCopy(let copy) = code else { return [:] }
+        func expand(_ ranges: [UIDRange]) -> [UInt32] {
+            ranges.flatMap { r in Array(r.range.lowerBound.rawValue...r.range.upperBound.rawValue) }
+        }
+        let source = expand(copy.sourceUIDs)
+        let destination = expand(copy.destinationUIDs)
+        guard source.count == destination.count else { return [:] }
+        return Dictionary(zip(source, destination), uniquingKeysWith: { a, _ in a })
     }
 
     /// Permanently removes the given UIDs from the selected mailbox (requires UIDPLUS).

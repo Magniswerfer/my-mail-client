@@ -22,6 +22,11 @@ public struct ThreadSummary: Sendable, Hashable, Identifiable {
     public var messageCount: Int
     public var unreadCount: Int
     public var participants: [String]
+    /// Any message in the conversation is \Flagged (Pin, SPEC §4).
+    public var isPinned: Bool = false
+    /// When the conversation entered the mailbox; for a returned snooze, when it came back.
+    public var arrivedAt: Date
+    public var snoozedUntil: Date?
 }
 
 extension MailStore {
@@ -71,9 +76,23 @@ extension MailStore {
     public func updateFlags(accountID: String, mailbox: String, changes: [UInt32: String]) throws {
         try db.write { db in
             for (uid, flags) in changes {
-                try db.execute(sql: "UPDATE message SET flags = ? WHERE accountID = ? AND mailbox = ? AND uid = ?",
-                               arguments: [flags, accountID, mailbox, uid])
+                // Snooze state follows the server keywords (set here or on another device).
+                let (snoozed, until) = SnoozeKeywords.parse(flags.split(separator: " ").map(String.init))
+                try db.execute(sql: """
+                    UPDATE message SET flags = ?, isSnoozed = ?, snoozedUntil = ?
+                    WHERE accountID = ? AND mailbox = ? AND uid = ?
+                    """, arguments: [flags, snoozed, until, accountID, mailbox, uid])
             }
+        }
+    }
+
+    func uids(localIDs: Set<Int64>, mailbox: String) throws -> Set<UInt32> {
+        guard !localIDs.isEmpty else { return [] }
+        let args: [(any DatabaseValueConvertible)?] = [mailbox] + localIDs.map { $0 }
+        return try db.read { db in
+            Set(try UInt32.fetchAll(db, sql: """
+                SELECT uid FROM message WHERE mailbox = ? AND id IN (\(localIDs.map { _ in "?" }.joined(separator: ",")))
+                """, arguments: StatementArguments(args)))
         }
     }
 
@@ -125,20 +144,26 @@ extension MailStore {
             var args: [any DatabaseValueConvertible] = [mailbox]
             var accountFilter = ""
             if let accountID { accountFilter = "AND accountID = ?"; args.append(accountID) }
-            let latest = try StoredMessage.fetchAll(db, sql: """
-                SELECT m.* FROM message m JOIN (
-                    SELECT threadID, max(sortKey) AS k FROM message
+            // A snoozed conversation that came back sorts by when it came back (surfacedAt).
+            let latestRows = try Row.fetchAll(db, sql: """
+                SELECT m.*, t.arrived AS arrived FROM message m JOIN (
+                    SELECT threadID, max(sortKey) AS k, max(coalesce(surfacedAt, date)) AS arrived FROM message
                     WHERE mailbox = ? \(accountFilter) GROUP BY threadID
                 ) t ON m.sortKey = t.k
-                ORDER BY m.sortKey DESC LIMIT \(limit)
+                ORDER BY t.arrived DESC LIMIT \(limit)
                 """, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? }))
+            let latest = try latestRows.map { try StoredMessage(row: $0) }
+            var arrived: [String: Date] = [:]
+            for row in latestRows { if let t: String = row["threadID"] { arrived[t] = row["arrived"] } }
             let threadIDs = latest.compactMap(\.threadID)
             guard !threadIDs.isEmpty else { return [] }
             var counts: [String: (Int, Int, [String])] = [:]
+            var extras: [String: (pinned: Bool, snoozed: Date?)] = [:]
             // An empty IN () is invalid SQL; a never-matching placeholder keeps the query uniform.
             let own = ownAddresses.isEmpty ? [""] : ownAddresses.map { $0.lowercased() }
             let rows = try Row.fetchAll(db, sql: """
                 SELECT threadID, count(*) AS n, sum(instr(flags, '\\Seen') = 0) AS unread,
+                       max(instr(flags, '\\Flagged') > 0) AS pinned, max(snoozedUntil) AS snoozed,
                        group_concat(DISTINCT CASE WHEN lower(fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
                                                   THEN NULL ELSE coalesce(fromName, fromAddress) END) AS people
                 FROM message WHERE threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ",")))
@@ -147,10 +172,14 @@ extension MailStore {
             for row in rows {
                 let people = (row["people"] as String?)?.split(separator: ",").map(String.init) ?? []
                 counts[row["threadID"]] = (row["n"], row["unread"] ?? 0, people)
+                extras[row["threadID"]] = ((row["pinned"] as Int? ?? 0) == 1, row["snoozed"])
             }
             return latest.map { m in
-                let c = counts[m.threadID ?? ""] ?? (1, m.flags.contains("\\Seen") ? 0 : 1, [m.fromName ?? m.fromAddress])
-                return ThreadSummary(threadID: m.threadID ?? "", latest: m, messageCount: c.0, unreadCount: c.1, participants: c.2)
+                let key = m.threadID ?? ""
+                let c = counts[key] ?? (1, m.flags.contains("\\Seen") ? 0 : 1, [m.fromName ?? m.fromAddress])
+                let e = extras[key] ?? (m.flags.contains("\\Flagged"), m.snoozedUntil)
+                return ThreadSummary(threadID: key, latest: m, messageCount: c.0, unreadCount: c.1, participants: c.2,
+                                     isPinned: e.pinned, arrivedAt: arrived[key] ?? m.date, snoozedUntil: e.snoozed)
             }
         }
     }
