@@ -3310,6 +3310,606 @@
           }
         }
       }
+    },
+    "There's nobody besides the sender to reply to.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der er ingen andre end afsenderen at svare."
+          }
+        }
+      }
+    },
+    "Thanks, %@ (moved to Bcc)!": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tak, %@ (flyttet til Bcc)!"
+          }
+        }
+      }
+    },
+    "Just following up on my email below. Let me know what you think when you have a moment.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeg følger lige op på min mail herunder. Sig til, hvad du tænker, når du har et øjeblik."
+          }
+        }
+      }
+    },
+    "Hi %@,": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hej %@,"
+          }
+        }
+      }
+    },
+    "Follow-up discarded. Tidings won't draft one for this conversation again.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opfølgningen er kasseret. Tidings laver ikke en ny til denne samtale."
+          }
+        }
+      }
+    },
+    "Summary: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resumé: %@"
+          }
+        }
+      }
+    },
+    "Summarized on this device": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opsummeret på denne enhed"
+          }
+        }
+      }
+    },
+    "Summarizing…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opsummerer…"
+          }
+        }
+      }
+    },
+    "Review": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gennemse"
+          }
+        }
+      }
+    },
+    "Tidings drafted this because nobody has answered. It's never sent without you.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings har skrevet et udkast, fordi ingen har svaret. Det sendes aldrig uden dig."
+          }
+        }
+      }
+    },
+    "No reply in %lld days. A follow-up is ready in Drafts.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet svar i %lld dage. En opfølgning ligger klar i Kladder."
+          }
+        }
+      }
+    },
+    "No one selected": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen valgt"
+          }
+        }
+      }
+    },
+    "Open a conversation to see who it's with.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn en samtale for at se, hvem den er med."
+          }
+        }
+      }
+    },
+    "All Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al mail"
+          }
+        }
+      }
+    },
+    "Copy Address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér adresse"
+          }
+        }
+      }
+    },
+    "%lld from them · %lld from you": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld fra dem · %2$lld fra dig"
+          }
+        }
+      }
+    },
+    "Since %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siden %@"
+          }
+        }
+      }
+    },
+    "Last mail %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seneste mail %@"
+          }
+        }
+      }
+    },
+    "Usually answers within the hour": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svarer som regel inden for en time"
+          }
+        }
+      }
+    },
+    "Usually answers within %lld hours": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svarer som regel inden for %lld timer"
+          }
+        }
+      }
+    },
+    "Usually answers within %lld days": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svarer som regel inden for %lld dage"
+          }
+        }
+      }
+    },
+    "From their signature": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra deres signatur"
+          }
+        }
+      }
+    },
+    "Recent conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seneste samtaler"
+          }
+        }
+      }
+    },
+    "Also at %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Også hos %@"
+          }
+        }
+      }
+    },
+    "About %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Om %@"
+          }
+        }
+      }
+    },
+    "Share availability": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del ledige tider"
+          }
+        }
+      }
+    },
+    "Shortest slot": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Korteste tidsrum"
+          }
+        }
+      }
+    },
+    "30 minutes": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 minutter"
+          }
+        }
+      }
+    },
+    "1 hour": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 time"
+          }
+        }
+      }
+    },
+    "2 hours": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 timer"
+          }
+        }
+      }
+    },
+    "No free time in your working hours over the next week.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen ledig tid i din arbejdstid den næste uge."
+          }
+        }
+      }
+    },
+    "Working hours and time zone come from Settings and this device.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbejdstid og tidszone kommer fra Indstillinger og denne enhed."
+          }
+        }
+      }
+    },
+    "Insert": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indsæt"
+          }
+        }
+      }
+    },
+    "Here are some times that work for me (%@):": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Her er nogle tidspunkter, der passer mig (%@):"
+          }
+        }
+      }
+    },
+    "Apple Intelligence": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence"
+          }
+        }
+      }
+    },
+    "Available": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilgængelig"
+          }
+        }
+      }
+    },
+    "Not available on this device": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke tilgængelig på denne enhed"
+          }
+        }
+      }
+    },
+    "Everything here runs on this device. Without Apple Intelligence, summaries are off and follow-ups use a short template.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alt her kører på denne enhed. Uden Apple Intelligence er resuméer slået fra, og opfølgninger bruger en kort skabelon."
+          }
+        }
+      }
+    },
+    "Summaries": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resuméer"
+          }
+        }
+      }
+    },
+    "Summarize long conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opsummer lange samtaler"
+          }
+        }
+      }
+    },
+    "Draft follow-ups when nobody replies": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv opfølgninger, når ingen svarer"
+          }
+        }
+      }
+    },
+    "After %lld days": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Efter %lld dage"
+          }
+        }
+      }
+    },
+    "Auto Drafts": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatiske udkast"
+          }
+        }
+      }
+    },
+    "Drafts wait in the Outbox for you to review. Tidings never sends them by itself, and drops them when a reply arrives.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udkastene venter i Udbakken, så du kan gennemse dem. Tidings sender dem aldrig selv og fjerner dem, når der kommer svar."
+          }
+        }
+      }
+    },
+    "Working day starts": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbejdsdagen starter"
+          }
+        }
+      }
+    },
+    "Working day ends": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbejdsdagen slutter"
+          }
+        }
+      }
+    },
+    "Reply to Introduction (Introducer to Bcc)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar på introduktion (introducerende til Bcc)"
+          }
+        }
+      }
+    },
+    "Reply to Introduction": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar på introduktion"
+          }
+        }
+      }
+    },
+    "Hide Contact Info": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skjul kontaktinfo"
+          }
+        }
+      }
+    },
+    "Show Contact Info": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis kontaktinfo"
+          }
+        }
+      }
+    },
+    "Contact Info": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontaktinfo"
+          }
+        }
+      }
+    },
+    "Who this is (⌃⌘I)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvem det er (⌃⌘I)"
+          }
+        }
+      }
+    },
+    "Review Follow-up Draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gennemse opfølgningsudkast"
+          }
+        }
+      }
+    },
+    "Discard Follow-up Draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kassér opfølgningsudkast"
+          }
+        }
+      }
+    },
+    "Follow-ups": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opfølgninger"
+          }
+        }
+      }
+    },
+    "Drafted follow-ups for conversations still waiting on a reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udkast til opfølgning på samtaler, der stadig venter på svar"
+          }
+        }
+      }
+    },
+    "Follow-up drafted for you": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opfølgning skrevet til dig"
+          }
+        }
+      }
+    },
+    "Assistant": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assistent"
+          }
+        }
+      }
+    },
+    "Share Availability": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del ledige tider"
+          }
+        }
+      }
+    },
+    "Insert free times from your calendar (⌥⌘A)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indsæt ledige tider fra din kalender (⌥⌘A)"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

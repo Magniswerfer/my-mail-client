@@ -22,6 +22,17 @@ struct SidebarView: View {
                         return true
                     }
                     .tag(SidebarItem.snoozed)
+                if !model.autoDrafts.isEmpty {
+                    Button {
+                        model.selection = .outbox
+                        didPick?()
+                    } label: {
+                        Label("Follow-ups", systemImage: "arrowshape.turn.up.right.circle")
+                            .badge(model.autoDrafts.count)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Drafted follow-ups for conversations still waiting on a reply")
+                }
                 if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
                     Label("Outbox", systemImage: "paperplane")
                         .badge(model.outboxItems.count)

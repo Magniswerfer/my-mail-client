@@ -48,6 +48,17 @@ struct MobileRootView: View {
         } detail: {
             ReaderView(threadID: model.readerThreadID)
                 .toolbar { readerToolbar }
+                .inspector(isPresented: $model.isContactPanelShown) {
+                    NavigationStack {
+                        ContactPanel()
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("Done") { model.isContactPanelShown = false }
+                                }
+                            }
+                    }
+                    .presentationDetents([.medium, .large])
+                }
                 .navigationBarTitleDisplayMode(.inline)
         }
         // Opening a conversation shows it; finishing the last one (or going back) shows the list.
@@ -119,6 +130,10 @@ struct MobileRootView: View {
 
     @ToolbarContentBuilder private var readerToolbar: some ToolbarContent {
         let none = model.targetThreads.isEmpty
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { model.toggleContactPanel() } label: { Label("Contact Info", systemImage: "person.crop.circle") }
+                .disabled(none)
+        }
         ToolbarItemGroup(placement: .bottomBar) {
             Button { model.perform(.done) } label: { Label("Done", systemImage: "checkmark") }
                 .disabled(none)
@@ -145,6 +160,7 @@ struct MobileRootView: View {
             Menu {
                 Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll) }
                 Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
+                Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
             } primaryAction: {

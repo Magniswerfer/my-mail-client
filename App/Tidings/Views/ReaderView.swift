@@ -19,6 +19,8 @@ struct ReaderView: View {
                             .textSelection(.enabled)
                             .padding(.bottom, 4)
                         CategoryLine(message: first)
+                        SummaryLine(threadID: threadID, messageCount: messages.count)
+                        FollowUpBanner(threadID: threadID)
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {
                             RiskBanner(message: risky)
                         }
@@ -84,7 +86,11 @@ struct MessageCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: message.senderDisplay, size: 34)
+            Button { model.showContact(message.fromAddress) } label: {
+                Avatar(name: message.senderDisplay, size: 34)
+            }
+            .buttonStyle(.plain)
+            .help("About \(message.senderDisplay)")
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(message.senderDisplay).font(.headline)

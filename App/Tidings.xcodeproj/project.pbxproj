@@ -11,6 +11,7 @@
 		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
 		186630237B178EECA7307A27 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
 		1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA0DB174A202248566399CE8 /* CalendarBridge.swift */; };
+		22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE746A738ECB396D4A3B489 /* AssistViews.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF8802ED3444B57EAECF71C /* ComposeModel.swift */; };
@@ -18,7 +19,9 @@
 		43F9F08320090F9103B0B2A9 /* MobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D84A6766D82ADED898767E /* MobileRootView.swift */; };
 		45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */; };
 		481B300BB3E42C31457162E1 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */; };
+		4942686CA734A7DAC5D52DFE /* AppModel+Assist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */; };
 		4C11E35FE59B713DEFD400E0 /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
+		4D89A4106575722EC1469CD3 /* AppModel+Assist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */; };
 		4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
 		5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
 		555940370E8B5E3FB27DA3B7 /* InviteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */; };
@@ -51,6 +54,7 @@
 		F05C5839A35FC0FBB354AE3D /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
 		F1C95501152A66AF83C251F2 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
 		F26D21D87F5C61CA11FAC008 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
+		F89FD41D7C64B5E4F269658C /* AssistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE746A738ECB396D4A3B489 /* AssistViews.swift */; };
 		FB6B4F1223C73D387E481AE4 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
 /* End PBXBuildFile section */
 
@@ -67,12 +71,14 @@
 		3093CCE2E8C8B894ABAB5365 /* TidingsMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TidingsMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		48A2F7CF09F07C275CE96257 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		6DB767A15EA74F768D716A48 /* TidingsMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsMobileApp.swift; sourceTree = "<group>"; };
+		90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Assist.swift"; sourceTree = "<group>"; };
 		A97A5FA03921FB76ED7DAE54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B07FA70D74524437B7FC3417 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		B1DB91C9DDBBE39459D38C1B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		B656C7C5D76B62DF59CF7881 /* Tidings.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tidings.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA0DB174A202248566399CE8 /* CalendarBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarBridge.swift; sourceTree = "<group>"; };
+		CBE746A738ECB396D4A3B489 /* AssistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistViews.swift; sourceTree = "<group>"; };
 		CCF8802ED3444B57EAECF71C /* ComposeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeModel.swift; sourceTree = "<group>"; };
 		D4D12F02B8A7B485182F3009 /* TidingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsApp.swift; sourceTree = "<group>"; };
 		D9E98B26701A0696C304E547 /* Tidings.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tidings.entitlements; sourceTree = "<group>"; };
@@ -110,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */,
+				CBE746A738ECB396D4A3B489 /* AssistViews.swift */,
 				02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */,
 				2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */,
 				06689F64AABF98230DE8B430 /* ReaderView.swift */,
@@ -124,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */,
+				90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */,
 				E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */,
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
@@ -322,11 +330,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */,
+				4942686CA734A7DAC5D52DFE /* AppModel+Assist.swift in Sources */,
 				59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */,
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
 				AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */,
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
+				F89FD41D7C64B5E4F269658C /* AssistViews.swift in Sources */,
 				A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */,
 				1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */,
 				052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */,
@@ -349,11 +359,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				BC1938DD90671298A57E7FC3 /* AccountSetupView.swift in Sources */,
+				4D89A4106575722EC1469CD3 /* AppModel+Assist.swift in Sources */,
 				4C11E35FE59B713DEFD400E0 /* AppModel+Classify.swift in Sources */,
 				45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */,
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
 				5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */,
 				FB6B4F1223C73D387E481AE4 /* AppModel.swift in Sources */,
+				22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */,
 				8457FC7736CB752FE8A55EAD /* BundleSchedule.swift in Sources */,
 				5B9DD7572A39D23B982D71BB /* CalendarBridge.swift in Sources */,
 				A6AEC3CD061B15B401752417 /* CommandPalette.swift in Sources */,

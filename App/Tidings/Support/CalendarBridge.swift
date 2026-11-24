@@ -57,6 +57,15 @@ import MailEngine
         .sorted { $0.startDate < $1.startDate }
     }
 
+    /// Times you're busy (for Share Availability): timed events that aren't free or cancelled.
+    func busyIntervals(from start: Date, to end: Date) -> [DateInterval] {
+        guard hasAccess, end > start else { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay && $0.availability != .free && $0.status != .canceled && $0.endDate > $0.startDate }
+            .map { DateInterval(start: $0.startDate, end: $0.endDate) }
+    }
+
     /// Adds the event, or updates our copy (new time, place, title) when the invite changed.
     @discardableResult
     func save(_ invite: CalendarInvite, tentative: Bool = false) throws -> EKEvent {

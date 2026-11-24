@@ -57,6 +57,17 @@ extension AppModel {
             AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.selection = .inbox },
             AppCommand(id: "goSnoozed", title: String(localized: "Go to Snoozed"), symbol: "clock", keys: "G S") { self.selection = .snoozed },
         ]
+        let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
+        list += [
+            AppCommand(id: "introReply", title: String(localized: "Reply to Introduction (Introducer to Bcc)"),
+                       symbol: "person.2.wave.2", keys: "⌘⇧I", isEnabled: hasSelection) { self.replyToIntroduction() },
+            AppCommand(id: "contact", title: isContactPanelShown ? String(localized: "Hide Contact Info") : String(localized: "Show Contact Info"),
+                       symbol: "person.crop.circle", keys: "⌃⌘I") { self.toggleContactPanel() },
+            AppCommand(id: "reviewFollowUp", title: String(localized: "Review Follow-up Draft"), symbol: "arrowshape.turn.up.right.circle",
+                       keys: nil, isEnabled: followUp != nil) { if let t = thread { self.reviewFollowUp(threadID: t.threadID) } },
+            AppCommand(id: "discardFollowUp", title: String(localized: "Discard Follow-up Draft"), symbol: "xmark.circle",
+                       keys: nil, isEnabled: followUp != nil) { if let t = thread { self.dismissFollowUp(threadID: t.threadID) } },
+        ]
         let canAnswer = answerableInvite != nil
         list += [
             AppCommand(id: "inviteAccept", title: String(localized: "Accept Invitation"), symbol: "checkmark.circle", keys: "⌃⌘Y",

@@ -294,6 +294,7 @@ struct ThreadActions: View {
         Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, thread: thread) }
         Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, thread: thread) }
         Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, thread: thread) }
+        Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction(thread: thread) }
         Divider()
         Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
         Button("Snooze…", systemImage: "clock") {

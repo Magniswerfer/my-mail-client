@@ -44,14 +44,14 @@ extension AppModel {
 
     // MARK: Opening the composer
 
-    func composeNew() {
+    func composeNew(to recipients: [MailAddress] = []) {
         guard let account = defaultAccount, let identity = account.sendingIdentities.first else { return }
         let body = NSMutableAttributedString(string: "", attributes: RichTextEditor.baseAttributes)
         if !identity.signature.isEmpty {
             body.append(NSAttributedString(string: "\n", attributes: RichTextEditor.baseAttributes))
             body.append(ComposeModel.signatureBlock(identity.signature))
         }
-        openDraft(OutgoingMessage(from: identity.mailAddress, to: [], subject: "", text: ""), body: body,
+        openDraft(OutgoingMessage(from: identity.mailAddress, to: recipients, subject: "", text: ""), body: body,
                   accountID: account.id, kind: .new, originalLocalID: nil)
     }
 
@@ -73,15 +73,54 @@ extension AppModel {
     }
 
     private func openDraft(_ message: OutgoingMessage, body: NSAttributedString, accountID: String, kind: ComposeKind, originalLocalID: Int64?) {
+        if let id = saveDraft(message, body: body, accountID: accountID, kind: kind, originalLocalID: originalLocalID) {
+            openComposeWindow?(id)
+        }
+    }
+
+    /// Stores a draft (with the editor's rich text) without opening it. Returns its outbox id.
+    func saveDraft(_ message: OutgoingMessage, body: NSAttributedString, accountID: String, kind: ComposeKind, originalLocalID: Int64?) -> Int64? {
         var message = message
         message.editorState = try? body.data(from: NSRange(location: 0, length: body.length),
                                              documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd])
+        message.text = MailBodyConverter.plainText(body)
         do {
             let item = try store.save(OutboxItem(accountID: accountID, message: message, state: .draft,
                                                  kind: kind, originalLocalID: originalLocalID))
-            if let id = item.id { openComposeWindow?(id) }
+            return item.id
         } catch {
             lastError = String(describing: error)
+            return nil
+        }
+    }
+
+    // MARK: Instant Intro
+
+    /// "Anna, meet Bob" → reply to Bob (and anyone Cc'd), Anna moved to Bcc, opening with a thank-you.
+    func replyToIntroduction(thread: ThreadSummary? = nil) {
+        guard let thread = thread ?? targetThreads.first,
+              let account = accounts.first(where: { $0.id == thread.latest.accountID }) else { return }
+        let original = messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+        Task {
+            do {
+                let raw = try await rawMessage(original)
+                let parsed = MIMEParser.parse(raw)
+                guard let plan = IntroReply.plan(for: parsed, ownAddresses: ownAddresses) else {
+                    show(Toast(message: String(localized: "There's nobody besides the sender to reply to."), symbol: "person.2.slash"))
+                    return
+                }
+                var draft = Self.draft(.replyAll, replyingTo: parsed, raw: raw, account: account)
+                draft.message.to = plan.to
+                draft.message.cc = plan.cc
+                draft.message.bcc = plan.bcc
+                let thanks = NSMutableAttributedString(
+                    string: String(localized: "Thanks, \(IntroReply.firstName(plan.introducer)) (moved to Bcc)!"),
+                    attributes: RichTextEditor.baseAttributes)
+                thanks.append(draft.body)
+                openDraft(draft.message, body: thanks, accountID: account.id, kind: .replyAll, originalLocalID: original.id)
+            } catch {
+                lastError = String(localized: "Couldn't open the original message: \(String(describing: error))")
+            }
         }
     }
 
@@ -189,6 +228,7 @@ extension AppModel {
     func reloadOutbox() {
         outboxItems = (try? store.outbox()) ?? []
         draftItems = (try? store.drafts()) ?? []
+        autoDrafts = (try? store.pendingAutoDrafts()) ?? []
     }
 
     func suggestions(for query: String) -> [MailAddress] {

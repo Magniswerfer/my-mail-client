@@ -30,6 +30,7 @@ struct ComposeView: View {
     let close: () -> Void
     @State private var isImporting = false
     @State private var isSendLaterShown = false
+    @State private var isAvailabilityShown = false
     @State private var isSending = false
     @FocusState private var focused: Field?
 
@@ -40,7 +41,8 @@ struct ComposeView: View {
             header
             Divider()
             RichTextEditor(text: Binding(get: { model.body }, set: { model.body = $0; model.changed() }),
-                           focusOnAppear: model.kind != .new && model.kind != .forward)
+                           focusOnAppear: model.kind != .new && model.kind != .forward,
+                           insertion: model.insertion)
                 .padding(.horizontal, 12)
             if !model.attachments.isEmpty { attachmentStrip }
             if let error = model.error {
@@ -67,6 +69,9 @@ struct ComposeView: View {
             if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
         }
         .sheet(isPresented: $isSendLaterShown) { sendLaterSheet }
+        .sheet(isPresented: $isAvailabilityShown) {
+            AvailabilityPicker { text in model.insertion = TextInsertion(text: text) }
+        }
     }
 
     // MARK: Header fields
@@ -156,6 +161,9 @@ struct ComposeView: View {
             Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .help("Attach files (⌘⇧A)")
+            Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .help("Insert free times from your calendar (⌥⌘A)")
             Button(role: .destructive) {
                 model.discard()
                 close()
@@ -340,6 +348,9 @@ struct OutboxView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(message?.subject.isEmpty == false ? message!.subject : String(localized: "(no subject)")).font(.headline)
                 Text(message?.envelopeRecipients.joined(separator: ", ") ?? "").font(.caption).foregroundStyle(.secondary)
+                if let id = item.id, model.autoDrafts.contains(where: { $0.outboxID == id }) {
+                    Label("Follow-up drafted for you", systemImage: "sparkles").font(.caption).foregroundStyle(.purple)
+                }
                 if let error = item.lastError {
                     Text(error).font(.caption).foregroundStyle(item.state == .failed ? .red : .orange)
                 }

@@ -15,6 +15,12 @@ extension NSAttributedString.Key {
     static let tidingsList = NSAttributedString.Key("TidingsList")
 }
 
+/// Text to put at the caret (e.g. Share Availability). The id makes each insertion happen once.
+struct TextInsertion: Equatable {
+    let id = UUID()
+    let text: String
+}
+
 // MARK: - Shared styling
 
 extension RichTextEditor {
@@ -133,6 +139,7 @@ extension RichTextEditor {
 struct RichTextEditor: NSViewRepresentable {
     @Binding var text: NSAttributedString
     var focusOnAppear = true
+    var insertion: TextInsertion? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -168,12 +175,22 @@ struct RichTextEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? NSTextView, !context.coordinator.isEditing else { return }
         if view.attributedString() != text { view.textStorage?.setAttributedString(text) }
+        if let insertion, insertion.id != context.coordinator.lastInsertion {
+            context.coordinator.lastInsertion = insertion.id
+            // After this update: undoable, and reported through textDidChange like typing.
+            DispatchQueue.main.async {
+                view.typingAttributes = Self.baseAttributes
+                view.insertText(insertion.text, replacementRange: view.selectedRange())
+                view.window?.makeFirstResponder(view)
+            }
+        }
     }
 
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
         weak var textView: NSTextView?
         var isEditing = false
+        var lastInsertion: UUID?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
 
@@ -237,6 +254,7 @@ struct RichTextEditor: NSViewRepresentable {
 struct RichTextEditor: UIViewRepresentable {
     @Binding var text: NSAttributedString
     var focusOnAppear = true
+    var insertion: TextInsertion? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -266,12 +284,22 @@ struct RichTextEditor: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         guard !context.coordinator.isEditing else { return }
         if view.attributedText != text { view.attributedText = text }
+        if let insertion, insertion.id != context.coordinator.lastInsertion {
+            context.coordinator.lastInsertion = insertion.id
+            let coordinator = context.coordinator
+            DispatchQueue.main.async {
+                view.typingAttributes = Self.baseAttributes
+                view.insertText(insertion.text)
+                coordinator.textViewDidChange(view)
+            }
+        }
     }
 
     @MainActor final class Coordinator: NSObject, UITextViewDelegate {
         var parent: RichTextEditor
         weak var textView: UITextView?
         var isEditing = false
+        var lastInsertion: UUID?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
 

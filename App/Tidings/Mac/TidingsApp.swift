@@ -45,6 +45,8 @@ struct TidingsApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Forward") { model.compose(.forward) }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
+                Button("Reply to Introduction") { model.replyToIntroduction() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
                 Divider()
                 Button("Mark Done") { model.perform(.done) }
                     .keyboardShortcut("e", modifiers: [.command, .option])
@@ -68,6 +70,12 @@ struct TidingsApp: App {
                 Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
                     .keyboardShortcut("n", modifiers: [.command, .control])
                     .disabled(model.answerableInvite == nil)
+            }
+            CommandGroup(after: .toolbar) {
+                Button(model.isContactPanelShown ? String(localized: "Hide Contact Info") : String(localized: "Show Contact Info")) {
+                    model.toggleContactPanel()
+                }
+                    .keyboardShortcut("i", modifiers: [.command, .control])
             }
             CommandMenu("Mailbox") {
                 Button("Check for New Mail") { model.checkForNewMail() }
@@ -129,6 +137,10 @@ struct RootView: View {
             .animation(.snappy, value: model.toast)
         } detail: {
             ReaderView(threadID: model.readerThreadID)
+                .inspector(isPresented: $model.isContactPanelShown) {
+                    ContactPanel()
+                        .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
+                }
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
         .searchFocused($searchFocused)
@@ -218,6 +230,12 @@ struct RootView: View {
             .menuIndicator(.hidden)
             .help("Move to another category (M)")
             .disabled(none)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Toggle(isOn: Binding(get: { model.isContactPanelShown }, set: { _ in model.toggleContactPanel() })) {
+                Label("Contact Info", systemImage: "person.crop.circle")
+            }
+            .help("Who this is (⌃⌘I)")
         }
     }
 

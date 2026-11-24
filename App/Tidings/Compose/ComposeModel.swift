@@ -22,6 +22,8 @@ final class ComposeModel {
     var references: [String] = []
     var error: String?
     var isDirty = false
+    /// Text waiting to go in at the caret (Share Availability).
+    var insertion: TextInsertion?
 
     @ObservationIgnored private weak var app: AppModel?
     @ObservationIgnored private var saveTask: Task<Void, Never>?

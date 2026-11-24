@@ -127,6 +127,7 @@ public final class MailStore: Sendable {
         registerEmbeddingMigrations(&m)
         registerPreviewMigrations(&m)
         registerInviteMigrations(&m)
+        registerAssistMigrations(&m)
         return m
     }
 
@@ -192,6 +193,15 @@ public final class MailStore: Sendable {
     /// The first words of what this message itself says. Quoted replies ("> …"), attribution
     /// lines ("On … wrote:", "Den … skrev …:") and forwarded/original-message blocks are left out.
     static func makePreview(_ text: String) -> String {
+        let kept = ownLines(text)
+        let collapsed = kept.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let result = collapsed.isEmpty ? text.split(whereSeparator: \.isWhitespace).joined(separator: " ") : collapsed
+        return String(result.prefix(160))
+    }
+
+    /// The lines the sender wrote themselves: no "> " quotes, attribution lines, or the
+    /// original/forwarded message below.
+    static func ownLines(_ text: String) -> [Substring] {
         var kept: [Substring] = []
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -204,9 +214,17 @@ public final class MailStore: Sendable {
             if attribution { continue }
             kept.append(line)
         }
-        let collapsed = kept.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        let result = collapsed.isEmpty ? text.split(whereSeparator: \.isWhitespace).joined(separator: " ") : collapsed
-        return String(result.prefix(160))
+        return kept
+    }
+
+    /// What the sender wrote themselves, with blank-line runs collapsed (for AI input).
+    public static func ownText(_ text: String) -> String {
+        var out: [Substring] = []
+        for line in ownLines(text) {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty, out.last?.trimmingCharacters(in: .whitespaces).isEmpty ?? true { continue }
+            out.append(line)
+        }
+        return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// M4.5: recompute stored previews without quoted text.

@@ -140,6 +140,7 @@ struct SettingsView: View {
         TabView {
             Tab("Identities", systemImage: "person.crop.rectangle.stack") { IdentitiesSettings() }
             Tab("Bundles", systemImage: "square.stack.3d.up") { BundleSettings() }
+            Tab("Assistant", systemImage: "sparkles") { AssistantSettings() }
             Tab("General", systemImage: "gearshape") {
                 Form {
                     Section("Accounts") {

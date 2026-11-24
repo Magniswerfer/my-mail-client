@@ -92,6 +92,18 @@ final class AppModel {
     @ObservationIgnored var openComposeWindow: ((Int64) -> Void)?
     var outboxItems: [OutboxItem] = []
     var draftItems: [OutboxItem] = []
+    /// Follow-ups Tidings drafted for conversations still waiting on someone (Auto Drafts).
+    var autoDrafts: [AutoDraft] = []
+
+    // Assistant (on-device): summaries, follow-up drafts. Nil writer = no Apple Intelligence.
+    @ObservationIgnored var writer: (any MailWriter)?
+    @ObservationIgnored var writerChecked = false
+    @ObservationIgnored var autoDraftTask: Task<Void, Never>?
+
+    // Contact sidebar
+    var isContactPanelShown = false
+    /// Whose profile the panel shows; nil follows the open conversation.
+    var contactAddress: String?
     @ObservationIgnored var markReadTask: Task<Void, Never>?
     @ObservationIgnored var toastTask: Task<Void, Never>?
     /// Layers 2–3 of the classifier (on-device embeddings + Foundation Models); nil if unavailable.
@@ -264,6 +276,7 @@ final class AppModel {
             lastError = nil
             reload()
             scheduleRefinement()
+            scheduleAutoDrafts()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message
