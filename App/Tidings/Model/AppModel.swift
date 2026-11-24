@@ -101,7 +101,7 @@ final class AppModel {
     /// "Now" for delivery schedules; bumped at each delivery so the stream re-renders.
     var now = Date()
     /// Bumped on every reload so views that read the store directly (the reader) redraw.
-    private(set) var revision = 0
+    var revision = 0
     @ObservationIgnored var deliveryTask: Task<Void, Never>?
 
     // Data

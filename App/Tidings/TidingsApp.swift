@@ -57,6 +57,16 @@ struct TidingsApp: App {
                     .keyboardShortcut(.delete, modifiers: .command)
                 Button("Move to Junk") { model.perform(.junk) }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
+                Divider()
+                Button("Accept Invitation") { model.respondToSelectedInvite(.accepted) }
+                    .keyboardShortcut("y", modifiers: [.command, .control])
+                    .disabled(model.answerableInvite == nil)
+                Button("Maybe") { model.respondToSelectedInvite(.tentative) }
+                    .keyboardShortcut("m", modifiers: [.command, .control])
+                    .disabled(model.answerableInvite == nil)
+                Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
+                    .keyboardShortcut("n", modifiers: [.command, .control])
+                    .disabled(model.answerableInvite == nil)
             }
             CommandMenu("Mailbox") {
                 Button("Check for New Mail") { model.checkForNewMail() }

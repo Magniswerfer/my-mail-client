@@ -72,6 +72,14 @@ Three layers, cheapest first:
 ### Highlights (v1)
 Flights/travel, packages, receipts/invoices, calendar events/invites, OTP/2FA codes, reservations, bills/subscriptions. schema.org JSON-LD first, LLM fallback. Each has an action (add to Calendar, copy code, track, open booking). Global hotkey: copy latest OTP.
 
+### Meeting invitations (M4.6)
+- Recognised from any `text/calendar` / `application/ics` / `.ics` part (iTIP, RFC 5546): Apple, Google, Outlook/Exchange (Windows TZIDs and VTIMEZONE resolved), Zoom, etc. The calendar alternative is not shown as an attachment.
+- Invites, updates, cancellations and counter-proposals for you → **Primary** (reason "A meeting invitation for you"); attendees' answers to your invites → **Updates**. Bulk webinar blasts that don't name you fall through to the normal rules.
+- Every message about one event (same `UID`) shares a conversation, even when the sender omits `References`.
+- Reader card: date tile, time (plus the organizer's local time when it differs), repeat rule, place, join button (Meet/Teams/Zoom/Webex/FaceTime), organizer and guests with their answers, clashes from your calendar.
+- **Accept / Maybe / Decline** (also ⌃⌘Y / ⌃⌘M / ⌃⌘N and ⌘K) sends an iTIP REPLY to the organizer through the outbox (normal undo window, ⌘Z), echoing UID/SEQUENCE/RECURRENCE-ID and the attendee address exactly as invited. Your answer is remembered per event (`inviteResponse`), including answers seen in Sent from other clients; an update with a higher SEQUENCE asks again.
+- Calendar (EventKit, full access asked on first use): accepting adds the event (tentative → shown as tentative), declining or a cancellation removes the copy Tidings made, updates move it. Events the calendar server already put there are never duplicated or rewritten. The copy carries no organizer/attendees, so Calendar never sends a second answer.
+
 ### Writing assistance
 System Writing Tools in the composer, one-line thread summaries, "Summarize" for long threads, 2–3 smart-reply chips, "extract questions". No full drafting (plugins/MCP can add a bigger model later).
 
@@ -173,6 +181,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M3 · Compose** ✅ (verified on local servers) | SMTP, outbox/undo send, identities, signatures — **daily driver** |
 | **M4 · Sorting** ✅ (verified on local servers) | AI categories, bundles + schedules, spam layers, remote-content protection |
 | **M4.5 · UI tightening** ✅ | Move a conversation (toolbar, right-click, drag to sidebar, M) that teaches the classifier and becomes a sender rule after two consistent moves; reply/forward/compose in the toolbar; status in the sidebar footer; sweep at the end of the list; neutral avatars, quieter bundles; previews without quoted text |
+| **M4.6 · Invites** ✅ (engine tested on Linux; app not yet built) | Recognise invites/updates/cancellations/replies, invite card, RSVP by iTIP reply, calendar add/update/remove, clashes, threading by event UID |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |

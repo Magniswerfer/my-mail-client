@@ -33,6 +33,8 @@ public struct OutgoingMessage: Codable, Sendable, Hashable {
     /// Opaque editor state (the composer's rich text as RTF) so a draft reopens exactly as left.
     /// Never sent.
     public var editorState: Data?
+    /// An iCalendar part (e.g. an invite reply), sent as `text/calendar` alongside the text.
+    public var calendar: OutgoingCalendar?
 
     public init(
         from: MailAddress, to: [MailAddress], cc: [MailAddress] = [], bcc: [MailAddress] = [],
@@ -95,6 +97,18 @@ public enum MIMEBuilder {
             let htmlPart = Part(headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
                                 content: quotedPrintable(html))
             main = multipart("alternative", [textPart, htmlPart])
+        }
+        if let calendar = m.calendar {
+            // iTIP over email (RFC 6047): the calendar is an alternative of the text, with the
+            // method repeated on the Content-Type so clients don't have to parse it.
+            let calendarPart = Part(
+                headers: ["Content-Type: text/calendar; charset=utf-8; method=\(calendar.method.rawValue)",
+                          "Content-Transfer-Encoding: quoted-printable"],
+                content: quotedPrintable(calendar.ics))
+            let alternatives = m.html == nil ? [textPart] : [textPart, Part(
+                headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
+                content: quotedPrintable(m.html ?? ""))]
+            main = multipart("alternative", alternatives + [calendarPart])
         }
         let inline = m.attachments.filter { $0.contentID != nil }
         let regular = m.attachments.filter { $0.contentID == nil }

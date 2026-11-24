@@ -2550,6 +2550,716 @@
           }
         }
       }
+    },
+    "A meeting invitation for you": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En mødeinvitation til dig"
+          }
+        }
+      }
+    },
+    "An answer to your invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et svar på din invitation"
+          }
+        }
+      }
+    },
+    "This account is offline, so the answer can't be sent yet.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontoen er offline, så svaret kan ikke sendes endnu."
+          }
+        }
+      }
+    },
+    "Accepted: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepteret: %@"
+          }
+        }
+      }
+    },
+    "Tentative: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreløbigt: %@"
+          }
+        }
+      }
+    },
+    "Declined: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afvist: %@"
+          }
+        }
+      }
+    },
+    "%@ has accepted this invitation.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har accepteret invitationen."
+          }
+        }
+      }
+    },
+    "%@ might attend.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ deltager måske."
+          }
+        }
+      }
+    },
+    "%@ has declined this invitation.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har afvist invitationen."
+          }
+        }
+      }
+    },
+    "Accepted. Telling %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepteret. Giver %@ besked…"
+          }
+        }
+      }
+    },
+    "Maybe. Telling %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Måske. Giver %@ besked…"
+          }
+        }
+      }
+    },
+    "Declined. Telling %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afvist. Giver %@ besked…"
+          }
+        }
+      }
+    },
+    "Answer": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar"
+          }
+        }
+      }
+    },
+    "Couldn't send your answer: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke sende dit svar: %@"
+          }
+        }
+      }
+    },
+    "Too late, your answer is already sent": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For sent, dit svar er allerede sendt"
+          }
+        }
+      }
+    },
+    "Couldn't add it to your calendar: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke føje den til din kalender: %@"
+          }
+        }
+      }
+    },
+    "Allow calendar access in System Settings › Privacy & Security › Calendars.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv adgang til kalenderen i Systemindstillinger › Anonymitet og sikkerhed › Kalendere."
+          }
+        }
+      }
+    },
+    "Added to your calendar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føjet til din kalender"
+          }
+        }
+      }
+    },
+    "Removed from your calendar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet fra din kalender"
+          }
+        }
+      }
+    },
+    "Meeting": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Møde"
+          }
+        }
+      }
+    },
+    "Untitled event": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Begivenhed uden titel"
+          }
+        }
+      }
+    },
+    "Invitation: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation: %@"
+          }
+        }
+      }
+    },
+    "Cancelled": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aflyst"
+          }
+        }
+      }
+    },
+    "New time proposed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyt tidspunkt foreslået"
+          }
+        }
+      }
+    },
+    "Event": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Begivenhed"
+          }
+        }
+      }
+    },
+    "You're the organizer": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du er arrangør"
+          }
+        }
+      }
+    },
+    "You're going": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du deltager"
+          }
+        }
+      }
+    },
+    "You might go": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du deltager måske"
+          }
+        }
+      }
+    },
+    "You declined": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du har afvist"
+          }
+        }
+      }
+    },
+    "Updated invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opdateret invitation"
+          }
+        }
+      }
+    },
+    "Invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation"
+          }
+        }
+      }
+    },
+    "%@ · %lld guests": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld gæster"
+          }
+        }
+      }
+    },
+    "Show guests": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis gæster"
+          }
+        }
+      }
+    },
+    "Remove from Calendar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern fra kalender"
+          }
+        }
+      }
+    },
+    "Accept": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acceptér"
+          }
+        }
+      }
+    },
+    "Maybe": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Måske"
+          }
+        }
+      }
+    },
+    "Decline": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afvis"
+          }
+        }
+      }
+    },
+    "In your calendar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I din kalender"
+          }
+        }
+      }
+    },
+    "Add to Calendar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Føj til kalender"
+          }
+        }
+      }
+    },
+    "Your answer": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit svar"
+          }
+        }
+      }
+    },
+    "Organizer": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrangør"
+          }
+        }
+      }
+    },
+    "Optional": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valgfri"
+          }
+        }
+      }
+    },
+    "%@ · All day": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Hele dagen"
+          }
+        }
+      }
+    },
+    "%@ – %@ · All day": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ – %2$@ · Hele dagen"
+          }
+        }
+      }
+    },
+    "%@ in %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ i %2$@"
+          }
+        }
+      }
+    },
+    "Every day": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hver dag"
+          }
+        }
+      }
+    },
+    "Every week": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hver uge"
+          }
+        }
+      }
+    },
+    "Every other week": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hver anden uge"
+          }
+        }
+      }
+    },
+    "Every month": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hver måned"
+          }
+        }
+      }
+    },
+    "Every year": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvert år"
+          }
+        }
+      }
+    },
+    "Repeats": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gentages"
+          }
+        }
+      }
+    },
+    "Join Teams": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag i Teams"
+          }
+        }
+      }
+    },
+    "Join Zoom": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag i Zoom"
+          }
+        }
+      }
+    },
+    "Join Meet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag i Meet"
+          }
+        }
+      }
+    },
+    "Join Webex": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag i Webex"
+          }
+        }
+      }
+    },
+    "Join FaceTime": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag i FaceTime"
+          }
+        }
+      }
+    },
+    "Join": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltag"
+          }
+        }
+      }
+    },
+    "Overlaps %@ at %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlapper %1$@ kl. %2$@"
+          }
+        }
+      }
+    },
+    "Overlaps %@ and %lld more": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlapper %1$@ og %2$lld mere"
+          }
+        }
+      }
+    },
+    "Going": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltager"
+          }
+        }
+      }
+    },
+    "Not going": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deltager ikke"
+          }
+        }
+      }
+    },
+    "Delegated": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uddelegeret"
+          }
+        }
+      }
+    },
+    "No answer yet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet svar endnu"
+          }
+        }
+      }
+    },
+    "%@ accepted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har accepteret"
+          }
+        }
+      }
+    },
+    "%@ might attend": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ deltager måske"
+          }
+        }
+      }
+    },
+    "%@ declined": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har afvist"
+          }
+        }
+      }
+    },
+    "%@ delegated the invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har uddelegeret invitationen"
+          }
+        }
+      }
+    },
+    "%@ hasn't answered": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ har ikke svaret"
+          }
+        }
+      }
+    },
+    "Accept Invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acceptér invitation"
+          }
+        }
+      }
+    },
+    "Answer Maybe to Invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar måske på invitation"
+          }
+        }
+      }
+    },
+    "Decline Invitation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afvis invitation"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

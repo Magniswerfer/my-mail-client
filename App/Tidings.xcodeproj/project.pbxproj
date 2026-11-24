@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
+		2D8205576A955A647CC185A1 /* InviteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF917702C89895B6D63E3494 /* InviteCard.swift */; };
 		186630237B178EECA7307A27 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
 		2AC9A6C048CC776ABD2445AE /* TidingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF92DF43EE36D90347135F4 /* TidingsApp.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
+		81407C57776BDB48A530B5AF /* CalendarBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5FE29C11B5696C1A26F173D /* CalendarBridge.swift */; };
 		3D80CF0E4641EA84D51EFB8E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
 		4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
 		59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
@@ -22,6 +24,7 @@
 		A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06689F64AABF98230DE8B430 /* ReaderView.swift */; };
 		A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6C0B607ECACC543430A53A /* BundleSchedule.swift */; };
 		AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
+		36E1EBC70CEFA06F710195E6 /* AppModel+Invites.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9C74E35CC1B1E3D1C1776E /* AppModel+Invites.swift */; };
 		B1A2B5DD989C49C4146CCB83 /* MailEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 187850F5704A0255AB5BF953 /* MailEngine */; };
 		C2F0CBE3DCB00FD1D3C8EEA3 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07FA70D74524437B7FC3417 /* SearchResultsView.swift */; };
 		F1C95501152A66AF83C251F2 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
@@ -29,9 +32,12 @@
 
 /* Begin PBXFileReference section */
 		02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
+		CF917702C89895B6D63E3494 /* InviteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCard.swift; sourceTree = "<group>"; };
 		06689F64AABF98230DE8B430 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Triage.swift"; sourceTree = "<group>"; };
+		FD9C74E35CC1B1E3D1C1776E /* AppModel+Invites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Invites.swift"; sourceTree = "<group>"; };
 		0ACC86ABC03818BEDC665920 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
+		B5FE29C11B5696C1A26F173D /* CalendarBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarBridge.swift; sourceTree = "<group>"; };
 		0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Compose.swift"; sourceTree = "<group>"; };
 		1EEBA246801CACDF96D1538A /* MailEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MailEngine; path = ../MailEngine; sourceTree = SOURCE_ROOT; };
@@ -68,6 +74,7 @@
 			children = (
 				E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */,
 				02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */,
+				CF917702C89895B6D63E3494 /* InviteCard.swift */,
 				06689F64AABF98230DE8B430 /* ReaderView.swift */,
 				B07FA70D74524437B7FC3417 /* SearchResultsView.swift */,
 				F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */,
@@ -83,6 +90,7 @@
 				E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */,
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */,
+				FD9C74E35CC1B1E3D1C1776E /* AppModel+Invites.swift */,
 				DB6C0B607ECACC543430A53A /* BundleSchedule.swift */,
 			);
 			path = Model;
@@ -101,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				0ACC86ABC03818BEDC665920 /* Support.swift */,
+				B5FE29C11B5696C1A26F173D /* CalendarBridge.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -226,9 +235,11 @@
 				59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */,
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */,
+				36E1EBC70CEFA06F710195E6 /* AppModel+Invites.swift in Sources */,
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
 				A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */,
 				052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */,
+				2D8205576A955A647CC185A1 /* InviteCard.swift in Sources */,
 				8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */,
 				7031F631BFE73A9822227883 /* ComposeView.swift in Sources */,
 				A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */,
@@ -237,6 +248,7 @@
 				79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */,
 				4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */,
 				37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */,
+				81407C57776BDB48A530B5AF /* CalendarBridge.swift in Sources */,
 				2AC9A6C048CC776ABD2445AE /* TidingsApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

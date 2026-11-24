@@ -57,6 +57,15 @@ extension AppModel {
             AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.selection = .inbox },
             AppCommand(id: "goSnoozed", title: String(localized: "Go to Snoozed"), symbol: "clock", keys: "G S") { self.selection = .snoozed },
         ]
+        let canAnswer = answerableInvite != nil
+        list += [
+            AppCommand(id: "inviteAccept", title: String(localized: "Accept Invitation"), symbol: "checkmark.circle", keys: "⌃⌘Y",
+                       isEnabled: canAnswer) { self.respondToSelectedInvite(.accepted) },
+            AppCommand(id: "inviteMaybe", title: String(localized: "Answer Maybe to Invitation"), symbol: "questionmark.circle", keys: "⌃⌘M",
+                       isEnabled: canAnswer) { self.respondToSelectedInvite(.tentative) },
+            AppCommand(id: "inviteDecline", title: String(localized: "Decline Invitation"), symbol: "xmark.circle", keys: "⌃⌘N",
+                       isEnabled: canAnswer) { self.respondToSelectedInvite(.declined) },
+        ]
         for account in accounts {
             for box in mailboxes where box.accountID == account.id && box.role == .archive {
                 list.append(AppCommand(id: "goArchive-\(account.id)", title: String(localized: "Go to Archive"), symbol: "archivebox",

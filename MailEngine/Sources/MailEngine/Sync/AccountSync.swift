@@ -268,7 +268,8 @@ public actor AccountSync {
         let parsed = MIMEParser.parse(data)
         let (category, reason) = MessageClassifier(store: store).classify(parsed, userAddresses: Set(account.addresses.map { $0.lowercased() }))
         let from = parsed.from.first
-        let threadID = try store.threadID(for: parsed, fallback: "\(account.id)/\(mailbox)/\(validity ?? 0)/\(summary.uid)")
+        let threadID = try store.threadID(for: parsed, fallback: "\(account.id)/\(mailbox)/\(validity ?? 0)/\(summary.uid)",
+                                          accountID: account.id)
         var message = StoredMessage(
             accountID: account.id, mailbox: mailbox, uid: summary.uid, messageID: parsed.messageID,
             threadID: threadID, subject: parsed.subject.isEmpty ? "(no subject)" : parsed.subject,
@@ -280,6 +281,18 @@ public actor AccountSync {
             category: category
         )
         message.inReplyTo = parsed.inReplyTo.first
+        if let invite = parsed.invite {
+            message.invite = invite
+            message.inviteUID = invite.uid
+            // Your own answer, sent from here or any other client, shows on the invite.
+            if invite.method == .reply, let sender = from?.address,
+               account.addresses.contains(where: { $0.caseInsensitiveCompare(sender) == .orderedSame }),
+               let answer = invite.attendees.first {
+                try? store.recordInviteResponse(InviteResponse(
+                    accountID: account.id, uid: invite.uid, sequence: invite.sequence,
+                    status: answer.status, respondedAt: parsed.date ?? Date()))
+            }
+        }
         message.classificationReason = reason.encoded
         (message.isSnoozed, message.snoozedUntil) = SnoozeKeywords.parse(summary.flags)
         let sender = parsed.from.first?.address ?? ""

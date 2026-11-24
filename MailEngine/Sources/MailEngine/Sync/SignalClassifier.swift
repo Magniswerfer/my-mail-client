@@ -43,6 +43,21 @@ public enum SignalClassifier {
         if userAddresses.contains(from) {
             return Decision(category: .primary, reason: .sentByYou)
         }
+        // Meeting invites go to Primary, whatever their subject or sender looks like ("Invitation:
+        // … confirmation", calendar-notification@google.com). Bulk webinar blasts that don't
+        // name you personally are left to the normal rules.
+        if let invite = message.invite {
+            switch invite.method {
+            case .request, .cancel, .counter, .add, .declineCounter:
+                if !isBulk || invite.attendee(matching: userAddresses) != nil {
+                    return Decision(category: .primary, reason: .calendarInvite)
+                }
+            case .reply:
+                return Decision(category: .updates, reason: .calendarReply)
+            case .publish, .refresh:
+                break
+            }
+        }
         if socialDomains.contains(where: { domain == $0 || domain.hasSuffix("." + $0) }) {
             return Decision(category: .social, reason: .socialNetwork(domain: domain))
         }

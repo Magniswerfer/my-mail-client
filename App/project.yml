@@ -36,11 +36,13 @@ targets:
         CFBundleLocalizations: [en, da]
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: AGPL-3.0
+        NSCalendarsFullAccessUsageDescription: Tidings adds invitations you accept to your calendar, keeps them up to date when they change, and warns you about clashes.
     entitlements:
       path: Tidings/Tidings.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
+        com.apple.security.personal-information.calendars: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings

@@ -22,6 +22,9 @@ struct ReaderView: View {
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {
                             RiskBanner(message: risky)
                         }
+                        if let found = model.invite(inThread: threadID) {
+                            InviteCard(message: found.message, invite: found.invite)
+                        }
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread)
@@ -58,6 +61,8 @@ struct MessageCard: View {
         var attachments: [AttachmentInfo]
         var to: String
         var inline: [String: (data: Data, mimeType: String)]
+        /// Parsed from the raw message, for mail synced before invites were stored.
+        var invite: CalendarInvite?
     }
 
     var body: some View {
@@ -99,6 +104,11 @@ struct MessageCard: View {
     }
 
     @ViewBuilder private var content: some View {
+        if let reply = message.invite ?? body_?.invite, reply.method == .reply {
+            InviteReplyLine(invite: reply)
+        } else if message.invite == nil, let invite = body_?.invite {
+            InviteCard(message: message, invite: invite)
+        }
         if let loaded = body_ {
             if let html = loaded.html {
                 PrivacyBar(prepared: html, imagesShown: showImages, sender: message.fromAddress,
@@ -143,7 +153,8 @@ struct MessageCard: View {
             body_ = LoadedBody(
                 html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
                 to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
-                inline: MIMEParser.inlineParts(in: raw)
+                inline: MIMEParser.inlineParts(in: raw),
+                invite: parsed.invite
             )
         } catch {
             loadError = String(localized: "Couldn't load the full message. Showing the stored text.")

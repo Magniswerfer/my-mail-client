@@ -122,7 +122,18 @@ extension MailStore {
     /// Children carry the root id in References, so a thread converges regardless of arrival order.
     /// An existing message with one of these ids wins, which also links replies whose client
     /// dropped References.
-    public func threadID(for parsed: ParsedMessage, fallback: String) throws -> String {
+    public func threadID(for parsed: ParsedMessage, fallback: String, accountID: String? = nil) throws -> String {
+        // Google and others send updates and cancellations without References; the event UID
+        // ties them (and your replies) to the original invitation.
+        if let uid = parsed.invite?.uid {
+            let known = try db.read { db in
+                try String.fetchOne(db, sql: """
+                    SELECT threadID FROM message WHERE inviteUID = ? AND (? IS NULL OR accountID = ?)
+                    AND threadID IS NOT NULL ORDER BY date LIMIT 1
+                    """, arguments: [uid, accountID, accountID])
+            }
+            if let known { return known }
+        }
         let candidates = parsed.references + parsed.inReplyTo
         if !candidates.isEmpty {
             let known = try db.read { db in

@@ -41,6 +41,13 @@ public struct ParsedMessage: Sendable {
     /// The HTML body, if the message has one.
     public var html: String?
     public var attachments: [AttachmentInfo]
+    /// Decoded iCalendar documents (`text/calendar`, `application/ics`, `.ics` files).
+    public var calendarParts: [String] = []
+
+    /// The meeting invite, update, cancellation or reply this message carries, if any.
+    public var invite: CalendarInvite? {
+        calendarParts.lazy.compactMap(CalendarInvite.parse).first
+    }
 
     public func header(_ name: String) -> String? {
         headers.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
@@ -60,7 +67,8 @@ public enum MIMEParser {
         var text: String?
         var html: String?
         var attachments: [AttachmentInfo] = []
-        collect(entity, text: &text, html: &html, attachments: &attachments)
+        var calendars: [String] = []
+        collect(entity, text: &text, html: &html, attachments: &attachments, calendars: &calendars)
 
         let plain = text ?? html.map(HTMLText.toPlainText) ?? ""
         let h = entity.headers
@@ -80,13 +88,15 @@ public enum MIMEParser {
             references: MessageIDs.parse(value("References") ?? ""),
             plainText: plain.trimmingCharacters(in: .whitespacesAndNewlines),
             html: html,
-            attachments: attachments
+            attachments: attachments,
+            calendarParts: calendars
         )
     }
 
     /// Picks the readable text/html bodies and lists attachments, preferring text/plain inside
     /// multipart/alternative and the first text part elsewhere.
-    static func collect(_ entity: Entity, text: inout String?, html: inout String?, attachments: inout [AttachmentInfo]) {
+    static func collect(_ entity: Entity, text: inout String?, html: inout String?, attachments: inout [AttachmentInfo],
+                        calendars: inout [String]) {
         let type = entity.contentType
         if type.type == "multipart" {
             if entity.children.isEmpty {
@@ -95,7 +105,7 @@ public enum MIMEParser {
                 return
             }
             for child in entity.children {
-                collect(child, text: &text, html: &html, attachments: &attachments)
+                collect(child, text: &text, html: &html, attachments: &attachments, calendars: &calendars)
             }
             return
         }
@@ -107,6 +117,13 @@ public enum MIMEParser {
             return
         }
         let isAttachment = entity.disposition == "attachment" || entity.filename != nil
+        let isCalendar = type.full == "text/calendar" || type.full == "application/ics"
+            || entity.filename?.lowercased().hasSuffix(".ics") == true
+        if isCalendar {
+            calendars.append(entity.decodedText)
+            // The invite's own alternative part isn't a file; a real .ics attachment still is.
+            if !isAttachment { return }
+        }
         if !isAttachment, type.type == "text", type.subtype == "plain", text == nil {
             text = entity.decodedText
             return

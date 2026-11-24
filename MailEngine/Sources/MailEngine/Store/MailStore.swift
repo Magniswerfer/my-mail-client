@@ -40,6 +40,10 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     /// Phishing/spoofing assessment (SPEC §8); reasons are encoded `RiskReason`s.
     public var riskLevel: RiskLevel = .none
     public var riskReasons: String?
+    /// The meeting invite, update, cancellation or reply this message carries (JSON), and its
+    /// event UID so every message about one event shares a conversation.
+    public var invite: CalendarInvite?
+    public var inviteUID: String?
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -122,6 +126,7 @@ public final class MailStore: Sendable {
         registerRiskMigrations(&m)
         registerEmbeddingMigrations(&m)
         registerPreviewMigrations(&m)
+        registerInviteMigrations(&m)
         return m
     }
 

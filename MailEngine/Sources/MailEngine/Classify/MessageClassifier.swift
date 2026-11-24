@@ -14,6 +14,8 @@ public enum ClassificationReason: Sendable, Hashable {
     case mailingList
     case automatedSender(local: String)
     case person
+    case calendarInvite                    // an invitation, update or cancellation for you
+    case calendarReply                     // someone answered your invitation
     case learned(confidence: Int)          // fast classifier, percent
     case onDevice(summary: String)         // Foundation Models, its own short reason
 
@@ -29,6 +31,8 @@ public enum ClassificationReason: Sendable, Hashable {
         case .mailingList: "list"
         case .automatedSender(let l): "automated|\(l)"
         case .person: "person"
+        case .calendarInvite: "invite"
+        case .calendarReply: "inviteReply"
         case .learned(let p): "learned|\(p)"
         case .onDevice(let s): "ai|\(s)"
         }
@@ -48,6 +52,8 @@ public enum ClassificationReason: Sendable, Hashable {
         case "list": self = .mailingList
         case "automated": self = .automatedSender(local: arg)
         case "person": self = .person
+        case "invite": self = .calendarInvite
+        case "inviteReply": self = .calendarReply
         case "learned": self = .learned(confidence: Int(arg) ?? 0)
         case "ai": self = .onDevice(summary: arg)
         default: return nil
@@ -58,6 +64,7 @@ public enum ClassificationReason: Sendable, Hashable {
     var confidence: Double {
         switch self {
         case .sentByYou, .youMovedThisSender, .youMovedThisConversation: 1
+        case .calendarInvite, .calendarReply: 0.95
         case .socialNetwork, .mailingListUnsubscribe: 0.9
         case .transactional, .promotional: 0.85
         case .automatedSender, .mailingList: 0.75
