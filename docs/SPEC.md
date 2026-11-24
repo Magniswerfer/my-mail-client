@@ -185,4 +185,6 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
-| **Later** | iOS app |
+| **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
+| **iOS-2 · Same state everywhere** | CloudKit for sender rules, corrections, bundle schedules, invite answers (M7 brought forward) |
+| **iOS-3 · Push** | MailEngine on the server (Linux build: replace NaturalLanguage/FoundationModels/LZFSE/CF charsets behind protocols), IDLE per account, APNs for Primary/VIP/pinned, server-side send-later and snooze wake |

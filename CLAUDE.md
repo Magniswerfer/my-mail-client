@@ -5,7 +5,8 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 ## Layout
 - `MailEngine/` — headless Swift package (no AppKit/UIKit/SwiftUI). Sync, IMAP, storage, search, classification, rules.
   - `Sources/MailEngine` library · `Sources/tidings-probe` CLI for live checks · `Tests/`.
-- `App/` — macOS app (XcodeGen `project.yml`; run `xcodegen generate` in `App/` after adding files).
+- `App/` — macOS app (`Tidings`) and iPhone/iPad app (`TidingsMobile`) from one XcodeGen `project.yml`; run `xcodegen generate` in `App/` after adding files.
+  - `App/Tidings/` is shared; `Mac/` and `iOS/` hold platform-only code (everything else uses `#if os(...)` sparingly, via `Support/Platform.swift`).
 
 ## Conventions
 - Swift 6, strict concurrency. Engine types are `Sendable`; IO is async.
@@ -22,6 +23,9 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 - Magnus runs the real app from `App/build` (bundle id `hk.gnus.tidings`). Agents test UI only with the **dev copy** (`hk.gnus.tidings.dev`, own data, local Dovecot), never by clicking in the real instance:
   `xcodebuild -project App/Tidings.xcodeproj -scheme Tidings -derivedDataPath App/build-dev PRODUCT_BUNDLE_IDENTIFIER=hk.gnus.tidings.dev build`, then
   `open -n App/build-dev/Build/Products/Debug/Tidings.app --args -TidingsDevServer`. With Stage Manager on, `osascript -e 'tell application id "hk.gnus.tidings.dev" to activate'` before screenshots.
+
+- iPhone dev copy: run the `TidingsMobile` scheme in the Simulator with `-TidingsDevServer` ticked (Edit Scheme → Arguments); the Simulator reaches the local Dovecot/Mailpit on 127.0.0.1.
+- CI (`.github/workflows/build.yml`) builds both apps and runs the engine tests on every push.
 
 ## Commands
 - `swift build --package-path MailEngine`
