@@ -2520,6 +2520,36 @@
           }
         }
       }
+    },
+    "Mailbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Postkasse"
+          }
+        }
+      }
+    },
+    "Check for New Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hent ny post"
+          }
+        }
+      }
+    },
+    "Checking for new mail…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Henter ny post…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

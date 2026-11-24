@@ -45,6 +45,9 @@ extension AppModel {
             },
             AppCommand(id: "sweep", title: String(localized: "Sweep Inbox (Done for all unpinned)"), symbol: "checkmark.rectangle.stack",
                        keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
+            AppCommand(id: "checkMail", title: String(localized: "Check for New Mail"), symbol: "arrow.clockwise", keys: "⌘⇧N") {
+                self.checkForNewMail()
+            },
             AppCommand(id: "undo", title: String(localized: "Undo"), symbol: "arrow.uturn.backward", keys: "⌘Z",
                        isEnabled: undoManager?.canUndo == true) { self.undoManager?.undo() },
             AppCommand(id: "pinnedOnly", title: pinnedOnly ? String(localized: "Show All Conversations") : String(localized: "Show Only Pinned"),

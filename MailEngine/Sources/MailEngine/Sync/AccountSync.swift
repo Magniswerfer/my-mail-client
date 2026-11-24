@@ -76,6 +76,14 @@ public actor AccountSync {
 
     private func setWake(_ continuation: AsyncStream<Void>.Continuation?) { wakeContinuation = continuation }
 
+    /// "Check for new mail": ends an IDLE in progress and re-syncs every mailbox now, not just
+    /// INBOX (the others otherwise wait for the next `pollInterval`).
+    var fullSyncRequested = false
+    public func checkNow() {
+        fullSyncRequested = true
+        wakeContinuation?.yield()
+    }
+
     public init(account: AccountConfig, password: String, store: MailStore, cache: MessageCache, profile: ServerProfile? = nil) {
         self.account = account
         self.password = password
@@ -119,7 +127,7 @@ public actor AccountSync {
                         try await self.drain(session)
                         _ = try await session.select("INBOX", readOnly: true)
                         var changed = false
-                        if !self.hasPendingWork {
+                        if !self.hasPendingWork && !self.fullSyncRequested {
                             self.emit(.idle)
                             let (wake, continuation) = AsyncStream<Void>.makeStream()
                             self.setWake(continuation)
@@ -132,7 +140,8 @@ public actor AccountSync {
                         if changed {
                             try await self.syncMailbox(session, path: "INBOX", role: .inbox)
                         }
-                        if ContinuousClock.now - lastFullSync > pollInterval {
+                        if self.fullSyncRequested || ContinuousClock.now - lastFullSync > pollInterval {
+                            self.fullSyncRequested = false
                             try await self.syncAll(session)
                             lastFullSync = .now
                         }

@@ -73,6 +73,10 @@ final class AppModel {
         }
     }
     var expandedBundles: Set<MailCategory> = []
+    /// Where an open bundle sits in the stream, captured when it's opened. A bundle is placed by
+    /// its newest conversation, so without this, archiving that one would move the whole open
+    /// bundle down the list mid-triage. It can still move up (new mail), never down.
+    @ObservationIgnored private var bundleAnchors: [MailCategory: Date] = [:]
     /// Show only pinned conversations (Google Inbox's pin toggle).
     var pinnedOnly = false { didSet { reload() } }
 
@@ -345,7 +349,12 @@ final class AppModel {
                 items.append(.bundle(category, members, deliveredAt: nil))
             }
         }
-        return items.sorted { $0.date > $1.date }
+        return items.sorted { sortDate($0) > sortDate($1) }
+    }
+
+    private func sortDate(_ item: StreamItem) -> Date {
+        if case .bundle(let category, _, _) = item, let anchor = bundleAnchors[category] { return max(anchor, item.date) }
+        return item.date
     }
 
     /// Flattened rows as displayed (bundles expanded inline), used for j/k navigation.
@@ -363,7 +372,24 @@ final class AppModel {
     }
 
     func toggleBundle(_ category: MailCategory) {
-        if expandedBundles.contains(category) { expandedBundles.remove(category) } else { expandedBundles.insert(category) }
+        if expandedBundles.contains(category) {
+            expandedBundles.remove(category)
+            bundleAnchors[category] = nil
+        } else {
+            if let item = streamItems.first(where: { if case .bundle(category, _, _) = $0 { true } else { false } }) {
+                bundleAnchors[category] = sortDate(item)
+            }
+            expandedBundles.insert(category)
+        }
+    }
+
+    /// "Check for New Mail" (⇧⌘N): every folder of every account, now.
+    func checkForNewMail() {
+        start()
+        for (accountID, sync) in syncs {
+            syncStatus[accountID] = String(localized: "Checking for new mail…")
+            Task { await sync.checkNow() }
+        }
     }
 
     /// j/k: the next/previous conversation in the stream, or result while searching.

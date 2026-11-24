@@ -3,7 +3,14 @@ import SwiftUI
 
 @main
 struct TidingsApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
+
+    init() {
+        // Sync runs with the app, not with a window: it keeps going if the window is closed.
+        let model = AppModel()
+        model.start()
+        _model = State(initialValue: model)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -50,6 +57,10 @@ struct TidingsApp: App {
                     .keyboardShortcut(.delete, modifiers: .command)
                 Button("Move to Junk") { model.perform(.junk) }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
+            }
+            CommandMenu("Mailbox") {
+                Button("Check for New Mail") { model.checkForNewMail() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
                 Divider()
                 Button("Sweep Inbox") { model.requestSweep() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
