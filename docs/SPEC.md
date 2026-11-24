@@ -102,7 +102,10 @@ System Writing Tools in the composer, one-line thread summaries, "Summarize" for
 
 - Rich-text editor (`NSTextView`) with Markdown-style input shortcuts; sends clean HTML + text/plain alternative. Quoted text trimmed/collapsed.
 - Undo send (default 10 s local outbox), send later (via helper; late-send notice after sleep), follow-up nudges ("bring back if no reply in N days"), snippets/templates (`;keyword`, variables), signatures per identity.
-- Identities: primary iCloud + custom-domain addresses. From auto-selected by receiving address; warn on mismatch. **Hide My Email** only after a live SMTP test proves it keeps the alias.
+- Identities: primary iCloud + custom-domain addresses (Settings → Identities). From auto-selected by receiving address. **Hide My Email** only after a live SMTP test proves it keeps the alias.
+- **Sent copy:** iCloud's behaviour is undocumented, so the first send per account checks whether the server filed its own copy (by Message-ID, ~12 s); if not, Tidings APPENDs one from then on. Remembered per account.
+- Sending is a persisted outbox (`outbox` table): undo window, send later, retries with backoff for 4xx/network errors, permanent failures kept with the error. Replies set `\Answered`, forwards `$Forwarded` on the original.
+- Follow-up nudges and `;snippets` move to M6.
 
 ## 10. Notifications
 
@@ -165,7 +168,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M0 · Engine spike** ✅ | iCloud IMAP connect + quirks, fenced live keyword test, tier-1 store + FTS, Foundation Models/Danish check |
 | **M1 · Read-only client** ✅ | sync, stream, threads, reading pane, instant faceted search |
 | **M2 · Triage** ✅ (verified on local server) | Done/Pin/Snooze/Sweep, undo, keyboard, ⌘K |
-| **M3 · Compose** | SMTP, outbox/undo send, identities, signatures — **daily driver** |
+| **M3 · Compose** ✅ (verified on local servers) | SMTP, outbox/undo send, identities, signatures — **daily driver** |
 | **M4 · Sorting** | AI categories, bundles + schedules, spam layers, remote-content protection |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |

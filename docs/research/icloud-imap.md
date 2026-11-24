@@ -49,6 +49,9 @@ SMTP SIZE 28319744 bytes **V**; 1000 msgs/day, 1000 recipients/day, 500/message,
 ## Folders
 No SPECIAL-USE. Common: `INBOX`, `Drafts`, `Sent Messages` (sometimes `Sent`), `Deleted Messages`, `Junk`, `Archive`; may be localized. **S/U**
 
+## Sent copies over SMTP — VERIFIED (2026-11-24, Magnus's account)
+iCloud does **not** file a copy of mail submitted via smtp.mail.me.com into Sent (Tidings' first-send check found no copy by Message-ID within ~12 s → policy `client`). Clients must APPEND to `Sent Messages` themselves.
+
 ## Spam
 Server-side filter → Junk; 30-day auto-delete; moving out of / into Junk trains per sender (Apple docs; IMAP-move equivalence **U**).
 

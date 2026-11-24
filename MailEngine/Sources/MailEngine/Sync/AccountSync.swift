@@ -7,12 +7,32 @@ public struct AccountConfig: Sendable, Codable, Hashable, Identifiable {
     public var endpoint: IMAPEndpoint
     /// Addresses that belong to the user (login + custom-domain identities), used to spot "sent by me".
     public var addresses: [String]
+    /// Outgoing server; nil means the provider default (iCloud: smtp.mail.me.com:587).
+    /// Optional (like `identities`) so accounts saved before M3 still decode.
+    public var smtp: SMTPEndpoint?
+    public var identities: [Identity]?
 
-    public init(id: String = UUID().uuidString, displayName: String, endpoint: IMAPEndpoint, addresses: [String]) {
+    public init(id: String = UUID().uuidString, displayName: String, endpoint: IMAPEndpoint, addresses: [String],
+                smtp: SMTPEndpoint? = nil, identities: [Identity]? = nil) {
         self.id = id
         self.displayName = displayName
         self.endpoint = endpoint
         self.addresses = addresses
+        self.smtp = smtp
+        self.identities = identities
+    }
+
+    /// Identities to send from; falls back to the account's addresses.
+    public var sendingIdentities: [Identity] {
+        if let identities, !identities.isEmpty { return identities }
+        return addresses.map { Identity(address: $0, name: "") }
+    }
+
+    /// The identity a reply should come from: whichever of mine the original was sent to (SPEC §9).
+    public func identity(replyingTo parsed: ParsedMessage) -> Identity {
+        let received = Set((parsed.to + parsed.cc).map { $0.address.lowercased() })
+        return sendingIdentities.first { received.contains($0.address.lowercased()) } ?? sendingIdentities.first
+            ?? Identity(address: endpoint.username, name: "")
     }
 }
 
@@ -25,6 +45,9 @@ public actor AccountSync {
         case mailboxSynced(mailbox: String, newMessages: Int)
         case idle
         case failed(String)
+        case sending(outboxID: Int64)
+        case sent(outboxID: Int64)
+        case sendFailed(outboxID: Int64, message: String)
     }
 
     public let account: AccountConfig
@@ -82,6 +105,7 @@ public actor AccountSync {
     /// Syncs everything, then IDLEs on INBOX and re-syncs on changes. Other mailboxes are
     /// re-synced every `pollInterval`. Reconnects with backoff on errors. Runs until cancelled.
     public func run(pollInterval: Duration = .seconds(600)) async {
+        try? store.resetInterruptedSends(accountID: account.id)
         var backoff: Duration = .seconds(5)
         while !Task.isCancelled {
             do {
@@ -91,6 +115,7 @@ public actor AccountSync {
                     var lastFullSync = ContinuousClock.now
                     while !Task.isCancelled {
                         try self.wakeDueSnoozes()
+                        try await self.sendDue(session)
                         try await self.drain(session)
                         _ = try await session.select("INBOX", readOnly: true)
                         var changed = false
@@ -102,6 +127,7 @@ public actor AccountSync {
                             self.setWake(nil)
                         }
                         try self.wakeDueSnoozes()
+                        try await self.sendDue(session)
                         try await self.drain(session)
                         if changed {
                             try await self.syncMailbox(session, path: "INBOX", role: .inbox)
@@ -131,7 +157,9 @@ public actor AccountSync {
 
     /// IDLE until the next snooze is due or the server's refresh interval, whichever is sooner.
     func idleTimeout() -> Duration {
-        guard let next = try? store.nextSnoozeWake(accountID: account.id) else { return profile.idleRefresh }
+        let candidates = [try? store.nextSnoozeWake(accountID: account.id), try? store.nextOutboxSend(accountID: account.id)]
+            .compactMap { $0 }
+        guard let next = candidates.min() else { return profile.idleRefresh }
         return min(profile.idleRefresh, .seconds(max(1, next.timeIntervalSinceNow)))
     }
 

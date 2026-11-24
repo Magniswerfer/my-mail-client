@@ -12,6 +12,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio-imap.git", from: "0.5.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.105.0"),
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.37.0"),
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.12.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.0"),
     ],
@@ -22,6 +23,8 @@ let package = Package(
                 .product(name: "IMAPCommands", package: "swift-nio-imap"),
                 .product(name: "NIOIMAP", package: "swift-nio-imap"),
                 .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "GRDB", package: "GRDB.swift"),
             ]
         ),

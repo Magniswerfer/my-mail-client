@@ -176,8 +176,10 @@ struct Entity {
         }
     }
 
+    /// Decoded text with line endings normalized to "\n" (the wire format is CRLF).
     var decodedText: String {
         Charsets.decode(decodedBody, charset: contentType.parameters["charset"])
+            .replacingOccurrences(of: "\r\n", with: "\n")
     }
 
     static func parse(_ bytes: ArraySlice<UInt8>, depth: Int = 0) -> Entity {
@@ -388,8 +390,8 @@ enum MessageIDs {
     }
 }
 
-enum AddressParser {
-    static func parse(_ raw: String) -> [MailAddress] {
+public enum AddressParser {
+    public static func parse(_ raw: String) -> [MailAddress] {
         var result: [MailAddress] = []
         for item in splitList(raw) {
             var entry = item.trimmingCharacters(in: .whitespaces)
@@ -609,5 +611,24 @@ public enum HTMLText {
             i = s.index(after: i)
         }
         return out
+    }
+}
+
+extension MIMEParser {
+    /// The attachments of a raw message with their contents, for forwarding.
+    public static func attachments(in data: Data) -> [OutgoingAttachment] {
+        var result: [OutgoingAttachment] = []
+        func walk(_ entity: Entity) {
+            let type = entity.contentType
+            if type.type == "multipart" { entity.children.forEach(walk); return }
+            let isAttachment = entity.disposition == "attachment" || entity.filename != nil
+            guard isAttachment else { return }
+            result.append(OutgoingAttachment(
+                filename: entity.filename ?? "attachment", mimeType: type.full, data: Data(entity.decodedBody),
+                contentID: entity.disposition == "inline"
+                    ? entity.header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) } : nil))
+        }
+        walk(Entity.parse([UInt8](data)[...]))
+        return result
     }
 }

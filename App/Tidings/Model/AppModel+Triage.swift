@@ -6,7 +6,9 @@ struct Toast: Identifiable, Equatable {
     let id = UUID()
     var message: String
     var symbol: String
-    var undo: ChangeBox?
+    var undo: ChangeBox? = nil
+    /// Outbox id of a message in its undo-send window.
+    var undoSend: Int64? = nil
 
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
 }
@@ -67,7 +69,7 @@ extension AppModel {
     /// The mailbox the current view shows (where moves start from).
     var sourceMailbox: String {
         switch selection {
-        case .inbox, .category: "INBOX"
+        case .inbox, .category, .outbox: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
         }

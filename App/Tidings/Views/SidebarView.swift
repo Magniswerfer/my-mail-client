@@ -14,6 +14,11 @@ struct SidebarView: View {
                     .tag(SidebarItem.inbox)
                 Label("Snoozed", systemImage: "clock")
                     .tag(SidebarItem.snoozed)
+                if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
+                    Label("Outbox", systemImage: "paperplane")
+                        .badge(model.outboxItems.count)
+                        .tag(SidebarItem.outbox)
+                }
             }
 
             Section("Bundles") {

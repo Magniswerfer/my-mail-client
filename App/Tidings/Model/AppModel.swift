@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MailEngine
 import Observation
@@ -5,6 +6,7 @@ import Observation
 enum SidebarItem: Hashable {
     case inbox
     case snoozed
+    case outbox
     case category(MailCategory)
     case mailbox(accountID: String, path: String)
 }
@@ -51,11 +53,15 @@ final class AppModel {
     var isPaletteShown = false
     var sweepCandidate: SweepRequest?
     weak var undoManager: UndoManager?
+    /// Set by the root view: opens a composer window for a draft id.
+    @ObservationIgnored var openComposeWindow: ((Int64) -> Void)?
+    var outboxItems: [OutboxItem] = []
+    var draftItems: [OutboxItem] = []
     @ObservationIgnored var markReadTask: Task<Void, Never>?
     @ObservationIgnored var toastTask: Task<Void, Never>?
 
     // Data
-    private(set) var accounts: [AccountConfig] = []
+    var accounts: [AccountConfig] = []
     private(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
     private(set) var inboxUnreadCount = 0
@@ -92,13 +98,26 @@ final class AppModel {
         }
         cache = MessageCache(directory: base.appendingPathComponent("Cache", isDirectory: true))
         accounts = isDevServer ? [Self.devAccount] : AccountStorage.load()
+        if !isDevServer {
+            var changed = false
+            for index in accounts.indices where accounts[index].identities == nil {
+                accounts[index].identities = [Identity(address: accounts[index].endpoint.username, name: NSFullUserName())]
+                changed = true
+            }
+            if changed { AccountStorage.save(accounts) }
+        }
         reload()
+        reloadOutbox()
     }
 
     static let devAccount = AccountConfig(
         id: "dev", displayName: "Dev (local Dovecot)",
         endpoint: IMAPEndpoint(host: "127.0.0.1", port: 31143, useTLS: false, username: "magnus"),
-        addresses: [TestMailFactory.me.address]
+        addresses: [TestMailFactory.me.address],
+        smtp: SMTPEndpoint(host: "127.0.0.1", port: 31587, security: .startTLS, username: TestMailFactory.me.address,
+                           allowSelfSignedLocalhost: true),
+        identities: [Identity(address: TestMailFactory.me.address, name: "Magnus Kaspersen", signature: "Magnus"),
+                     Identity(address: "m@tidings.test", name: "Magnus H. Kaspersen", signature: "Magnus H. Kaspersen\nTidings")]
     )
 
     // MARK: Sync
@@ -139,6 +158,16 @@ final class AppModel {
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message
+        case .sending:
+            syncStatus[account.id] = String(localized: "Sending…")
+            reloadOutbox()
+        case .sent:
+            reloadOutbox()
+            if case .some(let t) = toast, t.undoSend != nil { show(Toast(message: String(localized: "Sent"), symbol: "checkmark")) }
+        case .sendFailed(_, let message):
+            reloadOutbox()
+            lastError = message
+            show(Toast(message: String(localized: "Couldn't send: \(message)"), symbol: "exclamationmark.triangle"))
         }
     }
 
@@ -150,7 +179,8 @@ final class AppModel {
         // Validate before saving anything: read-only login + capability check.
         _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
         try Keychain.save(password: password, account: trimmed)
-        let account = AccountConfig(displayName: trimmed, endpoint: endpoint, addresses: [trimmed])
+        let account = AccountConfig(displayName: trimmed, endpoint: endpoint, addresses: [trimmed],
+                                    identities: [Identity(address: trimmed, name: NSFullUserName())])
         accounts.append(account)
         AccountStorage.save(accounts)
         start()
@@ -164,6 +194,7 @@ final class AppModel {
         switch selection {
         case .inbox: String(localized: "Inbox")
         case .snoozed: String(localized: "Snoozed")
+        case .outbox: String(localized: "Outbox")
         case .category(let c): c.title
         case .mailbox(let accountID, let path):
             mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
@@ -176,6 +207,8 @@ final class AppModel {
             case .inbox:
                 threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
                 if pinnedOnly { threads = threads.filter(\.isPinned) }
+            case .outbox:
+                threads = []
             case .snoozed:
                 threads = try store.threads(mailbox: AccountSync.snoozedMailbox, ownAddresses: ownAddresses)
                     .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }

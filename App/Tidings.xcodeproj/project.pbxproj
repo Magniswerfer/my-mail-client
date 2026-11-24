@@ -14,11 +14,15 @@
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		3D80CF0E4641EA84D51EFB8E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
 		4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
+		7031F631BFE73A9822227883 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */; };
 		79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */; };
+		8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF8802ED3444B57EAECF71C /* ComposeModel.swift */; };
+		9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */; };
 		A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06689F64AABF98230DE8B430 /* ReaderView.swift */; };
 		AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
 		B1A2B5DD989C49C4146CCB83 /* MailEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 187850F5704A0255AB5BF953 /* MailEngine */; };
 		C2F0CBE3DCB00FD1D3C8EEA3 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07FA70D74524437B7FC3417 /* SearchResultsView.swift */; };
+		F1C95501152A66AF83C251F2 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,16 +31,20 @@
 		067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Triage.swift"; sourceTree = "<group>"; };
 		0ACC86ABC03818BEDC665920 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
 		0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Compose.swift"; sourceTree = "<group>"; };
 		1EEBA246801CACDF96D1538A /* MailEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MailEngine; path = ../MailEngine; sourceTree = SOURCE_ROOT; };
 		A97A5FA03921FB76ED7DAE54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B07FA70D74524437B7FC3417 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
+		B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		B656C7C5D76B62DF59CF7881 /* Tidings.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tidings.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CCF8802ED3444B57EAECF71C /* ComposeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeModel.swift; sourceTree = "<group>"; };
 		D9E98B26701A0696C304E547 /* Tidings.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tidings.entitlements; sourceTree = "<group>"; };
 		DBF92DF43EE36D90347135F4 /* TidingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsApp.swift; sourceTree = "<group>"; };
 		DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSetupView.swift; sourceTree = "<group>"; };
 		F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		F8E681997413622DF1A1C6A4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */,
+				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */,
 			);
 			path = Model;
@@ -105,11 +114,22 @@
 				0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */,
 				D9E98B26701A0696C304E547 /* Tidings.entitlements */,
 				DBF92DF43EE36D90347135F4 /* TidingsApp.swift */,
+				B604B4EE7D7184EADFBBE1DD /* Compose */,
 				0E2FE2B8CAFDEFB84A0CB22E /* Model */,
 				3AB3C5F764B533664B394C12 /* Support */,
 				0E1610817743E9EF421021EC /* Views */,
 			);
 			path = Tidings;
+			sourceTree = "<group>";
+		};
+		B604B4EE7D7184EADFBBE1DD /* Compose */ = {
+			isa = PBXGroup;
+			children = (
+				CCF8802ED3444B57EAECF71C /* ComposeModel.swift */,
+				B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */,
+				FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */,
+			);
+			path = Compose;
 			sourceTree = "<group>";
 		};
 		B811B973E8EEAACC3A6E1261 /* Products */ = {
@@ -197,10 +217,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */,
+				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */,
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
 				052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */,
+				8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */,
+				7031F631BFE73A9822227883 /* ComposeView.swift in Sources */,
 				A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */,
+				F1C95501152A66AF83C251F2 /* RichTextEditor.swift in Sources */,
 				C2F0CBE3DCB00FD1D3C8EEA3 /* SearchResultsView.swift in Sources */,
 				79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */,
 				4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */,

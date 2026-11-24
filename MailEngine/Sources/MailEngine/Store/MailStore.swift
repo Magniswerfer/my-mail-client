@@ -113,6 +113,7 @@ public final class MailStore: Sendable {
         }
         registerSyncMigrations(&m)
         registerTriageMigrations(&m)
+        registerOutboxMigrations(&m)
         return m
     }
 

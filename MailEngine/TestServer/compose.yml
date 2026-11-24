@@ -1,6 +1,6 @@
-# Local IMAP server for integration tests. Never use real credentials here.
-# Dovecot's official image accepts any username with the password from USER_PASSWORD.
+# Local mail servers for integration tests. Never use real credentials here.
 services:
+  # IMAP. Dovecot's official image accepts any username with the password from USER_PASSWORD.
   dovecot:
     image: dovecot/dovecot:latest
     environment:
@@ -9,3 +9,19 @@ services:
       - ./tidings.conf:/etc/dovecot/conf.d/tidings.conf:ro
     ports:
       - "127.0.0.1:31143:31143"   # IMAP, plaintext, localhost only
+
+  # SMTP that catches everything (nothing is ever delivered) and exposes it over an API.
+  # Like iCloud: STARTTLS on submission, AUTH required (any credentials accepted).
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_TLS_CERT: /certs/localhost.pem
+      MP_SMTP_TLS_KEY: /certs/localhost.key
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_MAX_MESSAGES: "2000"
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "127.0.0.1:31587:1025"    # SMTP submission (STARTTLS)
+      - "127.0.0.1:38025:8025"    # Web UI + API

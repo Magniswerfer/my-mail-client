@@ -138,20 +138,78 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Form {
-            Section("Accounts") {
-                ForEach(model.accounts) { account in
-                    LabeledContent(account.displayName, value: account.endpoint.host)
+        TabView {
+            Tab("Identities", systemImage: "person.crop.rectangle.stack") { IdentitiesSettings() }
+            Tab("General", systemImage: "gearshape") {
+                Form {
+                    Section("Accounts") {
+                        ForEach(model.accounts) { account in
+                            LabeledContent(account.displayName, value: account.endpoint.host)
+                        }
+                    }
+                    Section("Storage") {
+                        LabeledContent("Location") {
+                            Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
+                        }
+                        LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
+                    }
                 }
+                .formStyle(.grouped)
             }
-            Section("Storage") {
-                LabeledContent("Location") {
-                    Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
+        }
+        .frame(width: 560, height: 440)
+    }
+}
+
+/// Sending identities (SPEC §9): the iCloud address plus custom-domain addresses, each with a
+/// name and signature. Sending from a custom domain works when it's set up in iCloud+.
+struct IdentitiesSettings: View {
+    @Environment(AppModel.self) private var model
+    @State private var newAddress = ""
+
+    var body: some View {
+        Form {
+            ForEach(model.accounts) { account in
+                Section(account.displayName) {
+                    ForEach(account.sendingIdentities) { identity in
+                        IdentityEditor(accountID: account.id, identity: identity)
+                    }
+                    HStack {
+                        TextField("Add address", text: $newAddress, prompt: Text(verbatim: "you@your-domain.com"))
+                        Button("Add") {
+                            model.addIdentity(address: newAddress, accountID: account.id)
+                            newAddress = ""
+                        }
+                        .disabled(!newAddress.contains("@"))
+                    }
+                    Text("Custom-domain addresses must be set up in iCloud+ (Settings → Apple Account → iCloud → Custom Email Domain).")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 300)
+    }
+}
+
+struct IdentityEditor: View {
+    @Environment(AppModel.self) private var model
+    let accountID: String
+    @State var identity: Identity
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(identity.address).font(.headline)
+                Spacer()
+                Button(role: .destructive) { model.removeIdentity(identity, accountID: accountID) } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless)
+                    .disabled(model.identities(for: accountID).count <= 1)
+            }
+            TextField("Name", text: $identity.name)
+            TextField("Signature", text: $identity.signature, axis: .vertical)
+                .lineLimit(2...5)
+        }
+        .padding(.vertical, 4)
+        .onChange(of: identity) { model.updateIdentity(identity, accountID: accountID) }
     }
 }

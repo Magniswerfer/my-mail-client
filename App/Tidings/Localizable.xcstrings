@@ -1160,6 +1160,476 @@
           }
         }
       }
+    },
+    "New Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny besked"
+          }
+        }
+      }
+    },
+    "Reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar"
+          }
+        }
+      }
+    },
+    "Reply All": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvar alle"
+          }
+        }
+      }
+    },
+    "Forward": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videresend"
+          }
+        }
+      }
+    },
+    "Go to Outbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til udbakke"
+          }
+        }
+      }
+    },
+    "Outbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udbakke"
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "Send Later…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send senere…"
+          }
+        }
+      }
+    },
+    "Send later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send senere"
+          }
+        }
+      }
+    },
+    "Attach": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæft"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kassér"
+          }
+        }
+      }
+    },
+    "From": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra"
+          }
+        }
+      }
+    },
+    "To": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Til"
+          }
+        }
+      }
+    },
+    "Cc": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cc"
+          }
+        }
+      }
+    },
+    "Bcc": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bcc"
+          }
+        }
+      }
+    },
+    "Subject": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emne"
+          }
+        }
+      }
+    },
+    "Cc/Bcc": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cc/Bcc"
+          }
+        }
+      }
+    },
+    "Hide Cc/Bcc": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skjul Cc/Bcc"
+          }
+        }
+      }
+    },
+    "Attach files (⌘⇧A)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæft filer (⌘⇧A)"
+          }
+        }
+      }
+    },
+    "Discard draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kassér kladde"
+          }
+        }
+      }
+    },
+    "Send (⌘↩)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send (⌘↩)"
+          }
+        }
+      }
+    },
+    "Tab to choose": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab for at vælge"
+          }
+        }
+      }
+    },
+    "Sending…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sender…"
+          }
+        }
+      }
+    },
+    "Too late, it's already sent": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For sent – den er allerede sendt"
+          }
+        }
+      }
+    },
+    "Will send %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendes %@"
+          }
+        }
+      }
+    },
+    "Couldn't send: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke sende: %@"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prøv igen"
+          }
+        }
+      }
+    },
+    "Edit": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redigér"
+          }
+        }
+      }
+    },
+    "Open": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn"
+          }
+        }
+      }
+    },
+    "Nothing waiting to be sent": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet venter på at blive sendt"
+          }
+        }
+      }
+    },
+    "Press C to write a new message.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tryk C for at skrive en ny besked."
+          }
+        }
+      }
+    },
+    "(no subject)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(intet emne)"
+          }
+        }
+      }
+    },
+    "This draft is gone": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne kladde findes ikke længere"
+          }
+        }
+      }
+    },
+    "It was sent or discarded in another window.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den blev sendt eller kasseret i et andet vindue."
+          }
+        }
+      }
+    },
+    "Add at least one recipient.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj mindst én modtager."
+          }
+        }
+      }
+    },
+    "One of the addresses doesn't look right.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En af adresserne ser forkert ud."
+          }
+        }
+      }
+    },
+    "Attachments are over iCloud's 20 MB limit. Share large files with a link instead.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæftningerne er over iClouds grænse på 20 MB. Del store filer med et link i stedet."
+          }
+        }
+      }
+    },
+    "On %@, %@ wrote:\n": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den %1$@ skrev %2$@:\n"
+          }
+        }
+      }
+    },
+    "---------- Forwarded message ----------\nFrom: %@\nDate: %@\nSubject: %@\nTo: %@\n\n": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "---------- Videresendt besked ----------\nFra: %1$@\nDato: %2$@\nEmne: %3$@\nTil: %4$@\n\n"
+          }
+        }
+      }
+    },
+    "Couldn't open the original message: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke åbne den oprindelige besked: %@"
+          }
+        }
+      }
+    },
+    "Identities": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identiteter"
+          }
+        }
+      }
+    },
+    "General": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generelt"
+          }
+        }
+      }
+    },
+    "Add address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj adresse"
+          }
+        }
+      }
+    },
+    "Add": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navn"
+          }
+        }
+      }
+    },
+    "Signature": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signatur"
+          }
+        }
+      }
+    },
+    "Custom-domain addresses must be set up in iCloud+ (Settings → Apple Account → iCloud → Custom Email Domain).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adresser på eget domæne skal være sat op i iCloud+ (Indstillinger → Apple-konto → iCloud → Eget e-maildomæne)."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

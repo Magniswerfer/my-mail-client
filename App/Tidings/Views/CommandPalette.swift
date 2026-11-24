@@ -19,6 +19,14 @@ extension AppModel {
         let thread = targetThreads.first
         let inSnoozedOrFolder = sourceMailbox != "INBOX"
         var list: [AppCommand] = [
+            AppCommand(id: "compose", title: String(localized: "New Message"), symbol: "square.and.pencil", keys: "C") { self.composeNew() },
+            AppCommand(id: "reply", title: String(localized: "Reply"), symbol: "arrowshape.turn.up.left", keys: "R",
+                       isEnabled: hasSelection) { self.compose(.reply) },
+            AppCommand(id: "replyAll", title: String(localized: "Reply All"), symbol: "arrowshape.turn.up.left.2", keys: "A",
+                       isEnabled: hasSelection) { self.compose(.replyAll) },
+            AppCommand(id: "forward", title: String(localized: "Forward"), symbol: "arrowshape.turn.up.right", keys: "F",
+                       isEnabled: hasSelection) { self.compose(.forward) },
+            AppCommand(id: "goOutbox", title: String(localized: "Go to Outbox"), symbol: "paperplane", keys: "G O") { self.selection = .outbox },
             AppCommand(id: "done", title: String(localized: "Mark Done"), symbol: "checkmark.circle", keys: "E",
                        isEnabled: hasSelection) { self.perform(.done) },
             AppCommand(id: "pin", title: thread?.isPinned == true ? String(localized: "Unpin") : String(localized: "Pin"),
@@ -204,6 +212,10 @@ struct ToastView: View {
             Label(toast.message, systemImage: toast.symbol)
             if let box = toast.undo {
                 Button("Undo") { model.undoFromToast(box) }
+                    .buttonStyle(.borderless)
+                    .fontWeight(.semibold)
+            } else if let outboxID = toast.undoSend {
+                Button("Undo") { model.undoSend(outboxID) }
                     .buttonStyle(.borderless)
                     .fontWeight(.semibold)
             }

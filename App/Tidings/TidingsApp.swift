@@ -29,6 +29,15 @@ struct TidingsApp: App {
                 Button("Command Palette…") { model.isPaletteShown.toggle() }
                     .keyboardShortcut("k", modifiers: .command)
                 Divider()
+                Button("New Message") { model.composeNew() }
+                    .keyboardShortcut("n", modifiers: .command)
+                Button("Reply") { model.compose(.reply) }
+                    .keyboardShortcut("r", modifiers: .command)
+                Button("Reply All") { model.compose(.replyAll) }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Forward") { model.compose(.forward) }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                Divider()
                 Button("Mark Done") { model.perform(.done) }
                     .keyboardShortcut("e", modifiers: [.command, .option])
                 Button("Pin / Unpin") { model.togglePin() }
@@ -48,6 +57,15 @@ struct TidingsApp: App {
             }
         }
 
+        WindowGroup("New Message", id: "compose", for: Int64.self) { $draftID in
+            if let draftID {
+                ComposeWindow(draftID: draftID)
+                    .environment(model)
+            }
+        }
+        .defaultSize(width: 720, height: 600)
+        .commands { TextFormattingCommands() }
+
         Settings {
             SettingsView()
                 .environment(model)
@@ -58,6 +76,7 @@ struct TidingsApp: App {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.openWindow) private var openWindow
     @FocusState private var searchFocused: Bool
     @FocusState private var streamFocused: Bool
     /// Set after "g" for two-key navigation (G I, G S, G A, G P).
@@ -72,6 +91,8 @@ struct RootView: View {
             Group {
                 if model.isSearching {
                     SearchResultsView()
+                } else if model.selection == .outbox {
+                    OutboxView()
                 } else {
                     StreamView()
                 }
@@ -123,7 +144,10 @@ struct RootView: View {
             AccountSetupView()
                 .interactiveDismissDisabled()
         }
-        .onAppear { model.undoManager = undoManager }
+        .onAppear {
+            model.undoManager = undoManager
+            model.openComposeWindow = { id in openWindow(id: "compose", value: id) }
+        }
         .onChange(of: undoManager) { _, manager in model.undoManager = manager }
     }
 
@@ -166,6 +190,7 @@ struct RootView: View {
             case "i": model.selection = .inbox
             case "s": model.selection = .snoozed
             case "a": model.goToArchive()
+            case "o": model.selection = .outbox
             case "p": model.pinnedOnly.toggle()
             default: return .ignored
             }
@@ -184,6 +209,10 @@ struct RootView: View {
         case "!": model.perform(.junk)
         case "i": model.run(commandID: "inbox")
         case "g": pendingG = Date()
+        case "c": model.composeNew()
+        case "r": model.compose(.reply)
+        case "a": model.compose(.replyAll)
+        case "f": model.compose(.forward)
         default: return .ignored
         }
         return .handled

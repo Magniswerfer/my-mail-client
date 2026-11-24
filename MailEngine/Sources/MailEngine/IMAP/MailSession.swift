@@ -345,6 +345,10 @@ public final class MailSession: Sendable {
             let all = MessageIdentifierSet<UID>(UID(rawValue: 1)...UID.max)
             set = .set(MessageIdentifierSetNonEmpty(set: all)!)
         }
+        return try await fetchHeaderField(field, set: set)
+    }
+
+    func fetchHeaderField(_ field: String, set: LastCommandSet<UID>) async throws -> [UInt32: String] {
         let section = SectionSpecifier(kind: .headerFields([field]))
         let responses = try await run(
             .uidFetch(set, [.uid, .bodySection(peek: true, section, nil)], []), name: "UID FETCH HEADER.FIELDS"
@@ -367,6 +371,14 @@ public final class MailSession: Sendable {
             }
         }
         return result
+    }
+
+    /// `fetchHeaderField` for every message with UID ≥ `fromUID` (e.g. "what arrived since").
+    public func fetchHeaderField(_ field: String, fromUID: UInt32) async throws -> [UInt32: String] {
+        if selected?.exists == 0 { return [:] }
+        let range = MessageIdentifierSet<UID>(UID(rawValue: max(1, fromUID))...UID.max)
+        return try await fetchHeaderField(field, set: .set(MessageIdentifierSetNonEmpty(set: range)!))
+            .filter { $0.key >= fromUID }   // "n:*" also matches the last message when n is past the end
     }
 
     /// Extracts an unfolded header value from a raw header block.
