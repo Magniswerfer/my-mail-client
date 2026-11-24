@@ -80,6 +80,13 @@ Flights/travel, packages, receipts/invoices, calendar events/invites, OTP/2FA co
 - **Accept / Maybe / Decline** (also ⌃⌘Y / ⌃⌘M / ⌃⌘N and ⌘K) sends an iTIP REPLY to the organizer through the outbox (normal undo window, ⌘Z), echoing UID/SEQUENCE/RECURRENCE-ID and the attendee address exactly as invited. Your answer is remembered per event (`inviteResponse`), including answers seen in Sent from other clients; an update with a higher SEQUENCE asks again.
 - Calendar (EventKit, full access asked on first use): accepting adds the event (tentative → shown as tentative), declining or a cancellation removes the copy Tidings made, updates move it. Events the calendar server already put there are never duplicated or rewritten. The copy carries no organizer/attendees, so Calendar never sends a second answer.
 
+### Assistant (M4.7, Superhuman-inspired, all on device)
+- **Auto Summarize:** one or two sentences under the subject for conversations with 3+ messages or ~1 200+ characters of their own words (quotes stripped). Foundation Models, in the emails' language; cached per conversation and redone when a message arrives. Off without Apple Intelligence.
+- **Auto Drafts:** when you wrote last, to real people (≤ 6, no robots), at least N days ago (default 3, max 21), Tidings drafts a follow-up (on-device model, else a localized template) as a reply quoting your message. It waits in Drafts with a banner on the conversation and a Follow-ups row in the sidebar; never sent automatically; deleted when a reply arrives; Discard means never again for that conversation.
+- **Instant Intro** (⌘⇧I): reply to everyone introduced, the introducer moved to Bcc, opening "Thanks, Anna (moved to Bcc)!".
+- **Share Availability** (⌥⌘A in the composer): free slots in working hours (Settings → Assistant) over the next five working days from your calendar, pick which, insert as text with your time zone.
+- **Contact sidebar** (⌃⌘I, toolbar, or tap an avatar; a sheet on iPhone): mail both ways, since when, last contact, typical reply time, links and phone numbers from their signature, recent conversations, colleagues at the same organisation. Built only from your own mail; nothing is looked up online.
+
 ### Writing assistance
 System Writing Tools in the composer, one-line thread summaries, "Summarize" for long threads, 2–3 smart-reply chips, "extract questions". No full drafting (plugins/MCP can add a bigger model later).
 
@@ -182,6 +189,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4 · Sorting** ✅ (verified on local servers) | AI categories, bundles + schedules, spam layers, remote-content protection |
 | **M4.5 · UI tightening** ✅ | Move a conversation (toolbar, right-click, drag to sidebar, M) that teaches the classifier and becomes a sender rule after two consistent moves; reply/forward/compose in the toolbar; status in the sidebar footer; sweep at the end of the list; neutral avatars, quieter bundles; previews without quoted text |
 | **M4.6 · Invites** ✅ (engine tested on Linux; app not yet built) | Recognise invites/updates/cancellations/replies, invite card, RSVP by iTIP reply, calendar add/update/remove, clashes, threading by event UID |
+| **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
