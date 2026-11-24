@@ -106,7 +106,7 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.toast)
         } detail: {
-            ReaderView(threadID: model.selectedThreadID)
+            ReaderView(threadID: model.readerThreadID)
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
         .searchFocused($searchFocused)

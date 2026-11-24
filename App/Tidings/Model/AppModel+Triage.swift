@@ -88,7 +88,16 @@ extension AppModel {
             registerUndo(box, kind: kind, count: targets.count)
             show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: box))
         }
-        if kind.removesFromView { selectedThreadID = nextSelection }
+        let ids = Set(targets.map(\.threadID))
+        if kind.removesFromView {
+            // One motion: the row leaves and the selection moves on together, before the engine
+            // has written anything (it catches up a moment later; see `pendingRemovals`).
+            pendingRemovals.formUnion(ids)
+            withAnimation(.snappy(duration: 0.22)) {
+                self.threads.removeAll { ids.contains($0.threadID) }
+                selectedThreadID = nextSelection
+            }
+        }
         let source = sourceMailbox
         Task {
             for (accountID, group) in Dictionary(grouping: targets, by: \.latest.accountID) {
@@ -103,6 +112,7 @@ extension AppModel {
             }
             // Undo was pressed before the engine finished: reverse right away.
             if box.undone { await undo(box) }
+            pendingRemovals.subtract(ids)
             reload()
         }
     }

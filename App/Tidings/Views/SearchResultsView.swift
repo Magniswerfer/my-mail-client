@@ -33,7 +33,15 @@ struct SearchResultsView: View {
             }
             .onChange(of: model.selectedHitID) { _, id in
                 guard let id else { return }
-                withAnimation(.snappy(duration: 0.18)) { proxy.scrollTo(id) }
+                let ids = model.searchHits.map(\.id)
+                var target = id
+                if model.lastMoveDirection != 0, let i = ids.firstIndex(of: id), ids.indices.contains(i + model.lastMoveDirection) {
+                    target = ids[i + model.lastMoveDirection]
+                }
+                model.lastMoveDirection = 0
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { proxy.scrollTo(target) }
             }
             }
         }

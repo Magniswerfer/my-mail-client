@@ -39,10 +39,20 @@ struct StreamView: View {
         .overlay {
             if model.threads.isEmpty { EmptyStream() }
         }
-        // Keep the selection in view as j/k move it (nil anchor = scroll only as far as needed).
+        // Keep the selection in view as j/k move it: instantly (an animation per key press falls
+        // behind fast typing), only as far as needed, with one row of lookahead in the direction
+        // of travel so you see what's coming.
         .onChange(of: model.selectedThreadID) { _, id in
             guard let id else { return }
-            withAnimation(.snappy(duration: 0.18)) { proxy.scrollTo(id) }
+            let ids = model.visibleThreadIDs
+            var target = id
+            if model.lastMoveDirection != 0, let i = ids.firstIndex(of: id), ids.indices.contains(i + model.lastMoveDirection) {
+                target = ids[i + model.lastMoveDirection]
+            }
+            model.lastMoveDirection = 0
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(target) }
         }
         }
     }

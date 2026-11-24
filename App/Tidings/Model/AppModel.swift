@@ -43,7 +43,35 @@ final class AppModel {
             reload()
         }
     }
-    var selectedThreadID: String? { didSet { scheduleMarkRead() } }
+    var selectedThreadID: String? {
+        didSet {
+            scheduleMarkRead()
+            updateReader(debounced: isKeyboardNavigating)
+        }
+    }
+    /// What the reader shows. Follows the selection at once for clicks, and after a short pause
+    /// while j/k are being pressed, so fast navigation never waits on rendering mail.
+    private(set) var readerThreadID: String?
+    /// Direction of the last j/k move (+1/-1, 0 for clicks); the list keeps one row of lookahead.
+    @ObservationIgnored var lastMoveDirection = 0
+    @ObservationIgnored private var isKeyboardNavigating = false
+    @ObservationIgnored private var readerTask: Task<Void, Never>?
+    /// Conversations just acted on (Done, Snooze, …) that stay hidden until the engine catches up,
+    /// so a row leaves the list in the same instant the selection moves on.
+    @ObservationIgnored var pendingRemovals: Set<String> = []
+
+    private func updateReader(debounced: Bool) {
+        readerTask?.cancel()
+        guard debounced else {
+            readerThreadID = selectedThreadID
+            return
+        }
+        readerTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled, let self else { return }
+            self.readerThreadID = self.selectedThreadID
+        }
+    }
     var expandedBundles: Set<MailCategory> = []
     /// Show only pinned conversations (Google Inbox's pin toggle).
     var pinnedOnly = false { didSet { reload() } }
@@ -74,7 +102,7 @@ final class AppModel {
 
     // Data
     var accounts: [AccountConfig] = []
-    private(set) var threads: [ThreadSummary] = []
+    internal(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
     private(set) var inboxUnreadCount = 0
     private(set) var syncStatus: [String: String] = [:]
@@ -263,6 +291,7 @@ final class AppModel {
             case .mailbox(let accountID, let path):
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
             }
+            if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
             inboxUnreadCount = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
                 .filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
@@ -344,13 +373,19 @@ final class AppModel {
             let ids = searchHits.map(\.id)
             guard !ids.isEmpty else { return }
             let index = selectedHitID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+            lastMoveDirection = delta > 0 ? 1 : -1
+            isKeyboardNavigating = true
             selectedHitID = ids[max(0, min(ids.count - 1, index + delta))]
+            isKeyboardNavigating = false
             return
         }
         let ids = visibleThreadIDs
         guard !ids.isEmpty else { return }
         let index = selectedThreadID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+        lastMoveDirection = delta > 0 ? 1 : -1
+        isKeyboardNavigating = true
         selectedThreadID = ids[max(0, min(ids.count - 1, index + delta))]
+        isKeyboardNavigating = false
     }
 
     // MARK: Search
