@@ -30,6 +30,9 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     public var preview: String
     /// LZFSE-compressed UTF-8 plain-text body.
     public var bodyText: Data?
+    public var inReplyTo: String?
+    /// Why the message got its category ("why is this here?", SPEC §5).
+    public var classificationReason: String?
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -104,6 +107,7 @@ public final class MailStore: Sendable {
                 )
                 """)
         }
+        registerSyncMigrations(&m)
         return m
     }
 

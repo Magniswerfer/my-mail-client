@@ -52,7 +52,7 @@ public final class MailSession: Sendable {
     public let profile: ServerProfile
     public let greetingCapabilities: [String]
     public let capabilities: [String]
-    private let connection: IMAPConnection
+    let connection: IMAPConnection
 
     private init(
         endpoint: IMAPEndpoint, profile: ServerProfile, connection: IMAPConnection,
@@ -87,11 +87,11 @@ public final class MailSession: Sendable {
     }
 
     /// Connects, logs in, refreshes capabilities and enables CONDSTORE/QRESYNC when available.
-    public static func open<Result: Sendable>(
+    public nonisolated(nonsending) static func open<Result>(
         endpoint: IMAPEndpoint,
         password: String,
         profile: ServerProfile? = nil,
-        _ body: (MailSession) async throws -> Result
+        _ body: nonisolated(nonsending) (MailSession) async throws -> Result
     ) async throws -> Result {
         let profile = profile ?? ServerProfile.detect(host: endpoint.host)
         let configuration = IMAPConnection.Configuration(

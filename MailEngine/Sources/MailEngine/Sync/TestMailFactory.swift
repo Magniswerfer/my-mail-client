@@ -1,0 +1,211 @@
+import Foundation
+
+/// Realistic raw messages for seeding the local test server. Never used against real accounts.
+public enum TestMailFactory {
+    public struct Seed: Sendable {
+        public var mailbox: String
+        public var raw: Data
+        public var flags: [String]
+    }
+
+    public static let me = MailAddress(name: "Magnus Kaspersen", address: "magnus@tidings.test")
+
+    public static func mailbox(now: Date = Date()) -> [Seed] {
+        var seeds: [Seed] = []
+        var n = 0
+        func id() -> String { n += 1; return "seed-\(n)@tidings.test" }
+        func ago(_ hours: Double) -> Date { now.addingTimeInterval(-hours * 3600) }
+
+        // A real conversation, with my replies in Sent.
+        let anna = MailAddress(name: "Anna Jensen", address: "anna@example.dk")
+        let t1 = id(), t2 = id(), t3 = id()
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: anna, to: [me], subject: "Middag på lørdag?", date: ago(50), id: t1,
+            body: "Hej Magnus,\n\nSkal vi lave middag på lørdag? Jeg kan tage desserten med.\n\nKh Anna"), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "Sent", raw: text(from: me, to: [anna], subject: "Re: Middag på lørdag?", date: ago(48), id: t2,
+            body: "Hej Anna,\n\nGerne! Kl. 18? Jeg laver lasagne.\n\nMagnus\n\n> Skal vi lave middag på lørdag?", replyTo: [t1]), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: anna, to: [me], subject: "Re: Middag på lørdag?", date: ago(3), id: t3,
+            body: "Perfekt, kl. 18 passer. Skal jeg tage vin med også?\n\nAnna", replyTo: [t1, t2]), flags: []))
+
+        // Work thread with an attachment.
+        let peter = MailAddress(name: "Peter Nielsen", address: "peter.nielsen@firma.dk")
+        let w1 = id()
+        seeds.append(Seed(mailbox: "INBOX", raw: withAttachment(from: peter, to: [me], subject: "Kontrakt til gennemsyn",
+            date: ago(26), id: w1, body: "Hej Magnus,\n\nHer er udkastet til kontrakten. Kan du kigge på punkt 4 inden fredag?\n\nVh Peter",
+            filename: "Kontrakt udkast æøå.pdf"), flags: ["\\Seen", "\\Flagged"]))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "Sofie Hansen", address: "sofie@example.com"), to: [me],
+            subject: "Quick question about the website", date: ago(1.5), id: id(),
+            body: "Hi Magnus,\n\nDo you have time for a 15 minute call tomorrow about the new website design? I have some feedback on the navigation.\n\nBest,\nSofie"), flags: []))
+
+        // Transactions.
+        seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: "Zalando", address: "noreply@zalando.dk"), subject: "Din ordre #48213 er afsendt",
+            date: ago(20), id: id(), html: "<h2>Din pakke er på vej</h2><p>Ordre <b>#48213</b>: Nike Air Max 90, str. 44 — <b>899,00 kr</b>.</p><p>Forventet levering: torsdag.</p>",
+            bulk: false), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: "MobilePay", address: "kvittering@mobilepay.dk"), subject: "Kvittering for dit køb hos Lagkagehuset",
+            date: ago(30), id: id(), html: "<p>Du har betalt <b>87,50 kr</b> til Lagkagehuset.</p>", bulk: false), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: "SAS", address: "no-reply@flysas.com"), subject: "Your booking confirmation CPH → OSL",
+            date: ago(70), id: id(), html: "<p>Booking reference <b>K7XQ2P</b>. SK1456 Copenhagen 08:05 → Oslo 09:15, 12 December.</p>", bulk: false), flags: ["\\Seen"]))
+
+        // Updates.
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "Apple", address: "no_reply@email.apple.com"), to: [me],
+            subject: "Your Apple Account password was changed", date: ago(6), id: id(),
+            body: "The password for your Apple Account was changed. If you didn't do this, reset your password."), flags: []))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "GitHub", address: "notifications@github.com"), to: [me],
+            subject: "[tidings] CI failed on main", date: ago(4), id: id(), body: "Run #142 failed: swift test (3 failures)."), flags: []))
+
+        // Newsletters and ads (bulk with List-Unsubscribe).
+        for (i, (name, address, subject, body)) in [
+            ("Politiken", "nyhedsbrev@pol.dk", "Morgenbrief: det skal du vide i dag", "<h1>Godmorgen</h1><p>Her er dagens vigtigste historier…</p>"),
+            ("Stratechery", "email@stratechery.com", "The Aggregator's Dilemma", "<p>This week: why platforms bundle, and what it means for mail.</p>"),
+            ("Swift Weekly", "hello@swiftweekly.dev", "Issue #312: strict concurrency in practice", "<p>Five articles on Sendable and region isolation.</p>"),
+        ].enumerated() {
+            seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: name, address: address), subject: subject,
+                date: ago(Double(8 + i * 22)), id: id(), html: body, bulk: true), flags: i == 0 ? [] : ["\\Seen"]))
+        }
+        for (i, (name, address, subject)) in [
+            ("Nike", "news@nike.com", "Black Friday: -40% på alle sko"),
+            ("Matas", "tilbud@matas.dk", "Kun i dag: gratis fragt på alt"),
+            ("Elgiganten", "kampagne@elgiganten.dk", "Sidste chance: udsalg på hørebøffer"),
+        ].enumerated() {
+            seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: name, address: address), subject: subject,
+                date: ago(Double(5 + i * 17)), id: id(), html: "<p>\(subject)</p><img src=\"https://tracker.example/pixel.gif\" width=1 height=1>", bulk: true), flags: []))
+        }
+
+        // Social.
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "LinkedIn", address: "messages-noreply@linkedin.com"), to: [me],
+            subject: "You have 3 new connection requests", date: ago(12), id: id(), body: "Lars, Mette and Jonas want to connect."), flags: []))
+
+        // Archive: older mail that should still be searchable.
+        for i in 0..<12 {
+            seeds.append(Seed(mailbox: "Archive", raw: text(from: MailAddress(name: "Bogholderiet", address: "bogholderi@firma.dk"), to: [me],
+                subject: "Faktura \(2026_100 + i)", date: ago(Double(24 * (30 + i * 20))), id: id(),
+                body: "Vedlagt faktura nr. \(2026_100 + i). Betalingsfrist 14 dage."), flags: ["\\Seen"]))
+        }
+        return seeds
+    }
+
+    // MARK: Builders
+
+    static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        return f
+    }()
+
+    static func headers(from: MailAddress, to: [MailAddress], subject: String, date: Date, id: String, replyTo: [String] = []) -> [String] {
+        var h = [
+            "From: \(encodeAddress(from))",
+            "To: \(to.map(encodeAddress).joined(separator: ", "))",
+            "Subject: \(encodeWord(subject))",
+            "Date: \(dateFormatter.string(from: date))",
+            "Message-ID: <\(id)>",
+            "MIME-Version: 1.0",
+        ]
+        if let parent = replyTo.last {
+            h.append("In-Reply-To: <\(parent)>")
+            h.append("References: \(replyTo.map { "<\($0)>" }.joined(separator: " "))")
+        }
+        return h
+    }
+
+    static func text(from: MailAddress, to: [MailAddress], subject: String, date: Date, id: String, body: String, replyTo: [String] = []) -> Data {
+        let h = headers(from: from, to: to, subject: subject, date: date, id: id, replyTo: replyTo) + [
+            "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: quoted-printable",
+        ]
+        return crlf(h.joined(separator: "\n") + "\n\n" + quotedPrintable(body))
+    }
+
+    static func html(from: MailAddress, subject: String, date: Date, id: String, html: String, bulk: Bool) -> Data {
+        var h = headers(from: from, to: [me], subject: subject, date: date, id: id)
+        if bulk {
+            h.append("List-Unsubscribe: <https://\(from.address.split(separator: "@").last ?? "example.com")/unsub?u=1>, <mailto:unsub@\(from.address.split(separator: "@").last ?? "example.com")>")
+            h.append("List-Unsubscribe-Post: List-Unsubscribe=One-Click")
+            h.append("Precedence: bulk")
+        }
+        h.append("Content-Type: multipart/alternative; boundary=\"alt\"")
+        let plain = HTMLText.toPlainText(html)
+        let body = """
+            --alt
+            Content-Type: text/plain; charset=utf-8
+            Content-Transfer-Encoding: quoted-printable
+
+            \(quotedPrintable(plain))
+            --alt
+            Content-Type: text/html; charset=utf-8
+            Content-Transfer-Encoding: base64
+
+            \(Data("<html><body style=\"font-family:-apple-system\">\(html)</body></html>".utf8).base64EncodedString(options: .lineLength76Characters))
+            --alt--
+            """
+        return crlf(h.joined(separator: "\n") + "\n\n" + body)
+    }
+
+    static func withAttachment(from: MailAddress, to: [MailAddress], subject: String, date: Date, id: String, body: String, filename: String) -> Data {
+        var h = headers(from: from, to: to, subject: subject, date: date, id: id)
+        h.append("Content-Type: multipart/mixed; boundary=\"mix\"")
+        let encodedName = filename.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: ".-_"))) ?? "file.pdf"
+        let pdf = Data("%PDF-1.4\n% fake pdf for tests\n".utf8).base64EncodedString()
+        let parts = """
+            --mix
+            Content-Type: text/plain; charset=utf-8
+            Content-Transfer-Encoding: quoted-printable
+
+            \(quotedPrintable(body))
+            --mix
+            Content-Type: application/pdf
+            Content-Disposition: attachment; filename*=utf-8''\(encodedName)
+            Content-Transfer-Encoding: base64
+
+            \(pdf)
+            --mix--
+            """
+        return crlf(h.joined(separator: "\n") + "\n\n" + parts)
+    }
+
+    static func encodeAddress(_ a: MailAddress) -> String {
+        guard let name = a.name else { return a.address }
+        return "\(encodeWord(name)) <\(a.address)>"
+    }
+
+    static func encodeWord(_ s: String) -> String {
+        s.allSatisfy(\.isASCII) ? s : "=?utf-8?B?\(Data(s.utf8).base64EncodedString())?="
+    }
+
+    static func quotedPrintable(_ s: String) -> String {
+        var out = ""
+        var lineLength = 0
+        for byte in Array(s.utf8) {
+            var piece: String
+            if byte == 10 { out += "\n"; lineLength = 0; continue }
+            if (byte >= 33 && byte <= 126 && byte != 61) || byte == 32 { piece = String(UnicodeScalar(byte)) }
+            else { piece = String(format: "=%02X", byte) }
+            if lineLength + piece.count > 75 { out += "=\n"; lineLength = 0 }
+            out += piece
+            lineLength += piece.count
+        }
+        return out
+    }
+
+    static func crlf(_ s: String) -> Data {
+        Data(s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n").utf8)
+    }
+}
+
+/// Seeds the local test server. Hard-refuses anything but localhost.
+public enum TestServerSeeder {
+    public static func seed(endpoint: IMAPEndpoint, password: String, now: Date = Date()) async throws -> Int {
+        guard endpoint.host == "127.0.0.1" || endpoint.host == "localhost" else {
+            throw MailSessionError.commandFailed(command: "seed", detail: "seeding is only allowed against localhost")
+        }
+        let seeds = TestMailFactory.mailbox(now: now)
+        return try await MailSession.open(endpoint: endpoint, password: password) { session in
+            for box in Set(seeds.map(\.mailbox)) where box != "INBOX" {
+                try await session.ensureMailbox(box)
+            }
+            for seed in seeds {
+                _ = try await session.append(to: seed.mailbox, message: seed.raw, flags: seed.flags)
+            }
+            return seeds.count
+        }
+    }
+}

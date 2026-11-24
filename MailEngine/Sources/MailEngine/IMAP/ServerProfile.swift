@@ -1,7 +1,7 @@
 import Foundation
 
 /// Connection settings for one IMAP account.
-public struct IMAPEndpoint: Sendable, Hashable {
+public struct IMAPEndpoint: Sendable, Hashable, Codable {
     public var host: String
     public var port: UInt16
     public var useTLS: Bool

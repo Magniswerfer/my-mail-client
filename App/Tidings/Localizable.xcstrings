@@ -1,0 +1,496 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indbakke"
+          }
+        }
+      }
+    },
+    "Bundles": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bundter"
+          }
+        }
+      }
+    },
+    "Folders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapper"
+          }
+        }
+      }
+    },
+    "Primary": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primær"
+          }
+        }
+      }
+    },
+    "Transactions": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transaktioner"
+          }
+        }
+      }
+    },
+    "Updates": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opdateringer"
+          }
+        }
+      }
+    },
+    "Newsletters": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyhedsbreve"
+          }
+        }
+      }
+    },
+    "Advertising": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reklamer"
+          }
+        }
+      }
+    },
+    "Social": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Socialt"
+          }
+        }
+      }
+    },
+    "Sent": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendt"
+          }
+        }
+      }
+    },
+    "Drafts": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kladder"
+          }
+        }
+      }
+    },
+    "Archive": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkiv"
+          }
+        }
+      }
+    },
+    "Trash": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Papirkurv"
+          }
+        }
+      }
+    },
+    "Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uønsket"
+          }
+        }
+      }
+    },
+    "Search mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søg i mail"
+          }
+        }
+      }
+    },
+    "Syncing…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synkroniserer…"
+          }
+        }
+      }
+    },
+    "Up to date": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opdateret"
+          }
+        }
+      }
+    },
+    "Offline": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
+          }
+        }
+      }
+    },
+    "Yesterday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I går"
+          }
+        }
+      }
+    },
+    "Nothing here": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet her"
+          }
+        }
+      }
+    },
+    "Add an account to start.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj en konto for at komme i gang."
+          }
+        }
+      }
+    },
+    "Mail will appear as it syncs.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail vises, efterhånden som den synkroniseres."
+          }
+        }
+      }
+    },
+    "No conversation selected": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen samtale valgt"
+          }
+        }
+      }
+    },
+    "Use j and k to move through your mail.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug j og k til at bevæge dig gennem din mail."
+          }
+        }
+      }
+    },
+    "Has attachment": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har vedhæftning"
+          }
+        }
+      }
+    },
+    "Flagged": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markeret"
+          }
+        }
+      }
+    },
+    "Unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ulæst"
+          }
+        }
+      }
+    },
+    "Attachments": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæftninger"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forbind"
+          }
+        }
+      }
+    },
+    "iCloud address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud-adresse"
+          }
+        }
+      }
+    },
+    "App-specific password": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App-specifik adgangskode"
+          }
+        }
+      }
+    },
+    "Add your iCloud Mail account": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj din iCloud Mail-konto"
+          }
+        }
+      }
+    },
+    "Go to Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til indbakke"
+          }
+        }
+      }
+    },
+    "Next Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Næste samtale"
+          }
+        }
+      }
+    },
+    "Previous Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forrige samtale"
+          }
+        }
+      }
+    },
+    "Accounts": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konti"
+          }
+        }
+      }
+    },
+    "Storage": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lager"
+          }
+        }
+      }
+    },
+    "Location": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Placering"
+          }
+        }
+      }
+    },
+    "Messages": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskeder"
+          }
+        }
+      }
+    },
+    "%lld new": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nye"
+          }
+        }
+      }
+    },
+    "%@: %lld of %lld": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld af %3$lld"
+          }
+        }
+      }
+    },
+    "%lld results · %@ ms": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld resultater · %2$@ ms"
+          }
+        }
+      }
+    },
+    "Tidings connects directly to iCloud over IMAP. Your mail stays on this Mac and with Apple.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings forbinder direkte til iCloud via IMAP. Din mail bliver på denne Mac og hos Apple."
+          }
+        }
+      }
+    },
+    "Use your primary @icloud.com address, not a custom-domain address. You can send from custom domains later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug din primære @icloud.com-adresse, ikke en adresse på eget domæne. Du kan sende fra egne domæner senere."
+          }
+        }
+      }
+    },
+    "Create an app-specific password at account.apple.com →": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opret en app-specifik adgangskode på account.apple.com →"
+          }
+        }
+      }
+    },
+    "Couldn't load the full message. Showing the stored text.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke hente hele beskeden. Viser den gemte tekst."
+          }
+        }
+      }
+    },
+    "Why this conversation is in %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvorfor denne samtale er i %@"
+          }
+        }
+      }
+    },
+    "Collapse bundle": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fold bundt sammen"
+          }
+        }
+      }
+    },
+    "Expand bundle": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fold bundt ud"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

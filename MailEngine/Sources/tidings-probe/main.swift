@@ -13,7 +13,7 @@ struct TidingsProbe: AsyncParsableCommand {
               security add-generic-password -s Tidings -a you@icloud.com -w
             (you'll be prompted; the password never appears on screen or in shell history).
             """,
-        subcommands: [Greeting.self, KeychainCheck.self, Capabilities.self, KeywordTestCommand.self, AICheck.self, BenchSearch.self]
+        subcommands: [Greeting.self, KeychainCheck.self, Capabilities.self, KeywordTestCommand.self, AICheck.self, BenchSearch.self, SeedTestServer.self]
     )
 }
 
@@ -242,5 +242,20 @@ struct BenchSearch: AsyncParsableCommand {
                      h50, h95, hMax, h95 < 30 ? "✓" : "✗ OVER"))
         print(String(format: "Facets (phase 2) — p50 %.2f ms, p95 %.2f ms, max %.2f ms  budget p95 < 100 ms %@",
                      f50, f95, fMax, f95 < 100 ? "✓" : "✗ OVER"))
+    }
+}
+
+struct SeedTestServer: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "seed-test-server",
+        abstract: "Fill the LOCAL Dovecot test server with realistic Danish/English mail. Refuses any other host."
+    )
+    @Option(help: "Test-server user (any name works on the local Dovecot).") var user = "magnus"
+    @Option var port: UInt16 = 31143
+
+    func run() async throws {
+        let endpoint = IMAPEndpoint(host: "127.0.0.1", port: port, useTLS: false, username: user)
+        let count = try await TestServerSeeder.seed(endpoint: endpoint, password: "tidings-test")
+        print("Seeded \(count) messages for user '\(user)' on 127.0.0.1:\(port).")
     }
 }
