@@ -54,6 +54,8 @@ final class AppModel {
     }
     var selectedThreadID: String? {
         didSet {
+            // A click, J/K or a removal moves the focus out of a ⌘A block: back to one row.
+            if !multiSelection.isEmpty, !(selectedThreadID.map(multiSelection.contains) ?? false) { multiSelection = [] }
             scheduleMarkRead()
             updateReader(debounced: isKeyboardNavigating)
             if let id = selectedThreadID, !isSearching, let index = visibleThreadIDs.firstIndex(of: id) {
@@ -61,6 +63,10 @@ final class AppModel {
             }
         }
     }
+    /// More than one selected conversation (⌘A selects the focused one and everything below),
+    /// always including `selectedThreadID`, which stays the focus the reader shows. Empty when
+    /// one row is selected. Triage acts on all of them (see `targetThreads`).
+    var multiSelection: Set<String> = []
     /// Where the selection last was in the list. If the selected conversation leaves the list
     /// without us moving it (another device, a sync), j/k/E carry on from here instead of
     /// starting over at the top.
@@ -608,6 +614,7 @@ final class AppModel {
             isKeyboardNavigating = false
             return
         }
+        multiSelection = []
         let ids = visibleThreadIDs
         guard !ids.isEmpty else { return }
         // If the selection has left the list, the row that took its place is "next".

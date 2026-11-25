@@ -133,6 +133,7 @@ struct RootView: View {
     @FocusState private var streamFocused: Bool
     /// Set after "g" for two-key navigation (G I, G S, G A, G P).
     @State private var pendingG: Date?
+    @State private var commandAMonitor: Any?
 
     var body: some View {
         @Bindable var model = model
@@ -188,6 +189,7 @@ struct RootView: View {
         .onKeyPress(.escape) {
             if model.isPaletteShown { model.isPaletteShown = false; return .handled }
             if model.isFolderPickerShown { model.isFolderPickerShown = false; return .handled }
+            if !searchFocused, model.clearMultiSelection() { return .handled }
             guard model.isSearching else { return .ignored }
             model.searchText = ""
             searchFocused = false
@@ -225,6 +227,11 @@ struct RootView: View {
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in openWindow(id: "compose", value: id) }
+            installCommandA()
+        }
+        .onDisappear {
+            if let commandAMonitor { NSEvent.removeMonitor(commandAMonitor) }
+            commandAMonitor = nil
         }
         .onChange(of: undoManager) { _, manager in model.undoManager = manager }
     }
@@ -263,9 +270,10 @@ struct RootView: View {
             }
             .help("Pin (P)").disabled(none)
             Menu {
-                if let thread = model.targetThreads.first {
-                    MoveMenuContent(thread: thread)
-                    Section("Folder") { FolderMenuContent(thread: thread) }
+                let targets = model.targetThreads
+                if let thread = targets.first {
+                    MoveMenuContent(thread: thread, threads: targets)
+                    Section("Folder") { FolderMenuContent(thread: thread, threads: targets) }
                 }
             } label: {
                 Label("Move to", systemImage: "tray.and.arrow.down")
@@ -297,6 +305,23 @@ struct RootView: View {
             // After the overlay or sheet has finished closing, or the focus change is lost.
             guard !isOverlayOpen, !searchFocused else { return }
             streamFocused = true
+        }
+    }
+
+    /// ⌘A in the stream: this conversation and everything below it, so one triage key handles
+    /// the lot. It has to be caught before the menus: Edit ▸ Select All would otherwise hand it
+    /// to the list, which selects every row. Text (search, ⌘K, the composer, the reader) keeps
+    /// ⌘A for selecting text.
+    private func installCommandA() {
+        guard commandAMonitor == nil else { return }
+        commandAMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers?.lowercased() == "a",
+                  streamFocused, !searchFocused, !isOverlayOpen, !model.isSearching,
+                  !(event.window?.firstResponder is NSText)
+            else { return event }
+            model.selectFocusedAndBelow()
+            return nil
         }
     }
 

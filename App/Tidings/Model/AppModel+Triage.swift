@@ -62,10 +62,57 @@ struct SnoozePreset: Identifiable, Hashable {
 extension AppModel {
     // MARK: Targets
 
-    /// What an action applies to: the selected conversation.
+    /// What an action applies to: the selected conversation, or every one in a ⌘A block
+    /// (in list order, so the focused one comes first).
     var targetThreads: [ThreadSummary] {
+        if !multiSelection.isEmpty {
+            let byID = Dictionary(threads.map { ($0.threadID, $0) }, uniquingKeysWith: { a, _ in a })
+            let selected = visibleThreadIDs.filter(multiSelection.contains).compactMap { byID[$0] }
+            if !selected.isEmpty { return selected }
+        }
         guard let id = selectedThreadID, let thread = threads.first(where: { $0.threadID == id }) else { return [] }
         return [thread]
+    }
+
+    // MARK: Selecting several
+
+    /// ⌘A: the focused conversation and every one below it as shown (open bundles included),
+    /// or all of them with nothing focused, so the next triage key handles the whole block.
+    func selectFocusedAndBelow() {
+        guard !isSearching else { return }
+        let ids = visibleThreadIDs
+        guard !ids.isEmpty else { return }
+        let start = selectedThreadID.flatMap { ids.firstIndex(of: $0) } ?? 0
+        let block = ids[start...]
+        multiSelection = block.count > 1 ? Set(block) : []
+        if selectedThreadID != block.first { selectedThreadID = block.first }
+    }
+
+    /// What the stream list shows selected: the ⌘A block, else the one conversation.
+    var listSelection: Set<String> {
+        multiSelection.isEmpty ? Set(selectedThreadID.map { [$0] } ?? []) : multiSelection
+    }
+
+    /// The list's own selection changing: a click (one row), or ⇧/⌘-click (several). The focus
+    /// stays put if it's still selected, else moves to the first selected row.
+    func setListSelection(_ ids: Set<String>) {
+        guard ids.count > 1 else {
+            multiSelection = []
+            if selectedThreadID != ids.first { selectedThreadID = ids.first }
+            return
+        }
+        multiSelection = ids
+        if !(selectedThreadID.map(ids.contains) ?? false) {
+            selectedThreadID = visibleThreadIDs.first(where: ids.contains) ?? ids.first
+        }
+    }
+
+    /// Esc: back to just the focused conversation. False when there was nothing to clear.
+    @discardableResult
+    func clearMultiSelection() -> Bool {
+        guard !multiSelection.isEmpty else { return false }
+        multiSelection = []
+        return true
     }
 
     /// The mailbox the current view shows (where moves start from).
@@ -167,9 +214,11 @@ extension AppModel {
         perform(thread.isReplyLater ? .clearReplyLater : .replyLater)
     }
 
-    /// The conversation to select after the current one leaves the list (next, else previous).
-    private func neighbour(after removed: [String]) -> String? {
+    /// The conversation to select after the current one leaves the list: the next one after
+    /// everything that leaves with it (a ⌘A block), else the one before.
+    private func neighbour(after removedIDs: [String]) -> String? {
         let ids = visibleThreadIDs
+        let removed = Set(removedIDs)
         let remaining = ids.enumerated().filter { !removed.contains($0.element) }
         guard let current = selectedThreadID, let index = ids.firstIndex(of: current) else {
             // The selection isn't in the list (it left it, or it's a search result): carry on
@@ -177,7 +226,8 @@ extension AppModel {
             guard !isSearching, let hint = selectionIndexHint, !remaining.isEmpty else { return selectedThreadID }
             return remaining.first { $0.offset >= hint }?.element ?? remaining.last?.element
         }
-        return remaining.first { $0.offset > index }?.element ?? remaining.last { $0.offset < index }?.element
+        let end = removed.contains(current) ? (ids.indices.last(where: { removed.contains(ids[$0]) }) ?? index) : index
+        return remaining.first { $0.offset > end }?.element ?? remaining.last { $0.offset < end }?.element
     }
 
     func togglePin() {
@@ -366,20 +416,25 @@ extension TriageKind {
     func toastText(count: Int) -> String {
         switch self {
         case .done: count == 1 ? String(localized: "Marked done") : String(localized: "\(count) conversations done")
-        case .trash: String(localized: "Moved to Trash")
-        case .junk: String(localized: "Moved to Junk")
-        case .moveToInbox: String(localized: "Moved to Inbox")
-        case .move(let path): String(localized: "Moved to \(MailboxState.displayName(path))")
+        case .trash: count == 1 ? String(localized: "Moved to Trash") : String(localized: "\(count) moved to \(MailboxRole.trash.title)")
+        case .junk: count == 1 ? String(localized: "Moved to Junk") : String(localized: "\(count) moved to \(MailboxRole.junk.title)")
+        case .moveToInbox: count == 1 ? String(localized: "Moved to Inbox") : String(localized: "\(count) moved to \(MailboxRole.inbox.title)")
+        case .move(let path):
+            count == 1 ? String(localized: "Moved to \(MailboxState.displayName(path))")
+                       : String(localized: "\(count) moved to \(MailboxState.displayName(path))")
         case .snooze(let until):
-            until.map { String(localized: "Snoozed until \($0.formatted(.dateTime.weekday(.wide).hour().minute()))") }
-                ?? String(localized: "Snoozed for someday")
-        case .unsnooze: String(localized: "Back in the Inbox")
-        case .pin: String(localized: "Pinned")
-        case .unpin: String(localized: "Unpinned")
-        case .markRead: String(localized: "Marked read")
-        case .markUnread: String(localized: "Marked unread")
+            if let when = until?.formatted(.dateTime.weekday(.wide).hour().minute()) {
+                count == 1 ? String(localized: "Snoozed until \(when)") : String(localized: "\(count) snoozed until \(when)")
+            } else {
+                count == 1 ? String(localized: "Snoozed for someday") : String(localized: "\(count) snoozed for someday")
+            }
+        case .unsnooze: count == 1 ? String(localized: "Back in the Inbox") : String(localized: "\(count) back in the Inbox")
+        case .pin: count == 1 ? String(localized: "Pinned") : String(localized: "\(count) pinned")
+        case .unpin: count == 1 ? String(localized: "Unpinned") : String(localized: "\(count) unpinned")
+        case .markRead: count == 1 ? String(localized: "Marked read") : String(localized: "\(count) marked read")
+        case .markUnread: count == 1 ? String(localized: "Marked unread") : String(localized: "\(count) marked unread")
         case .replyLater: count == 1 ? String(localized: "Set aside to reply later") : String(localized: "\(count) set aside to reply later")
-        case .clearReplyLater: String(localized: "Removed from Reply Later")
+        case .clearReplyLater: count == 1 ? String(localized: "Removed from Reply Later") : String(localized: "\(count) removed from Reply Later")
         }
     }
 }

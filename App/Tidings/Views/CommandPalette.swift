@@ -62,6 +62,8 @@ extension AppModel {
                        symbol: "pin.circle", keys: "G P") { self.pinnedOnly.toggle() },
             AppCommand(id: "next", title: String(localized: "Next Conversation"), symbol: "chevron.down", keys: "J") { self.moveSelection(1) },
             AppCommand(id: "previous", title: String(localized: "Previous Conversation"), symbol: "chevron.up", keys: "K") { self.moveSelection(-1) },
+            AppCommand(id: "selectBelow", title: String(localized: "Select This and Everything Below"), symbol: "list.bullet.below.rectangle",
+                       keys: "⌘A", isEnabled: !threads.isEmpty && !isSearching) { self.selectFocusedAndBelow() },
             AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.selection = .inbox },
             AppCommand(id: "goSnoozed", title: String(localized: "Go to Snoozed"), symbol: "clock", keys: "G S") { self.selection = .snoozed },
             AppCommand(id: "goReplyLater", title: String(localized: "Go to Set Aside"), symbol: "arrowshape.turn.up.left.circle", keys: "G L") {

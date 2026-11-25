@@ -49,6 +49,8 @@ extension AppModel {
         else { return }
         // Moved on purpose: these leave the bundle or category they're held in.
         releaseHolds(threads.map(\.threadID))
+        // A moved ⌘A block is done with; back to one row.
+        multiSelection = []
         let undo: @MainActor () -> Void = { [weak self] in
             self?.releaseHolds(threads.map(\.threadID))
             try? self?.store.restoreCategories(result.previous)

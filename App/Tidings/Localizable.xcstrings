@@ -5540,6 +5540,106 @@
           }
         }
       }
+    },
+    "Select This and Everything Below": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg denne og alt herunder"
+          }
+        }
+      }
+    },
+    "%lld conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld samtaler"
+          }
+        }
+      }
+    },
+    "%lld snoozed until %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld udsat til %2$@"
+          }
+        }
+      }
+    },
+    "%lld snoozed for someday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld udsat til en dag"
+          }
+        }
+      }
+    },
+    "%lld back in the Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld tilbage i indbakken"
+          }
+        }
+      }
+    },
+    "%lld pinned": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fastgjort"
+          }
+        }
+      }
+    },
+    "%lld unpinned": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld frigjort"
+          }
+        }
+      }
+    },
+    "%lld marked read": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld markeret som læst"
+          }
+        }
+      }
+    },
+    "%lld marked unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld markeret som ulæst"
+          }
+        }
+      }
+    },
+    "%lld removed from Reply Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fjernet fra Svar senere"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
