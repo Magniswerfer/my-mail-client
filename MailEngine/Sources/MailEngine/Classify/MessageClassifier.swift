@@ -18,6 +18,7 @@ public enum ClassificationReason: Sendable, Hashable {
     case calendarReply                     // someone answered your invitation
     case learned(confidence: Int)          // fast classifier, percent
     case onDevice(summary: String)         // Foundation Models, its own short reason
+    case rule(name: String)                // one of your rules set it
 
     public var encoded: String {
         switch self {
@@ -35,6 +36,7 @@ public enum ClassificationReason: Sendable, Hashable {
         case .calendarReply: "inviteReply"
         case .learned(let p): "learned|\(p)"
         case .onDevice(let s): "ai|\(s)"
+        case .rule(let name): "rule|\(name)"
         }
     }
 
@@ -56,6 +58,7 @@ public enum ClassificationReason: Sendable, Hashable {
         case "inviteReply": self = .calendarReply
         case "learned": self = .learned(confidence: Int(arg) ?? 0)
         case "ai": self = .onDevice(summary: arg)
+        case "rule": self = .rule(name: arg)
         default: return nil
         }
     }
@@ -63,7 +66,7 @@ public enum ClassificationReason: Sendable, Hashable {
     /// How sure the deciding layer is; low values are candidates for the next layer.
     var confidence: Double {
         switch self {
-        case .sentByYou, .youMovedThisSender, .youMovedThisConversation: 1
+        case .sentByYou, .youMovedThisSender, .youMovedThisConversation, .rule: 1
         case .calendarInvite, .calendarReply: 0.95
         case .socialNetwork, .mailingListUnsubscribe: 0.9
         case .transactional, .promotional: 0.85

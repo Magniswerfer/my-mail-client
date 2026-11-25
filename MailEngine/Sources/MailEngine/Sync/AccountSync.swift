@@ -278,6 +278,12 @@ public actor AccountSync {
             emit(.mailboxProgress(mailbox: path, done: done, total: new.count))
         }
 
+        // A mailbox's first sync (a new account or device, or the server reset its UIDs) brings in
+        // mail that was already there, not mail that just arrived: rules don't run on it.
+        if saved?.uidValidity == nil || saved?.uidValidity != selected.uidValidity.map(Int64.init) {
+            try store.markRulesChecked(accountID: account.id, mailbox: path)
+        }
+
         try store.save(MailboxState(
             accountID: account.id, path: path, role: role,
             uidValidity: selected.uidValidity.map(Int64.init), uidNext: selected.uidNext.map(Int64.init),
