@@ -63,6 +63,13 @@ enum Platform {
         #endif
     }
 
+    /// Brings the app to the front (a notification was clicked).
+    @MainActor static func activateApp() {
+        #if os(macOS)
+        NSApplication.shared.activate()
+        #endif
+    }
+
     @MainActor static func openExternally(_ url: URL) {
         #if os(macOS)
         NSWorkspace.shared.open(url)

@@ -6,6 +6,8 @@ public struct RuleReport: Sendable {
     public var matched = 0
     /// Runs whose rules asked for a notification.
     public var notify: [RuleRun] = []
+    /// Everything that arrived in the Inbox since the last pass (for notifications).
+    public var arrived: [StoredMessage] = []
     public init() {}
 }
 
@@ -19,6 +21,13 @@ extension AccountSync {
         let rules = try store.rules().filter { $0.isEnabled && $0.isComplete }
         let (candidates, upTo) = try store.ruleCandidates(accountID: account.id)
         var report = RuleReport()
+        report.arrived = candidates
+        // Muted conversations: new messages go straight to the Archive (SPEC §11).
+        let muted = try store.mutedThreadIDs()
+        for message in candidates {
+            guard let thread = message.threadID, muted.contains(thread) else { continue }
+            try perform(.done, threadIDs: [thread])
+        }
         if !rules.isEmpty {
             for message in candidates {
                 report.checked += 1

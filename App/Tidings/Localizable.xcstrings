@@ -1,6 +1,146 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%lld new messages": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nye beskeder"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifikationer"
+          }
+        }
+      }
+    },
+    "Notify me about new mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv mig besked om ny mail"
+          }
+        }
+      }
+    },
+    "Never for bundles. Mail that arrives while you're away is gathered into one notification.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aldrig for bundter. Mail, der kommer, mens du er væk, samles i én notifikation."
+          }
+        }
+      }
+    },
+    "Notify me about": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv mig besked om"
+          }
+        }
+      }
+    },
+    "Primary mail from people": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primær mail fra personer"
+          }
+        }
+      }
+    },
+    "Only from VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun fra VIP'er"
+          }
+        }
+      }
+    },
+    "Pinned conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fastgjorte samtaler"
+          }
+        }
+      }
+    },
+    "Replies when you're waiting for one": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar, når du venter på et"
+          }
+        }
+      }
+    },
+    "Rules that say “Notify me”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler, der siger “Giv mig besked”"
+          }
+        }
+      }
+    },
+    "Add an address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj en adresse"
+          }
+        }
+      }
+    },
+    "Suggest from Who You Write To": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslå ud fra, hvem du skriver til"
+          }
+        }
+      }
+    },
+    "VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP'er"
+          }
+        }
+      }
+    },
+    "VIPs' Primary mail always notifies. With “Only from VIPs”, other people's doesn't.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP'ers primære mail giver altid besked. Med “Kun fra VIP'er” gør andres ikke."
+          }
+        }
+      }
+    },
     "Related": {
       "localizations": {
         "da": {

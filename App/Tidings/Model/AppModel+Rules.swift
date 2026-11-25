@@ -93,23 +93,29 @@ extension AppModel {
         ruleTask = Task { [weak self] in
             var matched = 0
             var notify: [RuleRun] = []
+            var arrived: [StoredMessage] = []
             for sync in syncs {
                 guard let report = try? await sync.runRules(engine: engine) else { continue }
                 matched += report.matched
                 notify += report.notify
+                arrived += report.arrived
             }
             guard let self else { return }
             self.ruleTask = nil
-            if matched > 0 {
+            if matched > 0 || !arrived.isEmpty {
                 self.ruleCounts = (try? self.store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
                 self.reload()
             }
-            self.deliverRuleNotifications(notify)
+            await self.deliverNotifications(arrived: arrived, ruleRuns: notify)
         }
     }
 
-    /// Rules asked to notify about these; M6 turns them into system notifications.
-    func deliverRuleNotifications(_ runs: [RuleRun]) {}
+    /// New mail that deserves it becomes a system notification (SPEC §10).
+    func deliverNotifications(arrived: [StoredMessage], ruleRuns: [RuleRun]) async {
+        let notifications = notificationPolicy.notifications(for: arrived.sorted { $0.date < $1.date }, ruleRuns: ruleRuns,
+                                                             ownAddresses: ownAddresses, store: store)
+        await notifier.post(notifications) { n in n.messageID.flatMap(MessageLink.url) }
+    }
 
     /// "Run on Inbox now", for every account.
     func runOnInbox(_ rule: Rule) {

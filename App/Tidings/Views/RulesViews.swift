@@ -421,8 +421,7 @@ struct ConditionEditor: View {
 enum ActionKind: CaseIterable, Hashable {
     case category, pin, markRead, replyLater, done, snooze, folder, notify
 
-    /// Notifications arrive in M6.
-    static var available: [ActionKind] { allCases.filter { $0 != .notify } }
+    static var available: [ActionKind] { allCases }
 
     var title: String {
         switch self {

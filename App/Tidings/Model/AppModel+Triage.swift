@@ -92,6 +92,7 @@ extension AppModel {
             show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: box))
         }
         let ids = Set(targets.map(\.threadID))
+        if kind == .done || kind == .markRead || kind == .trash || kind == .junk { ids.forEach(notifier.clear) }
         let removes = removesFromCurrentView(kind)
         if removes {
             // One motion: the row leaves and the selection moves on together, before the engine
