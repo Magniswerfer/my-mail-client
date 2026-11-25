@@ -215,6 +215,22 @@ extension AccountSync {
         try perform(.unsnooze, threadIDs: threads)
     }
 
+    // MARK: Our keywords on servers that drop them
+
+    /// Some servers (iCloud, on ordinary Inbox mail) answer OK to a custom keyword but never
+    /// store it. We learn that from reading flags back after a STORE (`execute`), and from
+    /// then on a sync keeps our keywords locally instead of taking server truth for them.
+    /// Reply Later and snooze wake times then live on this device only, not across devices.
+    static let keepsKeywordsKey = "serverKeepsKeywords"
+
+    /// Our own keywords: Reply Later and the snooze keywords.
+    static func isOwnKeyword(_ flag: String) -> Bool { flag.hasPrefix("$Tidings") }
+
+    /// False once the server was seen dropping our keywords; nil until a STORE has shown either way.
+    public func serverKeepsKeywords() -> Bool? {
+        (try? store.setting(Self.keepsKeywordsKey, accountID: account.id)).map { $0 == "true" }
+    }
+
     // MARK: Draining the queue
 
     /// Applies queued actions in order. Stops at the first connection-level failure so later
@@ -271,6 +287,18 @@ extension AccountSync {
                 if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
                 if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
                 SyncLog.info("flags: \(mailbox) uids \(uids) +\(add) -\(remove)")
+                // Read the flags back on the same connection: do our keywords stick on this server?
+                if let check = try? await session.fetchFlags(uids: uids) {
+                    for (uid, state) in check.sorted(by: { $0.key < $1.key }) {
+                        SyncLog.info("flags: \(mailbox) uid \(uid) now [\(state.flags.sorted().joined(separator: " "))] modseq \(state.modSeq.map(String.init) ?? "-")")
+                    }
+                    let ours = add.filter(Self.isOwnKeyword)
+                    if !ours.isEmpty, !check.isEmpty {
+                        let kept = check.values.allSatisfy { state in ours.allSatisfy(state.flags.contains) }
+                        try? store.setSetting(Self.keepsKeywordsKey, kept ? "true" : "false", accountID: account.id)
+                        if !kept { SyncLog.info("server accepted but didn't keep \(ours): keeping our keywords locally") }
+                    }
+                }
             }
         }
     }

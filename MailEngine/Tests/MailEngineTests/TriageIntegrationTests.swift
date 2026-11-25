@@ -147,6 +147,30 @@ import Testing
         #expect(try f.thread("website").isReplyLater)
     }
 
+    /// iCloud answers OK to our keywords on Inbox mail but doesn't store them. Once that's been
+    /// seen, a sync keeps our keywords locally; on servers that keep them, server truth wins.
+    @Test func ourKeywordsStayLocalOnServersThatDropThem() async throws {
+        guard let f = try await fixture() else { return }
+        let sofie = try f.thread("website")
+        try await f.sync.perform(.replyLater, threadIDs: [sofie.threadID])
+        try await f.sync.processPendingActions()
+        #expect(await f.sync.serverKeepsKeywords() == true)   // Dovecot keeps them
+
+        // The keyword vanishes on the server, as it does on iCloud.
+        try await MailSession.open(endpoint: f.endpoint, password: "tidings-test", profile: .iCloudSimulation) { session in
+            _ = try await session.select("INBOX")
+            try await session.store(uids: [sofie.latest.uid], .remove, flags: [replyLaterKeyword])
+        }
+
+        try f.store.setSetting(AccountSync.keepsKeywordsKey, "false", accountID: "t")
+        try await f.sync.syncOnce()
+        #expect(try f.thread("website").isReplyLater)
+
+        try f.store.setSetting(AccountSync.keepsKeywordsKey, "true", accountID: "t")
+        try await f.sync.syncOnce()
+        #expect(try f.thread("website").isReplyLater == false)
+    }
+
     @Test func snoozeRoundTripsThroughServerKeywords() async throws {
         guard let f = try await fixture() else { return }
         let sofie = try f.thread("website")

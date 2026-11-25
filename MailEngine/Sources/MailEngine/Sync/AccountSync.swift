@@ -231,15 +231,21 @@ public actor AccountSync {
         if !vanished.isEmpty { try store.deleteMessages(accountID: account.id, mailbox: path, uids: vanished) }
 
         var flagChanges: [UInt32: String] = [:]
+        // On a server that doesn't store our keywords, its flags never have them: keep ours.
+        let keepOurKeywords = serverKeepsKeywords() == false
         for s in summaries where !inFlightUIDs.contains(s.uid) {
-            let flags = s.flags.sorted().joined(separator: " ")
-            if let old = known[s.uid], old != flags {
-                flagChanges[s.uid] = flags
-                let lost = old.split(separator: " ").filter { $0.hasPrefix("$Tidings") && !s.flags.contains(String($0)) }
-                if !lost.isEmpty {
-                    SyncLog.info("server dropped \(lost) on \(path) uid \(s.uid): was [\(old)] now [\(flags)]")
+            guard let old = known[s.uid] else { continue }
+            var serverFlags = s.flags
+            let ours = old.split(separator: " ").map(String.init).filter { Self.isOwnKeyword($0) && !serverFlags.contains($0) }
+            if !ours.isEmpty {
+                if keepOurKeywords {
+                    serverFlags += ours
+                } else {
+                    SyncLog.info("server dropped \(ours) on \(path) uid \(s.uid): was [\(old)] now [\(s.flags.sorted().joined(separator: " "))] modseq \(s.modSeq.map(String.init) ?? "-")")
                 }
             }
+            let flags = serverFlags.sorted().joined(separator: " ")
+            if old != flags { flagChanges[s.uid] = flags }
         }
         if !flagChanges.isEmpty { try store.updateFlags(accountID: account.id, mailbox: path, changes: flagChanges) }
 

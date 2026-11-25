@@ -40,6 +40,8 @@ Sources: MailKit #970, evolution-list 2021, nextcloud/mail #13889 (Oct 2026), po
 ## Keywords
 `PERMANENTFLAGS (... \*)` **V**. Third-party keywords: **V** persisted, visible from a second connection, bump MODSEQ, survive COPY+EXPUNGE moves, ≥ 41 per message accepted. Not added to the mailbox `FLAGS` list. Whether Apple Mail/iCloud.com preserve them when changing flags: **U**.
 
+**2026-11-25, contradicts the above for real mail — V (app sync log):** on ordinary INBOX messages, `UID STORE n +FLAGS.SILENT ($TidingsReplyLater)` returns OK and bumps the message's MODSEQ, but `UID FETCH n (FLAGS)` straight after, on the same connection, shows no keyword. Every attempt, with Apple Mail not running. The M0 test only covered a message we APPENDed to `Tidings-Test`; why INBOX mail differs (mailbox, message origin, or a server change since M0) is **U**. The engine now reads flags back after each STORE and, once it sees our keywords dropped, keeps them locally for that account (`serverKeepsKeywords` account setting): Reply Later and snooze wake times are then per-device on iCloud.
+
 ## Auth
 App-specific password required (2FA on). IMAP user = address (or local part); SMTP = full address. XOAUTH2 advertised but not available to new third parties. **S**
 
