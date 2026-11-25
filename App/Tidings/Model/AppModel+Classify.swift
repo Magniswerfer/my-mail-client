@@ -46,7 +46,10 @@ extension AppModel {
         guard !threads.isEmpty,
               let result = try? store.moveConversations(threads.map(\.threadID), to: category, ownAddresses: ownAddresses)
         else { return }
+        // Moved on purpose: these leave the bundle or category they're held in.
+        releaseHolds(threads.map(\.threadID))
         let undo: @MainActor () -> Void = { [weak self] in
+            self?.releaseHolds(threads.map(\.threadID))
             try? self?.store.restoreCategories(result.previous)
             if let sender = result.promotedSender { try? self?.store.forgetSenderRule(sender) }
             self?.toast = nil
@@ -75,7 +78,12 @@ extension AppModel {
         })?.map { MailStore.CategorySnapshot(id: $0["id"], category: MailCategory(rawValue: $0["category"]) ?? .primary,
                                             reason: $0["classificationReason"]) } ?? []
         guard (try? store.remember(category: category, forSender: sender)) != nil else { return }
+        let fromSender = { [weak self] in
+            self?.threads.filter { $0.latest.fromAddress.lowercased() == sender.lowercased() }.map(\.threadID) ?? []
+        }
+        releaseHolds(fromSender())
         let undo: @MainActor () -> Void = { [weak self] in
+            self?.releaseHolds(fromSender())
             try? self?.store.forgetSenderRule(sender)
             try? self?.store.restoreCategories(previous)
             self?.toast = nil

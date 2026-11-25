@@ -58,13 +58,16 @@ extension AppModel {
             AppCommand(id: "previous", title: String(localized: "Previous Conversation"), symbol: "chevron.up", keys: "K") { self.moveSelection(-1) },
             AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.selection = .inbox },
             AppCommand(id: "goSnoozed", title: String(localized: "Go to Snoozed"), symbol: "clock", keys: "G S") { self.selection = .snoozed },
+            AppCommand(id: "goReplyLater", title: String(localized: "Go to Set Aside"), symbol: "arrowshape.turn.up.left.circle", keys: "G L") {
+                self.selection = .replyLater
+            },
         ]
         let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         list += [
             AppCommand(id: "replyLater", title: thread?.isReplyLater == true ? String(localized: "Remove from Reply Later") : String(localized: "Reply Later"),
                        symbol: "arrowshape.turn.up.left.circle", keys: "L", isEnabled: hasSelection) { self.toggleReplyLater() },
             AppCommand(id: "replySession", title: String(localized: "Answer Reply Later Pile"), symbol: "arrowshape.turn.up.left.2.circle",
-                       keys: "⌘⇧L", isEnabled: !replyLaterThreads.isEmpty) { self.startReplySession() },
+                       keys: "⌘⇧L", isEnabled: replyLaterCount > 0) { self.startReplySession() },
             AppCommand(id: "addReminder", title: String(localized: "Add to Reminders"), symbol: "checklist", keys: "⌃⌘R",
                        isEnabled: hasSelection) { self.addToReminders() },
             AppCommand(id: "copyLink", title: String(localized: "Copy Link to Message"), symbol: "link", keys: nil,

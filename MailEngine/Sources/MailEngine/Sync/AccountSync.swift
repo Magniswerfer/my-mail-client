@@ -233,7 +233,13 @@ public actor AccountSync {
         var flagChanges: [UInt32: String] = [:]
         for s in summaries where !inFlightUIDs.contains(s.uid) {
             let flags = s.flags.sorted().joined(separator: " ")
-            if let old = known[s.uid], old != flags { flagChanges[s.uid] = flags }
+            if let old = known[s.uid], old != flags {
+                flagChanges[s.uid] = flags
+                let lost = old.split(separator: " ").filter { $0.hasPrefix("$Tidings") && !s.flags.contains(String($0)) }
+                if !lost.isEmpty {
+                    SyncLog.info("server dropped \(lost) on \(path) uid \(s.uid): was [\(old)] now [\(flags)]")
+                }
+            }
         }
         if !flagChanges.isEmpty { try store.updateFlags(accountID: account.id, mailbox: path, changes: flagChanges) }
 

@@ -8,7 +8,13 @@ struct ReplySession: Identifiable {
 }
 
 extension AppModel {
-    var replyLaterThreads: [ThreadSummary] { threads.filter(\.isReplyLater) }
+    /// Everything set aside, whichever list is on screen.
+    var replyLaterThreads: [ThreadSummary] {
+        switch selection {
+        case .inbox where !pinnedOnly, .replyLater: threads.filter(\.isReplyLater)
+        default: ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? []).filter(\.isReplyLater)
+        }
+    }
 
     /// "Answer them now": opens the session with the pile as it is.
     func startReplySession() {
@@ -93,16 +99,6 @@ struct ReplySessionView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { leaveDraftIfUntouched(); dismiss() }
                 }
-                if current != nil {
-                    ToolbarItemGroup(placement: .secondaryAction) {
-                        Button { skip() } label: { Label("Skip", systemImage: "forward") }
-                            .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
-                            .help("Leave it in Reply Later (⌥⌘→)")
-                        Button { doneWithoutReply() } label: { Label("Done Without Replying", systemImage: "checkmark.circle") }
-                            .keyboardShortcut("e", modifiers: [.command, .option])
-                            .help("Take it off the pile and mark it done (⌥⌘E)")
-                    }
-                }
             }
         }
         .macFrame(minWidth: 1000, minHeight: 720)
@@ -134,16 +130,33 @@ struct ReplySessionView: View {
             Divider()
             Group {
                 if let compose {
-                    ComposeView(model: compose, close: { finished() })
+                    ComposeView(model: compose, close: { finished() }, embeddedActions: AnyView(sessionActions))
                         .id(compose.draftID)
                 } else if loading {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ContentUnavailableView("Couldn't start a reply", systemImage: "exclamationmark.triangle",
-                                           description: Text("The message may not be downloaded yet. Skip it or try again later."))
+                    ContentUnavailableView {
+                        Label("Couldn't start a reply", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text("The message may not be downloaded yet. Skip it or try again later.")
+                    } actions: {
+                        sessionActions.buttonStyle(.glass)
+                    }
                 }
             }
-            .frame(height: Platform.isPhone ? 300 : 320)
+            .frame(height: Platform.isPhone ? 340 : 380)
+        }
+    }
+
+    /// Next to Send in the composer's bar: leave this one for later, or finish it without a reply.
+    private var sessionActions: some View {
+        HStack(spacing: 10) {
+            Button { skip() } label: { Label("Skip", systemImage: "forward") }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .help("Leave it in Reply Later (⌥⌘→)")
+            Button { doneWithoutReply() } label: { Label("Done Without Replying", systemImage: "checkmark.circle") }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+                .help("Take it off the pile and mark it done (⌥⌘E)")
         }
     }
 
@@ -215,7 +228,7 @@ struct ShortcutsView: View {
                               uniquingKeysWith: { a, _ in a })
         func pick(_ ids: [String]) -> [Entry] { ids.compactMap { byID[$0] } }
         return [
-            (String(localized: "Move around"), pick(["next", "previous", "goInbox", "goSnoozed", "goOutbox", "pinnedOnly"]) + [
+            (String(localized: "Move around"), pick(["next", "previous", "goInbox", "goSnoozed", "goReplyLater", "goOutbox", "pinnedOnly"]) + [
                 Entry(keys: "/", title: String(localized: "Search")),
                 Entry(keys: "⌘K", title: String(localized: "Command Palette")),
                 Entry(keys: "?", title: String(localized: "Keyboard Shortcuts")),

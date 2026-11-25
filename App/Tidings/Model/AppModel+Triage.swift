@@ -71,7 +71,7 @@ extension AppModel {
     /// The mailbox the current view shows (where moves start from).
     var sourceMailbox: String {
         switch selection {
-        case .inbox, .category, .outbox: "INBOX"
+        case .inbox, .category, .outbox, .replyLater: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
         }
@@ -90,14 +90,21 @@ extension AppModel {
             show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: box))
         }
         let ids = Set(targets.map(\.threadID))
-        if kind.removesFromView {
+        let removes = removesFromCurrentView(kind)
+        if removes {
             // One motion: the row leaves and the selection moves on together, before the engine
             // has written anything (it catches up a moment later; see `pendingRemovals`).
             pendingRemovals.formUnion(ids)
-            withAnimation(.snappy(duration: 0.22)) {
+            // The first press animates; presses in quick succession don't wait on animations.
+            let animation: Animation? = Date().timeIntervalSince(lastRemovalAt) < 0.5 ? nil : .snappy(duration: 0.18)
+            lastRemovalAt = Date()
+            // Like j/k: the reader follows once you pause, so rapid E never waits on rendering mail.
+            isKeyboardNavigating = true
+            withAnimation(animation) {
                 self.threads.removeAll { ids.contains($0.threadID) }
                 selectedThreadID = nextSelection
             }
+            isKeyboardNavigating = false
         }
         let source = sourceMailbox
         Task {
@@ -113,8 +120,10 @@ extension AppModel {
             }
             // Undo was pressed before the engine finished: reverse right away.
             if box.undone { await undo(box) }
+            // The store has the change now, so these can't come back on the next reload.
             pendingRemovals.subtract(ids)
-            reload()
+            // Removals already show; batch their reloads. Flag changes (pin, read) show on reload.
+            if removes { scheduleReload() } else { reload() }
         }
         return box
     }
@@ -137,6 +146,22 @@ extension AppModel {
         return box
     }
 
+    /// Whether an action takes the conversation out of the list on screen.
+    func removesFromCurrentView(_ kind: TriageKind) -> Bool {
+        switch kind {
+        // Set aside: it leaves the Inbox and categories for Set Aside (and the Inbox's Reply
+        // Later row). Elsewhere (Snoozed, folders) it only gets marked.
+        case .replyLater:
+            switch selection {
+            case .inbox, .category: true
+            default: false
+            }
+        // Taken off the pile: it leaves Set Aside.
+        case .clearReplyLater: selection == .replyLater
+        default: kind.removesFromView
+        }
+    }
+
     func toggleReplyLater() {
         guard let thread = targetThreads.first else { return }
         perform(thread.isReplyLater ? .clearReplyLater : .replyLater)
@@ -145,8 +170,13 @@ extension AppModel {
     /// The conversation to select after the current one leaves the list (next, else previous).
     private func neighbour(after removed: [String]) -> String? {
         let ids = visibleThreadIDs
-        guard let current = selectedThreadID, let index = ids.firstIndex(of: current) else { return selectedThreadID }
         let remaining = ids.enumerated().filter { !removed.contains($0.element) }
+        guard let current = selectedThreadID, let index = ids.firstIndex(of: current) else {
+            // The selection isn't in the list (it left it, or it's a search result): carry on
+            // from where it was in the list, if it was there at all.
+            guard !isSearching, let hint = selectionIndexHint, !remaining.isEmpty else { return selectedThreadID }
+            return remaining.first { $0.offset >= hint }?.element ?? remaining.last?.element
+        }
         return remaining.first { $0.offset > index }?.element ?? remaining.last { $0.offset < index }?.element
     }
 
@@ -184,7 +214,7 @@ extension AppModel {
 
     /// Done for everything in the Inbox that isn't pinned (or for one bundle).
     func requestSweep(bundle: MailCategory? = nil) {
-        let candidates = threads.filter { !$0.isPinned && (bundle == nil || $0.latest.category == bundle) }
+        let candidates = threads.filter { !$0.isPinned && (bundle == nil || displayCategory($0) == bundle) }
         guard !candidates.isEmpty else { return }
         let title = bundle.map { String(localized: "Mark all \($0.title) done?") } ?? String(localized: "Sweep the Inbox?")
         sweepCandidate = SweepRequest(threadIDs: candidates.map(\.threadID), title: title)

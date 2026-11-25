@@ -46,7 +46,7 @@ extension AppModel {
             : message.mailbox == AccountSync.snoozedMailbox ? .snoozed
             : .mailbox(accountID: message.accountID, path: message.mailbox)
         if selection != place { selection = place }
-        if !searchText.isEmpty { searchText = "" }
+        endSearch()
         selectedThreadID = threadID
         return true
     }

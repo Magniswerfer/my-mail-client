@@ -1,6 +1,56 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Set Aside": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagt til side"
+          }
+        }
+      }
+    },
+    "Go to Set Aside": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til Lagt til side"
+          }
+        }
+      }
+    },
+    "Nothing set aside": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet lagt til side"
+          }
+        }
+      }
+    },
+    "Press L on a conversation to reply to it later.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tryk L på en samtale for at svare på den senere."
+          }
+        }
+      }
+    },
+    "Conversations you set aside to reply to later (L)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Samtaler, du har lagt til side for at svare på senere (L)"
+          }
+        }
+      }
+    },
     "Inbox": {
       "localizations": {
         "da": {

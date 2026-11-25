@@ -28,6 +28,10 @@ struct ComposeView: View {
     @Environment(AppModel.self) private var app
     @Bindable var model: ComposeModel
     let close: () -> Void
+    /// Set when the composer sits inside another view (the Reply Later session): its actions go
+    /// in a bar under the editor, with these extra ones next to Send, instead of the window
+    /// toolbar, where the host's own buttons crowd them out.
+    var embeddedActions: AnyView? = nil
     @State private var isImporting = false
     @State private var isSendLaterShown = false
     @State private var isAvailabilityShown = false
@@ -60,9 +64,13 @@ struct ComposeView: View {
                     .padding(.horizontal, 16).padding(.bottom, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if let embeddedActions {
+                Divider()
+                actionBar(embeddedActions)
+            }
         }
         .navigationTitle(model.subject.isEmpty ? String(localized: "New Message") : model.subject)
-        .toolbar { toolbar }
+        .toolbar { if embeddedActions == nil { toolbar } }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { model.attach(urls: urls) }
         }
@@ -170,6 +178,27 @@ struct ComposeView: View {
         }
     }
 
+    // MARK: Action bar (embedded)
+
+    private func actionBar(_ extra: AnyView) -> some View {
+        HStack(spacing: 10) {
+            Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .help("Attach files (⌘⇧A)")
+            Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
+                .keyboardShortcut("a", modifiers: [.command, .option])
+                .help("Insert free times from your calendar (⌥⌘A)")
+            Spacer(minLength: 12)
+            extra
+            sendButton
+                .buttonStyle(.glassProminent)
+                .fixedSize()
+        }
+        .labelStyle(.titleAndIcon)
+        .buttonStyle(.glass)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
     // MARK: Toolbar
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -194,23 +223,28 @@ struct ComposeView: View {
                 close()
             } label: { Label("Discard", systemImage: "trash") }
                 .help("Discard draft")
-            Menu {
-                if model.isReply {
-                    Button(AssistSettings.sendAndDone ? String(localized: "Send and Keep in Inbox") : String(localized: "Send and Mark Done")) {
-                        Task { await send(at: nil, markDone: !AssistSettings.sendAndDone) }
-                    }
-                    .keyboardShortcut(.return, modifiers: [.command, .option])
-                }
-                Button("Send Later…") { isSendLaterShown = true }
-            } label: {
-                Label("Send", systemImage: "paperplane.fill")
-            } primaryAction: {
-                Task { await send(at: nil) }
-            }
-            .keyboardShortcut(.return, modifiers: .command)
-            .help(model.isReply && AssistSettings.sendAndDone ? "Send and mark the conversation done (⌘↩)" : "Send (⌘↩)")
-            .disabled(isSending)
+            sendButton
         }
+    }
+
+    /// Send (⌘↩), with Send Later and the other Send-and-Done choice in its menu.
+    private var sendButton: some View {
+        Menu {
+            if model.isReply {
+                Button(AssistSettings.sendAndDone ? String(localized: "Send and Keep in Inbox") : String(localized: "Send and Mark Done")) {
+                    Task { await send(at: nil, markDone: !AssistSettings.sendAndDone) }
+                }
+                .keyboardShortcut(.return, modifiers: [.command, .option])
+            }
+            Button("Send Later…") { isSendLaterShown = true }
+        } label: {
+            Label("Send", systemImage: "paperplane.fill")
+        } primaryAction: {
+            Task { await send(at: nil) }
+        }
+        .keyboardShortcut(.return, modifiers: .command)
+        .help(model.isReply && AssistSettings.sendAndDone ? "Send and mark the conversation done (⌘↩)" : "Send (⌘↩)")
+        .disabled(isSending)
     }
 
     private var sendLaterSheet: some View {

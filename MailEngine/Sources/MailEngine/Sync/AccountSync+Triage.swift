@@ -231,6 +231,7 @@ extension AccountSync {
                 try await execute(action, session)
                 try store.deletePending(id: id)
             } catch let error as MailSessionError {
+                SyncLog.info("queued action failed (attempt \(pending.attempts + 1)): \(error.description)")
                 pending.attempts += 1
                 pending.lastError = error.description
                 if pending.attempts >= Self.maxAttempts {
@@ -262,10 +263,14 @@ extension AccountSync {
             let byMailbox = Dictionary(grouping: try store.locations(localIDs: localIDs), by: \.mailbox)
             for (mailbox, group) in byMailbox {
                 let uids = group.map(\.uid).filter { $0 < provisionalUIDBase }
-                guard !uids.isEmpty else { continue }
+                guard !uids.isEmpty else {
+                    SyncLog.info("flags: skipped \(mailbox), only provisional UIDs \(group.map(\.uid))")
+                    continue
+                }
                 _ = try await session.select(mailbox)
                 if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
                 if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
+                SyncLog.info("flags: \(mailbox) uids \(uids) +\(add) -\(remove)")
             }
         }
     }

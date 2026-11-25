@@ -5,6 +5,8 @@ import Observation
 enum SidebarItem: Hashable {
     case inbox
     case snoozed
+    /// Conversations set aside with Reply Later (L).
+    case replyLater
     case outbox
     case category(MailCategory)
     case mailbox(accountID: String, path: String)
@@ -40,9 +42,13 @@ final class AppModel {
     // Navigation
     var selection: SidebarItem = .inbox {
         didSet {
-            if selection != oldValue { selectedThreadID = nil }
+            if selection != oldValue {
+                selectedThreadID = nil
+                selectionIndexHint = nil
+                heldCategories = [:]
+            }
             // Choosing a place in the sidebar leaves search, so the click visibly goes there.
-            if !searchText.isEmpty { searchText = "" }
+            endSearch()
             reload()
         }
     }
@@ -50,14 +56,37 @@ final class AppModel {
         didSet {
             scheduleMarkRead()
             updateReader(debounced: isKeyboardNavigating)
+            if let id = selectedThreadID, !isSearching, let index = visibleThreadIDs.firstIndex(of: id) {
+                selectionIndexHint = index
+            }
         }
+    }
+    /// Where the selection last was in the list. If the selected conversation leaves the list
+    /// without us moving it (another device, a sync), j/k/E carry on from here instead of
+    /// starting over at the top.
+    @ObservationIgnored var selectionIndexHint: Int?
+    /// The category each conversation was shown under, for a category you're looking at or a
+    /// bundle you've opened. The background classifier keeps learning after each sync, and
+    /// without this a conversation could hop to another bundle (taking rows with it) while
+    /// you triage. Released when you leave the view, collapse the bundle, or move it yourself.
+    @ObservationIgnored var heldCategories: [String: MailCategory] = [:]
+
+    /// The category a conversation is shown under: where you saw it, else its current one.
+    func displayCategory(_ thread: ThreadSummary) -> MailCategory {
+        heldCategories[thread.threadID] ?? thread.latest.category
+    }
+
+    /// Lets these conversations follow their category again (you moved them on purpose).
+    func releaseHolds(_ threadIDs: some Sequence<String>) {
+        for id in threadIDs { heldCategories[id] = nil }
     }
     /// What the reader shows. Follows the selection at once for clicks, and after a short pause
     /// while j/k are being pressed, so fast navigation never waits on rendering mail.
     private(set) var readerThreadID: String?
     /// Direction of the last j/k move (+1/-1, 0 for clicks); the list keeps one row of lookahead.
     @ObservationIgnored var lastMoveDirection = 0
-    @ObservationIgnored private var isKeyboardNavigating = false
+    /// Set while j/k or a triage key moves the selection, so the reader waits for a pause.
+    @ObservationIgnored var isKeyboardNavigating = false
     @ObservationIgnored private var readerTask: Task<Void, Never>?
     /// Conversations just acted on (Done, Snooze, …) that stay hidden until the engine catches up,
     /// so a row leaves the list in the same instant the selection moves on.
@@ -80,6 +109,8 @@ final class AppModel {
     /// its newest conversation, so without this, archiving that one would move the whole open
     /// bundle down the list mid-triage. It can still move up (new mail), never down.
     @ObservationIgnored private var bundleAnchors: [MailCategory: Date] = [:]
+    /// Open bundles that were pinned to the top (they had new mail) when opened; they stay there until collapsed.
+    @ObservationIgnored private var pinnedOpenBundles: Set<MailCategory> = []
     /// Show only pinned conversations (Google Inbox's pin toggle).
     var pinnedOnly = false { didSet { reload() } }
 
@@ -127,17 +158,31 @@ final class AppModel {
     /// Bumped on every reload so views that read the store directly (the reader) redraw.
     var revision = 0
     @ObservationIgnored var deliveryTask: Task<Void, Never>?
+    @ObservationIgnored var reloadTask: Task<Void, Never>?
+    /// When a triage action last removed a row; quick repeats skip the animation.
+    @ObservationIgnored var lastRemovalAt = Date.distantPast
 
     // Data
     var accounts: [AccountConfig] = []
     internal(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
     private(set) var inboxUnreadCount = 0
+    /// How many conversations are set aside with Reply Later (the sidebar badge).
+    private(set) var replyLaterCount = 0
     private(set) var syncStatus: [String: String] = [:]
     var lastError: String?
 
     // Search
     var searchText = "" { didSet { selectedHitID = nil; runSearch() } }
+    /// Bumped when search is left on purpose (a place picked, a link opened), so the window can
+    /// move focus to the list. Emptying the field by typing doesn't count: you're still searching.
+    private(set) var searchEndedCount = 0
+
+    func endSearch() {
+        guard !searchText.isEmpty else { return }
+        searchText = ""
+        searchEndedCount &+= 1
+    }
     /// The highlighted search result; selecting one opens its conversation.
     var selectedHitID: Int64? {
         didSet { if let id = selectedHitID { selectedThreadID = threadID(forMessage: id) } }
@@ -341,6 +386,7 @@ final class AppModel {
         switch selection {
         case .inbox: String(localized: "Inbox")
         case .snoozed: String(localized: "Snoozed")
+        case .replyLater: String(localized: "Set Aside")
         case .outbox: String(localized: "Outbox")
         case .category(let c): c.title
         case .mailbox(let accountID, let path):
@@ -352,26 +398,51 @@ final class AppModel {
         now = Date()
         revision &+= 1
         do {
+            // One read of the Inbox serves the stream, a category and the unread count.
+            var inboxCache: [ThreadSummary]?
+            func inbox() throws -> [ThreadSummary] {
+                if let inboxCache { return inboxCache }
+                let loaded = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+                inboxCache = loaded
+                return loaded
+            }
             switch selection {
             case .inbox:
-                threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+                threads = try inbox()
                 if pinnedOnly { threads = threads.filter(\.isPinned) }
             case .outbox:
                 threads = []
             case .snoozed:
                 threads = try store.threads(mailbox: AccountSync.snoozedMailbox, ownAddresses: ownAddresses)
                     .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
+            case .replyLater:
+                threads = try inbox().filter(\.isReplyLater)
             case .category(let category):
-                threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses).filter { $0.latest.category == category }
+                // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
+                threads = try inbox().filter { !$0.isReplyLater && displayCategory($0) == category }
+                for thread in threads where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
             case .mailbox(let accountID, let path):
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
             }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
+            if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
-            inboxUnreadCount = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
-                .filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
+            inboxUnreadCount = try inbox().filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
+            replyLaterCount = try inbox().filter(\.isReplyLater).count
         } catch {
             lastError = String(describing: error)
+        }
+    }
+
+    /// A reload a moment from now, folding together the ones asked for in the meantime
+    /// (pressing E ten times in a row reads the store once, not ten times).
+    func scheduleReload() {
+        guard reloadTask == nil else { return }
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self else { return }
+            self.reloadTask = nil
+            self.reload()
         }
     }
 
@@ -381,7 +452,7 @@ final class AppModel {
     func waiting(_ category: MailCategory) -> (count: Int, next: Date)? {
         guard let schedule = bundleSchedules[category], let last = schedule.lastDelivery(before: now),
               let next = schedule.nextDelivery(after: now) else { return nil }
-        let count = threads.filter { $0.latest.category == category && $0.arrivedAt > last }.count
+        let count = threads.filter { displayCategory($0) == category && $0.arrivedAt > last }.count
         return count > 0 ? (count, next) : nil
     }
 
@@ -410,8 +481,9 @@ final class AppModel {
         let later = threads.filter(\.isReplyLater)
         if !later.isEmpty { items.append(.replyLater(later)) }
         for thread in threads where !thread.isReplyLater {
-            if thread.latest.category == .primary { items.append(.thread(thread)) }
-            else { bundles[thread.latest.category, default: []].append(thread) }
+            let category = displayCategory(thread)
+            if category == .primary { items.append(.thread(thread)) }
+            else { bundles[category, default: []].append(thread) }
         }
         for (category, members) in bundles {
             // Scheduled bundles show what arrived before their last delivery; the rest waits.
@@ -422,7 +494,26 @@ final class AppModel {
                 items.append(.bundle(category, members, deliveredAt: nil))
             }
         }
-        return items.sorted { sortDate($0) > sortDate($1) }
+        return items.sorted { a, b in
+            let (ta, tb) = (tier(a), tier(b))
+            return ta != tb ? ta > tb : sortDate(a) > sortDate(b)
+        }
+    }
+
+    /// Reply Later sits on top, then bundles with new mail, then everything by time.
+    private func tier(_ item: StreamItem) -> Int {
+        switch item {
+        case .replyLater: 2
+        case .bundle(let category, let members, _): isBundlePinned(category, members) ? 1 : 0
+        case .thread: 0
+        }
+    }
+
+    /// A bundle with unread mail is pinned to the top of the Inbox. An open bundle keeps the
+    /// place it had when you opened it, so reading or clearing it doesn't send it down the list.
+    private func isBundlePinned(_ category: MailCategory, _ members: [ThreadSummary]) -> Bool {
+        if expandedBundles.contains(category) { return pinnedOpenBundles.contains(category) }
+        return members.contains { $0.unreadCount > 0 }
     }
 
     private func sortDate(_ item: StreamItem) -> Date {
@@ -449,11 +540,24 @@ final class AppModel {
         if expandedBundles.contains(category) {
             expandedBundles.remove(category)
             bundleAnchors[category] = nil
+            pinnedOpenBundles.remove(category)
+            heldCategories = expandedBundles.isEmpty ? [:] : heldCategories.filter { $0.value != category }
         } else {
             if let item = streamItems.first(where: { if case .bundle(category, _, _) = $0 { true } else { false } }) {
                 bundleAnchors[category] = sortDate(item)
+                if tier(item) == 1 { pinnedOpenBundles.insert(category) }
             }
             expandedBundles.insert(category)
+            holdOpenBundles()
+        }
+    }
+
+    /// While a bundle is open, conversations stay where they're shown, in it or around it, so
+    /// rows don't move in or out of it mid-triage (see `heldCategories`).
+    private func holdOpenBundles() {
+        guard !expandedBundles.isEmpty else { return }
+        for thread in threads where heldCategories[thread.threadID] == nil {
+            heldCategories[thread.threadID] = thread.latest.category
         }
     }
 
@@ -481,7 +585,10 @@ final class AppModel {
         }
         let ids = visibleThreadIDs
         guard !ids.isEmpty else { return }
-        let index = selectedThreadID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
+        // If the selection has left the list, the row that took its place is "next".
+        let index = selectedThreadID.flatMap { ids.firstIndex(of: $0) }
+            ?? selectionIndexHint.map { delta > 0 ? $0 - 1 : $0 }
+            ?? (delta > 0 ? -1 : ids.count)
         lastMoveDirection = delta > 0 ? 1 : -1
         isKeyboardNavigating = true
         selectedThreadID = ids[max(0, min(ids.count - 1, index + delta))]

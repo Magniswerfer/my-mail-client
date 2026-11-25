@@ -133,6 +133,20 @@ import Testing
         #expect(try await f.server("INBOX")[sofie.latest.uid]?.contains("\\Flagged") == false)
     }
 
+    /// Reply Later (L) is a keyword on the newest message: it must survive the push to the
+    /// server and the next sync, or the conversation drops back into the stream.
+    @Test func replyLaterSurvivesTheNextSync() async throws {
+        guard let f = try await fixture() else { return }
+        let sofie = try f.thread("website")
+        try await f.sync.perform(.replyLater, threadIDs: [sofie.threadID])
+        #expect(try f.thread("website").isReplyLater)
+        try await f.sync.processPendingActions()
+        let flags = try #require(try await f.server("INBOX")[sofie.latest.uid])
+        #expect(flags.contains(replyLaterKeyword))
+        try await f.sync.syncOnce()
+        #expect(try f.thread("website").isReplyLater)
+    }
+
     @Test func snoozeRoundTripsThroughServerKeywords() async throws {
         guard let f = try await fixture() else { return }
         let sofie = try f.thread("website")

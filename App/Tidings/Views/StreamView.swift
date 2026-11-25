@@ -136,6 +136,12 @@ struct EmptyStream: View {
             } description: {
                 Text("Nothing left to deal with. New mail will show up here.")
             }
+        case .replyLater:
+            ContentUnavailableView {
+                Label("Nothing set aside", systemImage: "arrowshape.turn.up.left.circle")
+            } description: {
+                Text("Press L on a conversation to reply to it later.")
+            }
         case .snoozed:
             ContentUnavailableView {
                 Label("Nothing snoozed", systemImage: "clock")

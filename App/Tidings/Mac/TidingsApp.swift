@@ -26,6 +26,8 @@ struct TidingsApp: App {
                     .keyboardShortcut("1", modifiers: .command)
                 Button("Go to Snoozed") { model.selection = .snoozed }
                     .keyboardShortcut("2", modifiers: .command)
+                Button("Go to Set Aside") { model.selection = .replyLater }
+                    .keyboardShortcut("3", modifiers: .command)
                 Button("Next Conversation") { model.moveSelection(1) }
                     .keyboardShortcut(.downArrow, modifiers: .command)
                 Button("Previous Conversation") { model.moveSelection(-1) }
@@ -64,8 +66,9 @@ struct TidingsApp: App {
                     .keyboardShortcut("b", modifiers: [.command, .option])
                 Button("Mark as Read / Unread") { model.toggleRead() }
                     .keyboardShortcut("u", modifiers: [.command, .shift])
+                // ⌘⌫ is handled in RootView, not here: a menu shortcut fires before the focused
+                // text field sees the key, so it would trash mail instead of deleting the line.
                 Button("Move to Trash") { model.perform(.trash) }
-                    .keyboardShortcut(.delete, modifiers: .command)
                 Button("Move to Junk") { model.perform(.junk) }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
                 Button("Move to Folder…") { model.isFolderPickerShown = true }
@@ -176,7 +179,7 @@ struct RootView: View {
                 }
             }
         }
-        .onKeyPress(phases: .down) { press in handleKey(press) }
+        .onKeyPress(phases: [.down, .repeat]) { press in handleKey(press) }
         .onKeyPress(.escape) {
             if model.isPaletteShown { model.isPaletteShown = false; return .handled }
             if model.isFolderPickerShown { model.isFolderPickerShown = false; return .handled }
@@ -206,8 +209,9 @@ struct RootView: View {
             AccountSetupView()
                 .interactiveDismissDisabled()
         }
-        .onChange(of: model.searchText) { _, text in
-            if text.isEmpty { searchFocused = false; streamFocused = true }
+        .onChange(of: model.searchEndedCount) {
+            searchFocused = false
+            streamFocused = true
         }
         .onAppear {
             model.undoManager = undoManager
@@ -271,15 +275,24 @@ struct RootView: View {
 
     /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        guard !searchFocused, !model.isPaletteShown, !model.isFolderPickerShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown,
-              press.modifiers.subtracting(.shift).isEmpty else { return .ignored }
+        guard !searchFocused, !model.isPaletteShown, !model.isFolderPickerShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown
+        else { return .ignored }
+        // ⌘⌫: Move to Trash, like Apple Mail (only here, so text fields keep ⌘⌫ for themselves).
+        if press.key == .delete, press.modifiers == .command, press.phase == .down {
+            model.perform(.trash)
+            return .handled
+        }
+        guard press.modifiers.subtracting(.shift).isEmpty else { return .ignored }
         let key = press.characters
+        // Holding J or K keeps moving (key repeat); every other key acts once per press.
+        if press.phase == .repeat, key != "j", key != "k" { return .ignored }
 
         if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {
             pendingG = nil
             switch key {
             case "i": model.selection = .inbox
             case "s": model.selection = .snoozed
+            case "l": model.selection = .replyLater
             case "a": model.goToArchive()
             case "o": model.selection = .outbox
             case "p": model.pinnedOnly.toggle()

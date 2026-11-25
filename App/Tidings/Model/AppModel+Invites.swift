@@ -58,7 +58,8 @@ extension AppModel {
         try? store.recordInviteResponse(response)
         revision &+= 1
 
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let item = try await sync.queue(reply, kind: .reply, originalLocalID: message.id)
                 reloadOutbox()

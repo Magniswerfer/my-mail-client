@@ -22,6 +22,16 @@ struct SidebarView: View {
                         return true
                     }
                     .tag(SidebarItem.snoozed)
+                Label("Set Aside", systemImage: "arrowshape.turn.up.left.circle")
+                    .badge(model.replyLaterCount)
+                    .dropDestination(for: ThreadDrag.self) { items, _ in
+                        let threads = model.threads(for: items).filter { !$0.isReplyLater }
+                        guard !threads.isEmpty else { return false }
+                        model.perform(.replyLater, on: threads)
+                        return true
+                    }
+                    .help("Conversations you set aside to reply to later (L)")
+                    .tag(SidebarItem.replyLater)
                 if !model.autoDrafts.isEmpty {
                     Button {
                         model.selection = .outbox
