@@ -6,38 +6,8 @@ struct StreamView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        @Bindable var model = model
         ScrollViewReader { proxy in
-        List(selection: $model.selectedThreadID) {
-            ForEach(model.streamItems) { item in
-                switch item {
-                case .thread(let thread):
-                    row(thread)
-                case .replyLater(let pile):
-                    ReplyLaterRow(threads: pile)
-                        .selectionDisabled()
-                case .bundle(let category, let members, let deliveredAt):
-                    BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
-                              deliveredAt: deliveredAt, waiting: model.waiting(category))
-                        .contentShape(Rectangle())
-                        .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
-                        .selectionDisabled()
-                        .contextMenu {
-                            Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
-                                model.requestSweep(bundle: category)
-                            }
-                        }
-                    if model.expandedBundles.contains(category) {
-                        ForEach(members) { thread in row(thread, inBundle: true) }
-                    }
-                }
-            }
-            if model.selection == .inbox, model.sweepableCount > 0 {
-                SweepFooter(count: model.sweepableCount)
-                    .selectionDisabled()
-                    .listRowSeparator(.hidden)
-            }
-        }
+        list
         .listStyle(.inset)
         .overlay {
             if model.threads.isEmpty { EmptyStream() }
@@ -57,6 +27,48 @@ struct StreamView: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) { proxy.scrollTo(target) }
         }
+        }
+    }
+
+    /// On the Mac the list takes several rows (⌘A, ⇧-click, ⌘-click) and shows them all
+    /// highlighted; the focus stays `selectedThreadID`. iOS keeps single selection (taps open).
+    @ViewBuilder private var list: some View {
+        #if os(macOS)
+        List(selection: Binding(get: { model.listSelection }, set: { model.setListSelection($0) })) { rows }
+        #else
+        @Bindable var model = model
+        List(selection: $model.selectedThreadID) { rows }
+        #endif
+    }
+
+    @ViewBuilder private var rows: some View {
+        ForEach(model.streamItems) { item in
+            switch item {
+            case .thread(let thread):
+                row(thread)
+            case .replyLater(let pile):
+                ReplyLaterRow(threads: pile)
+                    .selectionDisabled()
+            case .bundle(let category, let members, let deliveredAt):
+                BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
+                          deliveredAt: deliveredAt, waiting: model.waiting(category))
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
+                    .selectionDisabled()
+                    .contextMenu {
+                        Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
+                            model.requestSweep(bundle: category)
+                        }
+                    }
+                if model.expandedBundles.contains(category) {
+                    ForEach(members) { thread in row(thread, inBundle: true) }
+                }
+            }
+        }
+        if model.selection == .inbox, model.sweepableCount > 0 {
+            SweepFooter(count: model.sweepableCount)
+                .selectionDisabled()
+                .listRowSeparator(.hidden)
         }
     }
 
@@ -347,19 +359,28 @@ struct ThreadActions: View {
 }
 
 /// "Move to": this conversation (the default, and it teaches the classifier) or always for the sender.
+/// With several selected (⌘A), they all move, and there's no single sender to choose for.
 struct MoveMenuContent: View {
     @Environment(AppModel.self) private var model
     let thread: ThreadSummary
+    var threads: [ThreadSummary]? = nil
 
     var body: some View {
-        Section("This conversation") {
+        let all = threads ?? [thread]
+        Section(all.count > 1 ? String(localized: "\(all.count) conversations") : String(localized: "This conversation")) {
             ForEach(MailCategory.allCases, id: \.self) { category in
                 Button(category.title, systemImage: category.symbol) {
-                    model.moveConversations([thread], to: category)
+                    model.moveConversations(all, to: category)
                 }
-                .disabled(category == thread.latest.category)
+                .disabled(all.allSatisfy { $0.latest.category == category })
             }
         }
+        if all.count == 1 {
+            senderSection
+        }
+    }
+
+    @ViewBuilder private var senderSection: some View {
         Section("Always for \(thread.latest.senderDisplay)") {
             ForEach(MailCategory.allCases, id: \.self) { category in
                 Button(category.title, systemImage: category.symbol) {
@@ -374,11 +395,12 @@ struct MoveMenuContent: View {
 struct FolderMenuContent: View {
     @Environment(AppModel.self) private var model
     let thread: ThreadSummary
+    var threads: [ThreadSummary]? = nil
 
     var body: some View {
         ForEach(model.folderTargets(for: thread), id: \.path) { box in
             Button(box.displayName, systemImage: box.role?.symbol ?? "folder") {
-                model.move([thread], toFolder: box)
+                model.move(threads ?? [thread], toFolder: box)
             }
         }
     }
