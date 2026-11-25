@@ -8,3 +8,4 @@ App/build-dev/
 App/build-dev.log
 App/build.log
 MailEngine/TestServer/certs/
+.claude/worktrees/
