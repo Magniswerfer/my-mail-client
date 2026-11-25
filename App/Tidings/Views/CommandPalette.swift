@@ -61,6 +61,13 @@ extension AppModel {
         ]
         let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         list += [
+            AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: nil) {
+                self.isRulesShown = true
+            },
+            AppCommand(id: "newRule", title: String(localized: "New Rule for This Sender…"), symbol: "plus.circle", keys: nil,
+                       isEnabled: hasSelection) { self.newRule() },
+        ]
+        list += [
             AppCommand(id: "replyLater", title: thread?.isReplyLater == true ? String(localized: "Remove from Reply Later") : String(localized: "Reply Later"),
                        symbol: "arrowshape.turn.up.left.circle", keys: "L", isEnabled: hasSelection) { self.toggleReplyLater() },
             AppCommand(id: "replySession", title: String(localized: "Answer Reply Later Pile"), symbol: "arrowshape.turn.up.left.2.circle",

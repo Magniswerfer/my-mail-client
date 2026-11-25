@@ -188,6 +188,15 @@ struct RootView: View {
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
+        .sheet(isPresented: $model.isRulesShown) {
+            NavigationStack {
+                RulesManager()
+                    .navigationTitle("Rules")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.isRulesShown = false } } }
+            }
+            .macFrame(width: 600, height: 560)
+        }
         .sheet(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }

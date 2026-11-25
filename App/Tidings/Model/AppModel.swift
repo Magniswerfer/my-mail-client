@@ -112,6 +112,14 @@ final class AppModel {
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
+    // Rules (M5)
+    var rules: [MailRule] = []
+    var ruleEditing: RuleEditing?
+    var isRulesShown = false
+    @ObservationIgnored var ruleTask: Task<Void, Never>?
+    @ObservationIgnored var topicEmbedder: ContextualEmbedder?
+    @ObservationIgnored var topicVectors: [String: [Float]] = [:]
+
     // Contact sidebar
     var isContactPanelShown = false
     /// Whose profile the panel shows; nil follows the open conversation.
@@ -186,6 +194,7 @@ final class AppModel {
         reloadOutbox()
         scheduleDeliveryRefresh()
         Self.shared = self
+        loadRules()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
     }
 
@@ -290,6 +299,7 @@ final class AppModel {
             lastError = nil
             reload()
             scheduleRefinement()
+            scheduleRules()
             scheduleAutoDrafts()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")

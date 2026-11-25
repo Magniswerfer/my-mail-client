@@ -21,7 +21,7 @@ public struct SignatureInfo: Sendable, Hashable {
         "hey.com", "fastmail.com", "gmx.com", "gmx.net", "mail.dk", "jubii.dk", "hotmail.dk", "live.dk",
     ]
 
-    static func looksAutomated(_ address: String) -> Bool {
+    public static func looksAutomated(_ address: String) -> Bool {
         let local = address.lowercased().split(separator: "@").first.map(String.init) ?? ""
         let normalized = local.replacingOccurrences(of: "_", with: "-").replacingOccurrences(of: ".", with: "-")
         return SignalClassifier.automatedLocalParts.contains { normalized == $0 || normalized.hasPrefix($0 + "-") }

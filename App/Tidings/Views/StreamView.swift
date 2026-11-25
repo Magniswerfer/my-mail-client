@@ -315,6 +315,7 @@ struct ThreadActions: View {
             Button("Add to Things", systemImage: "checkmark.square") { model.addToThings(thread: thread) }
         }
         Button("Copy Link to Message", systemImage: "link") { model.copyLink(thread: thread) }
+        Button("New Rule for This Sender…", systemImage: "line.3.horizontal.decrease.circle") { model.newRule(forSenderOf: thread) }
         Divider()
         Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
         Button("Snooze…", systemImage: "clock") {

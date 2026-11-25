@@ -128,6 +128,7 @@ public final class MailStore: Sendable {
         registerPreviewMigrations(&m)
         registerInviteMigrations(&m)
         registerAssistMigrations(&m)
+        registerRuleMigrations(&m)
         return m
     }
 

@@ -17,6 +17,7 @@ extension ClassificationReason {
         case .person: String(localized: "From a person")
         case .calendarInvite: String(localized: "A meeting invitation for you")
         case .calendarReply: String(localized: "An answer to your invitation")
+        case .rule(let name): String(localized: "Your rule “\(name)”")
         case .learned(let p): String(localized: "Learned from your choices (\(p)% sure)")
         case .onDevice(let summary): String(localized: "On-device AI: \(summary)")
         }

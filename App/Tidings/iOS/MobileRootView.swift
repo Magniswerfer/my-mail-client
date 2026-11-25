@@ -72,6 +72,14 @@ struct MobileRootView: View {
             SnoozePicker().presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
+        .sheet(isPresented: $model.isRulesShown) {
+            NavigationStack {
+                RulesManager()
+                    .navigationTitle("Rules")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { model.isRulesShown = false } } }
+            }
+        }
         .sheet(isPresented: $model.isPaletteShown) {
             CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
         }

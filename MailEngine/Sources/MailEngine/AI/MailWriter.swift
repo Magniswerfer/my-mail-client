@@ -185,3 +185,114 @@ struct WrittenText {
     var text: String
 }
 #endif
+
+// MARK: - Rules: topics and sentences
+
+extension FoundationModelsWriter: TopicJudge {
+    /// "Is this email about <topic>?" Conservative: only a clear yes counts.
+    public func isAbout(_ topic: String, subject: String, sender: String, snippet: String) async -> Bool? {
+        #if canImport(FoundationModels)
+        let session = LanguageModelSession(instructions: """
+            You decide whether an email is about a given topic. Emails may be Danish or English. \
+            Answer yes only when the topic is clearly what the email is about, not a passing mention.
+            """)
+        do {
+            let response = try await session.respond(to: """
+                Topic: \(topic)
+                From: \(sender)
+                Subject: \(subject)
+
+                \(snippet.prefix(800))
+                """, generating: TopicVerdict.self)
+            return response.content.isAbout
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    /// "All mails about shoes go to Shopping" → an editable rule. Nil when the sentence doesn't
+    /// describe one.
+    public func rule(from sentence: String, folders: [String]) async -> MailRule? {
+        #if canImport(FoundationModels)
+        let session = LanguageModelSession(instructions: """
+            You turn one sentence (Danish or English) into an email rule. Fill only the fields the \
+            sentence asks for and leave the others empty. Folders that exist: \(folders.prefix(60).joined(separator: ", ")).
+            """)
+        do {
+            let s = try await session.respond(to: sentence, generating: RuleSketch.self).content
+            return RuleSketchMapper.rule(from: s.fields, sentence: sentence)
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+}
+
+#if canImport(FoundationModels)
+@Generable
+struct TopicVerdict {
+    @Guide(description: "True only if the email is clearly about the topic")
+    var isAbout: Bool
+}
+
+@Generable
+struct RuleSketch {
+    @Guide(description: "A short name for the rule, in the sentence's language")
+    var name: String
+    @Guide(description: "Sender address, domain or name the mail must come from; empty if not mentioned")
+    var from: String
+    @Guide(description: "Text the subject must contain; empty if not mentioned")
+    var subjectContains: String
+    @Guide(description: "A topic in a few words when the rule is about what the mail discusses, e.g. 'shoes'; empty otherwise")
+    var about: String
+    @Guide(description: "What to do", .anyOf(["move to folder", "set category", "mark done", "pin", "mark read", "snooze", "reply later", "notify", "forward"]))
+    var action: String
+    @Guide(description: "Folder name, category (primary, transactions, updates, newsletters, advertising, social), forwarding address, or days to snooze; empty if none")
+    var target: String
+
+    var fields: RuleSketchMapper.Fields {
+        .init(name: name, from: from, subjectContains: subjectContains, about: about, action: action, target: target)
+    }
+}
+#endif
+
+/// Turns the model's answer into a rule (kept separate so it's testable without the model).
+public enum RuleSketchMapper {
+    public struct Fields: Sendable {
+        public var name, from, subjectContains, about, action, target: String
+        public init(name: String, from: String, subjectContains: String, about: String, action: String, target: String) {
+            self.name = name; self.from = from; self.subjectContains = subjectContains
+            self.about = about; self.action = action; self.target = target
+        }
+    }
+
+    public static func rule(from f: Fields, sentence: String) -> MailRule? {
+        func clean(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'"))) }
+        var conditions: [MailRule.Condition] = []
+        if !clean(f.from).isEmpty { conditions.append(.from(clean(f.from))) }
+        if !clean(f.subjectContains).isEmpty { conditions.append(.subject(clean(f.subjectContains))) }
+        if !clean(f.about).isEmpty { conditions.append(.about(clean(f.about))) }
+        let target = clean(f.target)
+        let action: MailRule.Action?
+        switch f.action.lowercased() {
+        case "move to folder": action = target.isEmpty ? nil : .moveToFolder(target)
+        case "set category": action = MailCategory(rawValue: target.lowercased()).map(MailRule.Action.setCategory)
+        case "mark done": action = .markDone
+        case "pin": action = .pin
+        case "mark read": action = .markRead
+        case "snooze": action = .snooze(days: Int(target.filter(\.isNumber)) ?? 1)
+        case "reply later": action = .replyLater
+        case "notify": action = .notify
+        case "forward": action = target.contains("@") ? .forward(to: target) : nil
+        default: action = nil
+        }
+        guard !conditions.isEmpty, let action else { return nil }
+        let name = clean(f.name).isEmpty ? String(sentence.prefix(40)) : clean(f.name)
+        return MailRule(name: name, conditions: conditions, actions: [action], sentence: sentence)
+    }
+}
