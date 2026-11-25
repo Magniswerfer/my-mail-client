@@ -197,7 +197,21 @@ final class AppModel {
     var lastError: String?
 
     // Search
-    var searchText = "" { didSet { selectedHitID = nil; runSearch() } }
+    var searchText = "" {
+        didSet {
+            selectedHitID = nil
+            if searchText.isEmpty { searchEverywhere = false }
+            runSearch()
+        }
+    }
+    /// Search looks in the place you're in (a category, folder, smart folder) unless widened
+    /// with "Search Everywhere" (⌥⌘F). From the Inbox it always searches everything.
+    var searchEverywhere = false { didSet { if searchEverywhere != oldValue { runSearch() } } }
+    /// The person the search seems to mean (card on top of the results).
+    private(set) var searchContact: ContactHit?
+    /// Close in meaning to the search, beyond the keyword hits (semantic second tier).
+    private(set) var relatedHits: [SearchHit] = []
+    @ObservationIgnored var relatedTask: Task<Void, Never>?
     /// Bumped when search is left on purpose (a place picked, a link opened), so the window can
     /// move focus to the list. Emptying the field by typing doesn't count: you're still searching.
     private(set) var searchEndedCount = 0
@@ -614,7 +628,7 @@ final class AppModel {
     /// The lists scroll to follow (StreamView / SearchResultsView).
     func moveSelection(_ delta: Int) {
         if isSearching {
-            let ids = searchHits.map(\.id)
+            let ids = searchHits.map(\.id) + relatedHits.map(\.id)
             guard !ids.isEmpty else { return }
             let index = selectedHitID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
             lastMoveDirection = delta > 0 ? 1 : -1
@@ -637,13 +651,37 @@ final class AppModel {
 
     // MARK: Search
 
+    /// Where search looks by default: the place you're in, unless that's the Inbox.
+    var searchScope: SidebarItem? {
+        guard !searchEverywhere else { return nil }
+        switch selection {
+        case .category, .mailbox, .smartFolder, .snoozed: return selection
+        default: return nil
+        }
+    }
+
+    /// The search as typed, plus the scope's own operators.
+    private var scopedSearchText: String {
+        switch searchScope {
+        case .category(let c): return "\(searchText) category:\(c.rawValue)"
+        case .mailbox(_, let path): return "\(searchText) in:\"\(path)\""
+        case .snoozed: return "\(searchText) in:\"\(AccountSync.snoozedMailbox)\""
+        case .smartFolder(let id): return "\(smartFolder(id: id)?.query ?? "") \(searchText)"
+        default: return searchText
+        }
+    }
+
     private func runSearch() {
-        let query = SearchQuery(parsing: searchText)
-        guard !query.isEmpty else {
+        relatedTask?.cancel()
+        let typed = SearchQuery(parsing: searchText)
+        guard !typed.isEmpty else {
             searchHits = []
             facets = nil
+            searchContact = nil
+            relatedHits = []
             return
         }
+        let query = SearchQuery(parsing: scopedSearchText)
         let engine = SearchEngine(store: store)
         do {
             let hits = try engine.hits(query)
@@ -654,6 +692,38 @@ final class AppModel {
             searchHits = []
             facets = nil
         }
+        // The person card: never yourself.
+        let contact = try? engine.contact(for: typed)
+        searchContact = contact.flatMap { ownAddresses.contains($0.address.lowercased()) ? nil : $0 }
+        scheduleRelated(for: typed, excluding: Set(searchHits.map(\.id)))
+    }
+
+    /// Semantic second tier: a moment after typing stops, off the main thread.
+    private func scheduleRelated(for query: SearchQuery, excluding: Set<Int64>) {
+        relatedHits = []
+        let text = (query.terms + query.phrases).joined(separator: " ")
+        guard text.count >= 3, let embedder = refinement?.embedder else { return }
+        let engine = SearchEngine(store: store)
+        relatedTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            let found = await Task.detached(priority: .userInitiated) {
+                (try? engine.related(to: text, embedder: embedder, excluding: excluding)) ?? []
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.relatedHits = found
+        }
+    }
+
+    /// ⌥⌘F: widen a scoped search to all mail, or narrow it back.
+    func toggleSearchEverywhere() {
+        guard isSearching else { return }
+        if searchEverywhere { searchEverywhere = false } else if searchScope != nil { searchEverywhere = true }
+    }
+
+    /// All mail from the person on the card.
+    func searchAll(from contact: ContactHit) {
+        searchText = "from:\(contact.address)"
     }
 
     func addSearchFilter(_ token: String) {

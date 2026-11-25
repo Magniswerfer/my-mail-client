@@ -47,6 +47,8 @@ extension AppModel {
                        keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
             AppCommand(id: "moveFolder", title: String(localized: "Move to Folder…"), symbol: "folder", keys: "V",
                        isEnabled: hasSelection) { self.isFolderPickerShown = true },
+            AppCommand(id: "searchEverywhere", title: String(localized: "Search Everywhere"), symbol: "globe", keys: "⌥⌘F",
+                       isEnabled: isSearching && searchScope != nil) { self.toggleSearchEverywhere() },
             AppCommand(id: "saveSearch", title: String(localized: "Save Search as Smart Folder…"), symbol: "folder.badge.plus", keys: "⌘S",
                        isEnabled: isSearching) { self.saveCurrentSearch() },
             AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: "⌥⌘R") {

@@ -1,6 +1,106 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Related": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relateret"
+          }
+        }
+      }
+    },
+    "Close in meaning, found with on-device embeddings": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tæt på i betydning, fundet med embeddings på enheden"
+          }
+        }
+      }
+    },
+    "Searching all mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søger i al mail"
+          }
+        }
+      }
+    },
+    "Searching in %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søger i %@"
+          }
+        }
+      }
+    },
+    "Only %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun %@"
+          }
+        }
+      }
+    },
+    "Search Everywhere": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søg overalt"
+          }
+        }
+      }
+    },
+    "Search Only Here": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søg kun her"
+          }
+        }
+      }
+    },
+    "1 message from them": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 besked fra dem"
+          }
+        }
+      }
+    },
+    "%lld messages from them": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld beskeder fra dem"
+          }
+        }
+      }
+    },
+    "All Their Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al deres mail"
+          }
+        }
+      }
+    },
     "Waiting for Reply": {
       "localizations": {
         "da": {

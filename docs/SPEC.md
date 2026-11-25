@@ -106,6 +106,8 @@ System Writing Tools in the composer, one-line thread summaries, "Summarize" for
 - Create rules by typing a sentence → editable rule.
 - Actions: move, categorize/bundle, pin, snooze, mark read, forward, auto-reply, notify, run plugin, run Shortcut. NL rules may never hard-delete or forward without confirmation.
 - Run on new mail automatically; run on existing mail on demand; every rule has a preview ("would have matched 143").
+- **M5 implementation:** rules live in SQLite (`rule`, ordered; CloudKit in M7). They run after the AI sorting pass that follows each sync, on Inbox mail that arrived since the last pass (`message.rulesChecked`; mail that was there before rules existed, and a mailbox's first sync, count as seen). Actions go through the normal queued triage path; matched rules merge (last category wins, only the first action that leaves the Inbox runs). Every run is recorded (`ruleRun`) with the previous category, shown in Rule History with Undo. Conditions: sender, recipient, subject, subject-or-text (contains / doesn't contain / is / begins with / ends with), category, attachments, "about …". Forward and auto-reply are deferred (they need a confirmation step).
+- **"About …" conditions:** the description is embedded once; a message's stored embedding must clear a per-condition cut calibrated on your Inbox (mean + 1.5 SD of similarities, since raw scores are high for everything) before Foundation Models gives the yes/no, with your ✓/✗ examples in the prompt (~0.4 s per message on device). Without the model the cut decides; previews ask the model only about the 30 likeliest. A sentence can be drafted into a rule (guided generation), then grounded in the sentence: invented addresses and unmentioned conditions are dropped.
 
 ## 7. Search & smart folders
 
@@ -114,6 +116,7 @@ System Writing Tools in the composer, one-line thread summaries, "Summarize" for
 - Gmail-compatible operators: `from: to: has:attachment larger: before: after: category: is:pinned in:` + NL criteria.
 - Danish + English stemming ("faktura" finds "fakturaer").
 - Smart folders = saved searches (⌘S), live counts; built-ins: Attachments, Waiting for reply, Receipts this year.
+- **M5 implementation:** extra operators `is:pinned`, `is:waiting` (the newest message in the conversation is in a Sent folder), relative dates (`after:30d`, `6w`, `3m`, `1y`, `today`, `thisweek`, `thismonth`, `thisyear`). Smart folders list conversations from any folder; triage acts where the conversation lives. Search is scoped to the category, folder or smart folder you're in (not the Inbox); ⌥⌘F widens it. A person card appears when plain words prefix-match a sender (by volume, never yourself). "Related" results: the query embedding against the stored embeddings of the newest 20 000 messages, keeping standouts (mean + 2 SD), off the main thread after typing pauses.
 
 ## 8. Spam & privacy
 
@@ -199,7 +202,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4.6 · Invites** ✅ (engine tested on Linux; app not yet built) | Recognise invites/updates/cancellations/replies, invite card, RSVP by iTIP reply, calendar add/update/remove, clashes, threading by event UID |
 | **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
 | **M4.8 · Flow** ✅ (CI-built; engine tested) | Send and Done, pre-send check, dark message bodies, Reply Later + Answer Now, message links + Reminders/Things/Shortcuts, shortcuts sheet |
-| **M5 · Rules** | rules incl. NL, smart folders, semantic search |
+| **M5 · Rules** ✅ (engine tested; UI built, not yet clicked through) | rules incl. NL (about …, drafting from a sentence), history + undo, smart folders, scope-aware/entity/semantic search |
 | **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
 | **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |

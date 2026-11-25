@@ -102,6 +102,9 @@ struct TidingsApp: App {
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
                 Divider()
+                Button(model.searchEverywhere ? "Search Only Here" : "Search Everywhere") { model.toggleSearchEverywhere() }
+                    .keyboardShortcut("f", modifiers: [.command, .option])
+                    .disabled(!model.isSearching || (model.searchScope == nil && !model.searchEverywhere))
                 Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!model.isSearching)

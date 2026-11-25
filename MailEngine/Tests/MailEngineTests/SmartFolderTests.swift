@@ -77,3 +77,39 @@ import Testing
         #expect(try s.smartFolders() == [mine])
     }
 }
+
+@Suite struct RelatedAndContactSearchTests {
+    func store(_ items: [(subject: String, from: String, name: String?)]) throws -> MailStore {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tidings-related-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let s = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
+        let messages = items.enumerated().map { i, item in
+            StoredMessage(accountID: "a", mailbox: "INBOX", uid: UInt32(i + 1), messageID: "m\(i)@x", threadID: "t\(i)", subject: item.subject,
+                          fromName: item.name, fromAddress: item.from, recipients: "me@x", date: Date().addingTimeInterval(-Double(i) * 60))
+        }
+        try s.upsert(messages.map { ($0, $0.subject) })
+        for m in try s.inboxMessages() {
+            try s.saveEmbedding(AboutConditionTests.AxisEmbedder().embed(MailStore.embeddingText(m))!, for: m.id!)
+        }
+        return s
+    }
+
+    @Test func relatedFindsMeaningNotWordsAndSkipsKeywordHits() throws {
+        let s = try store([("Nike: nye løbesko", "a@shop.dk", nil), ("Shoe sale this weekend", "b@shop.com", nil)]
+                          + (0..<40).map { ("Nyhedsbrev \($0)", "news@x.dk", nil) })
+        let engine = SearchEngine(store: s)
+        let shoeHit = try #require(try s.inboxMessages().first { $0.subject.hasPrefix("Shoe") })
+        let related = try engine.related(to: "sko", embedder: AboutConditionTests.AxisEmbedder(), excluding: [shoeHit.id!])
+        #expect(related.map(\.subject) == ["Nike: nye løbesko"])
+    }
+
+    @Test func contactMatchesNamePrefixAndPrefersTheBusiestSender() throws {
+        let s = try store([("Hej", "anna@firma.dk", "Anna Holm"), ("Møde", "anna@firma.dk", "Anna Holm"),
+                           ("Tilbud", "annoncer@shop.dk", "Annoncer")])
+        let engine = SearchEngine(store: s)
+        let hit = try #require(try engine.contact(for: SearchQuery(parsing: "ann")))
+        #expect(hit.address == "anna@firma.dk" && hit.messageCount == 2 && hit.name == "Anna Holm")
+        #expect(try engine.contact(for: SearchQuery(parsing: "holm")) != nil)
+        #expect(try engine.contact(for: SearchQuery(parsing: "anna has:attachment")) == nil)   // operators: no card
+    }
+}

@@ -8,11 +8,16 @@ struct SearchResultsView: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 0) {
+            ScopeBar()
             if let facets = model.facets {
                 FacetBar(facets: facets)
             }
             ScrollViewReader { proxy in
             List(selection: $model.selectedHitID) {
+                if let contact = model.searchContact {
+                    ContactCard(contact: contact)
+                        .selectionDisabled()
+                }
                 Section {
                     ForEach(model.searchHits, id: \.id) { hit in
                         SearchHitRow(hit: hit)
@@ -24,16 +29,30 @@ struct SearchResultsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if !model.relatedHits.isEmpty {
+                    Section {
+                        ForEach(model.relatedHits, id: \.id) { hit in
+                            SearchHitRow(hit: hit)
+                                .id(hit.id)
+                                .tag(hit.id)
+                        }
+                    } header: {
+                        Label("Related", systemImage: "sparkle.magnifyingglass")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("Close in meaning, found with on-device embeddings")
+                    }
+                }
             }
             .listStyle(.inset)
             .overlay {
-                if model.searchHits.isEmpty {
+                if model.searchHits.isEmpty && model.relatedHits.isEmpty && model.searchContact == nil {
                     ContentUnavailableView.search(text: model.searchText)
                 }
             }
             .onChange(of: model.selectedHitID) { _, id in
                 guard let id else { return }
-                let ids = model.searchHits.map(\.id)
+                let ids = model.searchHits.map(\.id) + model.relatedHits.map(\.id)
                 var target = id
                 if model.lastMoveDirection != 0, let i = ids.firstIndex(of: id), ids.indices.contains(i + model.lastMoveDirection) {
                     target = ids[i + model.lastMoveDirection]
@@ -50,6 +69,65 @@ struct SearchResultsView: View {
     private var summary: String {
         let count = model.facets?.total ?? model.searchHits.count
         return String(localized: "\(count) results · \(String(format: "%.1f", model.searchMilliseconds)) ms")
+    }
+}
+
+/// "In Reklamer · Search Everywhere": what a scoped search covers, and the key that widens it.
+struct ScopeBar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.searchScope != nil || model.searchEverywhere {
+            HStack(spacing: 8) {
+                Image(systemName: model.searchEverywhere ? "globe" : "scope").foregroundStyle(.secondary)
+                Text(model.searchEverywhere ? String(localized: "Searching all mail")
+                                            : String(localized: "Searching in \(model.currentMailboxTitle)"))
+                    .lineLimit(1)
+                Spacer()
+                Button(model.searchEverywhere ? String(localized: "Only \(model.currentMailboxTitle)")
+                                              : String(localized: "Search Everywhere")) {
+                    model.toggleSearchEverywhere()
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .help("⌥⌘F")
+            }
+            .font(.caption)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+        }
+    }
+}
+
+/// The person a search seems to mean: their mail in one click, or who they are.
+struct ContactCard: View {
+    @Environment(AppModel.self) private var model
+    let contact: ContactHit
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Avatar(name: contact.name ?? contact.address, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(contact.name ?? contact.address).font(.headline)
+                Text(contact.address).font(.caption).foregroundStyle(.secondary)
+                Text(contact.messageCount == 1 ? String(localized: "1 message from them")
+                                               : String(localized: "\(contact.messageCount) messages from them"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("All Their Mail") { model.searchAll(from: contact) }
+                .buttonStyle(.glass)
+            Button {
+                model.contactAddress = contact.address
+                model.isContactPanelShown = true
+            } label: {
+                Label("Contact Info", systemImage: "person.crop.circle")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.glass)
+            .help("Who this is (⌃⌘I)")
+        }
+        .padding(.vertical, 6)
     }
 }
 
