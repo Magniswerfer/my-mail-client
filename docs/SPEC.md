@@ -42,6 +42,7 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 - **Done** (archive move), **Pin**, **Snooze** (time + "someday"), **Bundles**, **Sweep** (Done all non-pinned), **Highlights** — all v1.
 - Single stream (Inbox-style): Primary as individual rows; other categories collapse into inline bundles.
 - Categories: **Primary, Transactions, Updates, Newsletters, Advertising, Social** + custom bundles (rule- or AI-defined).
+- **Category bar** above the Inbox: All, the six categories, then your **AI categories** (a name and a sentence; the on-device model sorts new mail and your recent Inbox into them; right-click ✓/✗ corrections stick and teach it). **Tab / ⇧Tab** (and ⌘] / ⌘[) cycle.
 - Bundle delivery schedules (Settings → Bundles); Advertising + Newsletters default to daily at 17:00. Waiting mail shows as "N more at 17:00"; the sidebar bundle view always shows everything.
 - Conversations threaded by `References`/`In-Reply-To` with subject fallback, including Sent. Actions apply to threads. Toggle to message view.
 - Global ⌘Z undo for every action.
@@ -203,7 +204,8 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
 | **M4.8 · Flow** ✅ (CI-built; engine tested) | Send and Done, pre-send check, dark message bodies, Reply Later + Answer Now, message links + Reminders/Things/Shortcuts, shortcuts sheet |
 | **M5 · Rules** ✅ (engine tested; UI built, not yet clicked through) | rules incl. NL (about …, drafting from a sentence), history + undo, smart folders, scope-aware/entity/semantic search |
-| **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
+| **M6 · Polish** ✅ (CI-built; engine tested) | Highlights (JSON-LD + patterns, copy code ⌃⌥C), notifications + VIPs + Focus filter, one-click unsubscribe + Senders, Read Later (reader mode), mute, attachment browser, ;snippets; auto drafts also reply to mail that asks you something; rules can forward, auto-reply, run a Shortcut |
+| **M6.5 · AI categories** ✅ (CI-built; engine tested) | Categories you describe in words, sorted on device (rule judge), ✓/✗ corrections as examples; category bar above the Inbox, Tab / ⇧Tab and ⌘] / ⌘[ cycle |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
 | **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
 | **iOS-2 · Same state everywhere** | CloudKit for sender rules, corrections, bundle schedules, invite answers (M7 brought forward) |
