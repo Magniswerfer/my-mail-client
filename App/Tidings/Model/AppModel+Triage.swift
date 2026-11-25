@@ -157,11 +157,15 @@ extension AppModel {
             isKeyboardNavigating = false
         }
         let source = sourceMailbox
+        // A smart folder mixes folders: each conversation is acted on where it lives.
+        let perFolder: Bool = if case .smartFolder = selection { true } else { false }
+        struct Where: Hashable { var accountID: String; var mailbox: String }
         Task {
-            for (accountID, group) in Dictionary(grouping: targets, by: \.latest.accountID) {
-                guard let sync = syncs[accountID] else { continue }
+            let groups = Dictionary(grouping: targets) { Where(accountID: $0.latest.accountID, mailbox: perFolder ? $0.latest.mailbox : source) }
+            for (place, group) in groups {
+                guard let sync = syncs[place.accountID] else { continue }
                 do {
-                    if let change = try await sync.perform(kind, threadIDs: group.map(\.threadID), from: source) {
+                    if let change = try await sync.perform(kind, threadIDs: group.map(\.threadID), from: place.mailbox) {
                         box.changes.append(change)
                     }
                 } catch {
