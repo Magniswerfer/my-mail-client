@@ -219,6 +219,21 @@ extension AppModel {
         }
     }
 
+    /// Read Later (⇧R): the keyword, then Done when it's in the Inbox, as one undoable step.
+    func readLater(_ thread: ThreadSummary? = nil) {
+        guard let thread = thread ?? targetThreads.first else { return }
+        let account = thread.latest.accountID
+        let flag = performQuietly(.readLater, threadID: thread.threadID, accountID: account)
+        let done = sourceMailbox == "INBOX" ? performQuietly(.done, threadID: thread.threadID, accountID: account) : nil
+        let undo: @MainActor () -> Void = { [weak self] in
+            self?.undo(box: flag)
+            if let done { self?.undo(box: done) }
+        }
+        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
+        undoManager?.setActionName(TriageKind.readLater.toastText(count: 1))
+        show(Toast(message: TriageKind.readLater.toastText(count: 1), symbol: "book", undoAction: undo))
+    }
+
     func toggleReplyLater() {
         guard let thread = targetThreads.first else { return }
         perform(thread.isReplyLater ? .clearReplyLater : .replyLater)
@@ -420,6 +435,8 @@ extension TriageKind {
         case .markUnread: "envelope.badge"
         case .replyLater: "arrowshape.turn.up.left.circle"
         case .clearReplyLater: "checkmark.circle"
+        case .readLater: "book"
+        case .clearReadLater: "book.closed"
         }
     }
 
@@ -445,6 +462,8 @@ extension TriageKind {
         case .markUnread: count == 1 ? String(localized: "Marked unread") : String(localized: "\(count) marked unread")
         case .replyLater: count == 1 ? String(localized: "Set aside to reply later") : String(localized: "\(count) set aside to reply later")
         case .clearReplyLater: count == 1 ? String(localized: "Removed from Reply Later") : String(localized: "\(count) removed from Reply Later")
+        case .readLater: count == 1 ? String(localized: "Saved to Read Later") : String(localized: "\(count) saved to Read Later")
+        case .clearReadLater: count == 1 ? String(localized: "Removed from Read Later") : String(localized: "\(count) removed from Read Later")
         }
     }
 }

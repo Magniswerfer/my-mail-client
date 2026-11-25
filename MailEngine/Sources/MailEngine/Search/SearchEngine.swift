@@ -229,6 +229,9 @@ public struct SearchEngine: Sendable {
         if let pinned = q.pinned {
             p.messageClauses.append(pinned ? "instr(m.flags, '\\Flagged') > 0" : "instr(m.flags, '\\Flagged') = 0")
         }
+        if q.readLater == true {
+            p.messageClauses.append("instr(m.flags, '\(readLaterKeyword)') > 0")
+        }
         if q.waiting == true {
             // A message you sent that is still the newest in its conversation.
             p.messageClauses.append("""

@@ -20,6 +20,8 @@ public struct SearchQuery: Sendable, Hashable {
     public var pinned: Bool?
     /// Conversations where the newest message is one you sent ("waiting for reply").
     public var waiting: Bool?
+    /// `is:readlater`: conversations set aside with Read Later.
+    public var readLater: Bool?
     public var before: Date?
     public var after: Date?
     public var largerThan: Int?
@@ -67,6 +69,7 @@ public struct SearchQuery: Sendable, Hashable {
             case "is" where value.lowercased() == "read": unread = false
             case "is" where value.lowercased() == "pinned": pinned = true
             case "is" where value.lowercased() == "waiting": waiting = true
+            case "is" where value.lowercased() == "readlater": readLater = true
             case "before": if let d = Self.date(value) { before = d } else { terms.append(w) }
             case "after": if let d = Self.date(value) { after = d } else { terms.append(w) }
             case "larger": if let n = Self.size(value) { largerThan = n } else { terms.append(w) }

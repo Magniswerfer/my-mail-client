@@ -108,6 +108,22 @@ extension RichTextEditor {
         return attrs
     }
 
+    /// `;keyword` right before the caret that names a snippet → its range and expanded text.
+    static func snippet(in storage: NSTextStorage, caret: Int) -> (NSRange, String)? {
+        let string = storage.string as NSString
+        guard caret > 1, caret <= string.length else { return nil }
+        let start = max(0, caret - 40)
+        let before = string.substring(with: NSRange(location: start, length: caret - start))
+        guard let semicolon = before.lastIndex(of: ";") else { return nil }
+        let keyword = String(before[before.index(after: semicolon)...])
+        guard !keyword.isEmpty, keyword.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return nil }
+        // The ; must start a word ("hi;x" isn't a snippet).
+        if semicolon > before.startIndex, !before[before.index(before: semicolon)].isWhitespace { return nil }
+        guard let snippet = SnippetStore.all.first(where: { $0.keyword == keyword.lowercased() }) else { return nil }
+        let length = keyword.utf16.count + 1
+        return (NSRange(location: caret - length, length: length), SnippetStore.expand(snippet, context: SnippetContext.current))
+    }
+
     static func visibleMarker(_ marker: NSTextList.MarkerFormat, number: Int = 1) -> String {
         marker == .disc ? "\t•\t" : "\t\(number).\t"
     }
@@ -208,6 +224,13 @@ struct RichTextEditor: NSViewRepresentable {
         func textView(_ view: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
             guard let text, let storage = view.textStorage else { return true }
             let string = storage.string as NSString
+
+            if text == " " || text == "\t" || text == "\n", range.length == 0,
+               let found = MarkdownShortcuts.snippet(in: storage, caret: range.location) {
+                let (snippetRange, expansion) = found
+                view.insertText(expansion + (text == "\t" ? "" : text), replacementRange: snippetRange)
+                return false
+            }
 
             if text == "\n" {
                 if MarkdownShortcuts.endsBlock(in: storage, at: range.location) {
@@ -317,6 +340,16 @@ struct RichTextEditor: UIViewRepresentable {
         func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             let storage = view.textStorage
             let string = storage.string as NSString
+
+            if text == " " || text == "\t" || text == "\n", range.length == 0,
+               let found = MarkdownShortcuts.snippet(in: storage, caret: range.location) {
+                let (snippetRange, expansion) = found
+                let inserted = expansion + (text == "\t" ? "" : text)
+                storage.replaceCharacters(in: snippetRange, with: NSAttributedString(string: inserted, attributes: RichTextEditor.baseAttributes))
+                view.selectedRange = NSRange(location: snippetRange.location + (inserted as NSString).length, length: 0)
+                textViewDidChange(view)
+                return false
+            }
 
             if text == "\n", storage.length > 0 {
                 let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))

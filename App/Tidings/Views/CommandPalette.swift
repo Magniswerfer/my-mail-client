@@ -54,6 +54,11 @@ extension AppModel {
             AppCommand(id: "attachments", title: String(localized: "Attachments…"), symbol: "paperclip", keys: "⌃⌘A") {
                 self.isAttachmentsShown = true
             },
+            AppCommand(id: "readLater", title: String(localized: "Read Later"), symbol: "book", keys: "⇧R",
+                       isEnabled: hasSelection) { self.readLater() },
+            AppCommand(id: "copyCode", title: String(localized: "Copy Latest Login Code"), symbol: "key.fill", keys: "⌃⌥C") {
+                self.copyLatestCode()
+            },
             AppCommand(id: "senders", title: String(localized: "Senders…"), symbol: "person.2", keys: "⌥⌘S") { self.isSendersShown = true },
             AppCommand(id: "unsubscribe", title: String(localized: "Unsubscribe…"), symbol: "hand.raised", keys: nil,
                        isEnabled: listSenderOfSelection != nil) {

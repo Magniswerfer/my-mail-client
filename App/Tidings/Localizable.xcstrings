@@ -6550,6 +6550,756 @@
           }
         }
       }
+    },
+    "Back in your Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbage i din indbakke"
+          }
+        }
+      }
+    },
+    "Ready to send": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klar til at sende"
+          }
+        }
+      }
+    },
+    "Open Tidings to send “%@”.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn Tidings for at sende “%@”."
+          }
+        }
+      }
+    },
+    "A reply is drafted for you. Check the [brackets] before sending.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et svar er skrevet til dig. Tjek [parenteserne] før du sender."
+          }
+        }
+      }
+    },
+    "Draft replies to mail that asks you something": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv svar på mail, der spørger dig om noget"
+          }
+        }
+      }
+    },
+    "Drafted for You": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skrevet til dig"
+          }
+        }
+      }
+    },
+    "Follow-ups and replies Tidings drafted. Nothing is sent without you.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opfølgninger og svar, Tidings har skrevet. Intet sendes uden dig."
+          }
+        }
+      }
+    },
+    "Reply drafted for you": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar skrevet til dig"
+          }
+        }
+      }
+    },
+    "Create": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opret"
+          }
+        }
+      }
+    },
+    "If %@: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvis %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "put in %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "læg i %@"
+          }
+        }
+      }
+    },
+    "mark done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "markér færdig"
+          }
+        }
+      }
+    },
+    "pin": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fastgør"
+          }
+        }
+      }
+    },
+    "snooze %lld days": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "udsæt %lld dage"
+          }
+        }
+      }
+    },
+    "reply later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "svar senere"
+          }
+        }
+      }
+    },
+    "Match": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match"
+          }
+        }
+      }
+    },
+    "%@ · %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "Category is": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategori er"
+          }
+        }
+      }
+    },
+    "text": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tekst"
+          }
+        }
+      }
+    },
+    "Forward to": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videresend til"
+          }
+        }
+      }
+    },
+    "Reply with": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar med"
+          }
+        }
+      }
+    },
+    "Run shortcut": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kør genvej"
+          }
+        }
+      }
+    },
+    "%lld days": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld dage"
+          }
+        }
+      }
+    },
+    "address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adresse"
+          }
+        }
+      }
+    },
+    "message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "besked"
+          }
+        }
+      }
+    },
+    "shortcut name": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "genvejens navn"
+          }
+        }
+      }
+    },
+    "Code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kode"
+          }
+        }
+      }
+    },
+    "Parcel": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakke"
+          }
+        }
+      }
+    },
+    "Flight": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fly"
+          }
+        }
+      }
+    },
+    "Receipt": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kvittering"
+          }
+        }
+      }
+    },
+    "Reservation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reservation"
+          }
+        }
+      }
+    },
+    "Bill": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regning"
+          }
+        }
+      }
+    },
+    "Expected %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forventet %@"
+          }
+        }
+      }
+    },
+    "Booking %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Booking %@"
+          }
+        }
+      }
+    },
+    "%@ people": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ personer"
+          }
+        }
+      }
+    },
+    "Order %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordre %@"
+          }
+        }
+      }
+    },
+    "Due %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forfalder %@"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér"
+          }
+        }
+      }
+    },
+    "Track": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spor"
+          }
+        }
+      }
+    },
+    "Check In": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check ind"
+          }
+        }
+      }
+    },
+    "Manage": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrer"
+          }
+        }
+      }
+    },
+    "Remind Me": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Påmind mig"
+          }
+        }
+      }
+    },
+    "Pay": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betal"
+          }
+        }
+      }
+    },
+    "View Order": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ordre"
+          }
+        }
+      }
+    },
+    "Copy the code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér koden"
+          }
+        }
+      }
+    },
+    "Copied %@ from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopierede %1$@ fra %2$@"
+          }
+        }
+      }
+    },
+    "No login code in the last 20 minutes": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen loginkode de seneste 20 minutter"
+          }
+        }
+      }
+    },
+    "Pay %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betal %@"
+          }
+        }
+      }
+    },
+    "Copy Latest Login Code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér seneste loginkode"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra"
+          }
+        }
+      }
+    },
+    "VIP": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP"
+          }
+        }
+      }
+    },
+    "Removed %@ from VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernede %@ fra VIP'er"
+          }
+        }
+      }
+    },
+    "Tidings Notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings-notifikationer"
+          }
+        }
+      }
+    },
+    "Only notify about VIPs while this Focus is on.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv kun besked om VIP'er, mens dette fokus er slået til."
+          }
+        }
+      }
+    },
+    "Only VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun VIP'er"
+          }
+        }
+      }
+    },
+    "Usual notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normale notifikationer"
+          }
+        }
+      }
+    },
+    "Muted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lydløs"
+          }
+        }
+      }
+    },
+    "Saved to Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemt til Læs senere"
+          }
+        }
+      }
+    },
+    "Removed from Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet fra Læs senere"
+          }
+        }
+      }
+    },
+    "Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læs senere"
+          }
+        }
+      }
+    },
+    "Unsubscribed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeldt"
+          }
+        }
+      }
+    },
+    "keyword": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nøgleord"
+          }
+        }
+      }
+    },
+    "Text": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekst"
+          }
+        }
+      }
+    },
+    "New Snippet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyt tekststykke"
+          }
+        }
+      }
+    },
+    "Snippets": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekststykker"
+          }
+        }
+      }
+    },
+    "Type ;keyword and a space in a message to insert the text. {first} and {name} are the first recipient, {me} is you, {date} is today.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv ;nøgleord og et mellemrum i en besked for at indsætte teksten. {first} og {name} er første modtager, {me} er dig, {date} er i dag."
+          }
+        }
+      }
+    },
+    "Original Layout": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originalt layout"
+          }
+        }
+      }
+    },
+    "Reader Mode": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læsetilstand"
+          }
+        }
+      }
+    },
+    "Clean text for reading": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ren tekst til læsning"
+          }
+        }
+      }
+    },
+    "Forward to %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videresend til %@"
+          }
+        }
+      }
+    },
+    "Reply automatically": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar automatisk"
+          }
+        }
+      }
+    },
+    "Run shortcut “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kør genvejen “%@”"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mere"
+          }
+        }
+      }
+    },
+    "%lld saved to Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld gemt til Læs senere"
+          }
+        }
+      }
+    },
+    "%lld removed from Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fjernet fra Læs senere"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

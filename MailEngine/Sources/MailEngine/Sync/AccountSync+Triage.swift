@@ -17,7 +17,13 @@ public enum TriageKind: Sendable, Hashable, Codable {
     /// "Reply Later" (HEY): a keyword on the newest message, so it survives reinstalls and other devices see it.
     case replyLater
     case clearReplyLater
+    /// Read Later: a keyword on every message of the conversation (syncs via IMAP).
+    case readLater
+    case clearReadLater
 }
+
+/// Read Later: set aside to read in reader mode, out of the Inbox (SPEC §11).
+public let readLaterKeyword = "$TidingsReadLater"
 
 /// The IMAP keyword for Reply Later. Plain keywords are fine on iCloud (verified in M0).
 public let replyLaterKeyword = "$TidingsReplyLater"
@@ -100,7 +106,7 @@ extension AccountSync {
             return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
                                 snapshots: snapshots, addedFlags: add, removedFlags: remove)
 
-        case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater:
+        case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater, .readLater, .clearReadLater:
             let all = try store.localIDs(threadIDs: threadIDs, mailbox: nil, accountID: account.id)
             let snapshotsAll = try store.snapshots(localIDs: all)
             switch kind {
@@ -121,6 +127,12 @@ extension AccountSync {
             case .clearReplyLater:
                 localIDs = snapshotsAll.filter { $0.flags.contains(replyLaterKeyword) }.map(\.localID)
                 remove = [replyLaterKeyword]
+            case .readLater:
+                localIDs = snapshotsAll.map(\.localID)
+                add = [readLaterKeyword]
+            case .clearReadLater:
+                localIDs = snapshotsAll.filter { $0.flags.contains(readLaterKeyword) }.map(\.localID)
+                remove = [readLaterKeyword]
             case .markRead:
                 localIDs = snapshotsAll.filter { !$0.flags.contains("\\Seen") }.map(\.localID)
                 add = ["\\Seen"]
@@ -173,7 +185,7 @@ extension AccountSync {
             let undoID = UUID().uuidString
             let current = try store.snapshotsIn(db, localIDs: change.snapshots.map(\.localID))
             switch change.kind {
-            case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater:
+            case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater, .readLater, .clearReadLater:
                 let ids = current.map(\.localID)
                 try store.applyLocalFlags(localIDs: ids, add: change.removedFlags, remove: change.addedFlags, in: db)
                 try store.enqueue(.flags(localIDs: ids, add: change.removedFlags, remove: change.addedFlags),

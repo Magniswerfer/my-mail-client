@@ -1,3 +1,4 @@
+import AppIntents
 import Foundation
 import MailEngine
 import UserNotifications
@@ -111,5 +112,32 @@ enum NotificationPolicyStorage {
 
     static func save(_ policy: NotificationPolicy) {
         UserDefaults.standard.set(try? JSONEncoder().encode(policy), forKey: key)
+    }
+}
+
+
+// MARK: - Focus filter
+
+/// Set by the Focus filter below while a Focus that uses it is on.
+enum FocusFilterState {
+    static let key = "notify.focusOnlyVIPs"
+    static var onlyVIPs: Bool { UserDefaults.standard.bool(forKey: key) }
+}
+
+/// Settings › Focus › (a Focus) › Focus Filters › Tidings: only VIPs while that Focus is on.
+struct TidingsFocusFilter: SetFocusFilterIntent {
+    static let title: LocalizedStringResource = "Tidings Notifications"
+    static let description = IntentDescription("Only notify about VIPs while this Focus is on.")
+
+    @Parameter(title: "Only VIPs", default: true)
+    var onlyVIPs: Bool
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: onlyVIPs ? "Only VIPs" : "Usual notifications")
+    }
+
+    func perform() async throws -> some IntentResult {
+        UserDefaults.standard.set(onlyVIPs, forKey: FocusFilterState.key)
+        return .result()
     }
 }

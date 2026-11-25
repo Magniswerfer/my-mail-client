@@ -6,9 +6,18 @@ public struct RuleReport: Sendable {
     public var matched = 0
     /// Runs whose rules asked for a notification.
     public var notify: [RuleRun] = []
+    /// Runs with forward / auto-reply / Shortcut actions for the app to carry out.
+    public var deliveries: [RuleDelivery] = []
     /// Everything that arrived in the Inbox since the last pass (for notifications).
     public var arrived: [StoredMessage] = []
     public init() {}
+}
+
+/// App-delivered actions of one run. `draftOnly` when a matching rule used an "about" condition:
+/// such rules never send mail by themselves (SPEC §6).
+public struct RuleDelivery: Sendable, Hashable {
+    public var run: RuleRun
+    public var draftOnly: Bool
 }
 
 extension AccountSync {
@@ -35,6 +44,9 @@ extension AccountSync {
                 guard !matched.isEmpty, let run = try apply(matched, to: message) else { continue }
                 report.matched += 1
                 if run.actions.contains(.notify) { report.notify.append(run) }
+                if run.actions.contains(where: { $0.isAppDelivered && $0 != .notify }) {
+                    report.deliveries.append(RuleDelivery(run: run, draftOnly: matched.contains(where: \.usesLanguageModel)))
+                }
             }
         }
         if upTo > 0 { try store.markRulesChecked(accountID: account.id, upTo: upTo) }
@@ -54,6 +66,9 @@ extension AccountSync {
             guard await engine.matches(probe, message), let run = try apply([probe], to: message) else { continue }
             report.matched += 1
             if run.actions.contains(.notify) { report.notify.append(run) }
+            if run.actions.contains(where: { $0.isAppDelivered && $0 != .notify }) {
+                report.deliveries.append(RuleDelivery(run: run, draftOnly: probe.usesLanguageModel))
+            }
         }
         return report
     }
@@ -80,7 +95,7 @@ extension AccountSync {
             case .moveToFolder(let path):
                 guard path != "INBOX" else { continue }
                 try perform(.move(toMailbox: path), threadIDs: threads)
-            case .notify: break
+            case .notify, .forward, .autoReply, .runShortcut: break
             }
             applied.append(action)
         }
@@ -105,7 +120,7 @@ extension AccountSync {
                 try perform(.moveToInbox, threadIDs: threads, from: try path(for: .archive) ?? "Archive")
             case .snooze: try perform(.unsnooze, threadIDs: threads)
             case .moveToFolder(let path): try perform(.moveToInbox, threadIDs: threads, from: path)
-            case .notify: break
+            case .notify, .forward, .autoReply, .runShortcut: break
             }
         }
         try store.markRuleRunUndone(id: run.id)

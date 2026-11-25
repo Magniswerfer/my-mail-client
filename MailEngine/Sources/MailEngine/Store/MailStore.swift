@@ -44,6 +44,8 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     /// event UID so every message about one event shares a conversation.
     public var invite: CalendarInvite?
     public var inviteUID: String?
+    /// Codes, parcels, flights, receipts, reservations, bills found in the message (JSON).
+    public var highlights: [Highlight]?
     /// The files attached (not inline images), as JSON. nil until known: set at sync, from the
     /// cache in the background, or when the message is opened.
     public var attachmentList: [AttachmentInfo]?
@@ -136,6 +138,7 @@ public final class MailStore: Sendable {
         registerMuteMigrations(&m)
         registerUnsubscribeMigrations(&m)
         registerAttachmentMigrations(&m)
+        registerHighlightMigrations(&m)
         return m
     }
 

@@ -27,6 +27,9 @@ struct ReaderView: View {
                                     .buttonStyle(.borderless)
                             }
                         }
+                        if let latest = messages.last, let highlights = latest.highlights, !highlights.isEmpty {
+                            HighlightCards(highlights: highlights, message: latest)
+                        }
                         SummaryLine(threadID: threadID, messageCount: messages.count)
                         FollowUpBanner(threadID: threadID)
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {
@@ -61,6 +64,7 @@ struct MessageCard: View {
     @State private var showImages = false
     /// Dark mode: show this message's own colours instead of recolouring it.
     @State private var originalColors = false
+    @State private var readerMode = false
     @Environment(\.colorScheme) private var colorScheme
 
     init(message: StoredMessage, startsExpanded: Bool) {
@@ -127,7 +131,14 @@ struct MessageCard: View {
             InviteCard(message: message, invite: invite)
         }
         if let loaded = body_ {
-            if let html = loaded.html {
+            if loaded.html != nil, readerMode {
+                Button("Original Layout", systemImage: "doc.richtext") { readerMode = false }
+                    .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
+                ReaderModeText(text: loaded.text)
+            } else if let html = loaded.html {
+                Button("Reader Mode", systemImage: "book") { readerMode = true }
+                    .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
+                    .help("Clean text for reading")
                 PrivacyBar(prepared: html, imagesShown: showImages, sender: message.fromAddress,
                            loadImages: { showImages = true },
                            alwaysLoad: { scope in
@@ -187,6 +198,8 @@ struct MessageCard: View {
     }
 
     private func load() async {
+        // Read Later opens in reader mode.
+        if message.flags.contains(readLaterKeyword) { readerMode = true }
         do {
             let raw = try await model.rawMessage(message)
             let parsed = MIMEParser.parse(raw)

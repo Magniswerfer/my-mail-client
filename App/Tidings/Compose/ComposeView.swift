@@ -84,7 +84,9 @@ struct ComposeView: View {
         }
         .onAppear {
             if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
+            app.setSnippetContext(to: model.recipients(model.to), from: model.identity)
         }
+        .onChange(of: model.to) { app.setSnippetContext(to: model.recipients(model.to), from: model.identity) }
         .sheet(isPresented: $isSendLaterShown) { sendLaterSheet }
         .confirmationDialog(String(localized: "Send anyway?"), isPresented: Binding(
             get: { pendingSend != nil }, set: { if !$0 { pendingSend = nil } }
@@ -430,7 +432,9 @@ struct OutboxView: View {
                 Text(message?.subject.isEmpty == false ? message!.subject : String(localized: "(no subject)")).font(.headline)
                 Text(message?.envelopeRecipients.joined(separator: ", ") ?? "").font(.caption).foregroundStyle(.secondary)
                 if let id = item.id, model.autoDrafts.contains(where: { $0.outboxID == id }) {
-                    Label("Follow-up drafted for you", systemImage: "sparkles").font(.caption).foregroundStyle(.purple)
+                    let kind = model.autoDrafts.first { $0.outboxID == id }?.kind
+                    Label(kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you", systemImage: "sparkles")
+                        .font(.caption).foregroundStyle(.purple)
                 }
                 if let error = item.lastError {
                     Text(error).font(.caption).foregroundStyle(item.state == .failed ? .red : .orange)

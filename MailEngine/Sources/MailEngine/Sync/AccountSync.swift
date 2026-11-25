@@ -312,6 +312,8 @@ public actor AccountSync {
         )
         message.inReplyTo = parsed.inReplyTo.first
         message.attachmentList = parsed.attachments.filter { !$0.isInline }
+        let highlights = HighlightExtractor.extract(parsed)
+        message.highlights = highlights.isEmpty ? nil : highlights
         if let invite = parsed.invite {
             message.invite = invite
             message.inviteUID = invite.uid

@@ -94,13 +94,16 @@ extension AppModel {
             var matched = 0
             var notify: [RuleRun] = []
             var arrived: [StoredMessage] = []
+            var deliveries: [RuleDelivery] = []
             for sync in syncs {
                 guard let report = try? await sync.runRules(engine: engine) else { continue }
                 matched += report.matched
                 notify += report.notify
                 arrived += report.arrived
+                deliveries += report.deliveries
             }
             guard let self else { return }
+            await self.deliver(deliveries)
             self.ruleTask = nil
             if matched > 0 || !arrived.isEmpty {
                 self.ruleCounts = (try? self.store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
@@ -113,7 +116,10 @@ extension AppModel {
 
     /// New mail that deserves it becomes a system notification (SPEC §10).
     func deliverNotifications(arrived: [StoredMessage], ruleRuns: [RuleRun]) async {
-        let notifications = notificationPolicy.notifications(for: arrived.sorted { $0.date < $1.date }, ruleRuns: ruleRuns,
+        var policy = notificationPolicy
+        // A Focus with Tidings' filter on: only VIPs (and nothing at all if you have none).
+        if FocusFilterState.onlyVIPs { policy.onlyVIPs = true; policy.pinned = false; policy.replies = false; policy.rules = false }
+        let notifications = policy.notifications(for: arrived.sorted { $0.date < $1.date }, ruleRuns: ruleRuns,
                                                              ownAddresses: ownAddresses, store: store)
         await notifier.post(notifications) { n in n.messageID.flatMap(MessageLink.url) }
     }
@@ -125,7 +131,9 @@ extension AppModel {
         Task {
             var matched = 0
             for sync in syncs {
-                matched += (try? await sync.runRuleOnInbox(rule, engine: engine))?.matched ?? 0
+                guard let report = try? await sync.runRuleOnInbox(rule, engine: engine) else { continue }
+                matched += report.matched
+                await deliver(report.deliveries)
             }
             ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
             reload()
@@ -189,6 +197,9 @@ extension RuleAction {
             hours.map { String(localized: "Snooze for \($0) hours") } ?? String(localized: "Snooze for someday")
         case .moveToFolder(let path): String(localized: "Move to folder \(MailboxState.displayName(path))")
         case .notify: String(localized: "Notify me")
+        case .forward(let to): String(localized: "Forward to \(to)")
+        case .autoReply: String(localized: "Reply automatically")
+        case .runShortcut(let name): String(localized: "Run shortcut “\(name)”")
         }
     }
 
@@ -202,6 +213,9 @@ extension RuleAction {
         case .snooze: "clock"
         case .moveToFolder: "folder"
         case .notify: "bell"
+        case .forward: "arrowshape.turn.up.right"
+        case .autoReply: "arrowshape.turn.up.left"
+        case .runShortcut: "square.2.layers.3d"
         }
     }
 }
@@ -213,5 +227,60 @@ extension Rule {
         let when = conditions.map(\.summary).joined(separator: joiner)
         let then = actions.map(\.summary).joined(separator: ", ")
         return "\(when) → \(then)"
+    }
+}
+
+// MARK: - Forward, auto-reply, Shortcuts
+
+extension AppModel {
+    /// The actions the engine leaves to the app. Forwards and replies go through the outbox (so
+    /// the undo window applies), or stay in Drafts when the rule used an "about" condition.
+    func deliver(_ deliveries: [RuleDelivery]) async {
+        for delivery in deliveries {
+            guard let message = (try? store.message(id: delivery.run.messageID)) ?? nil else { continue }
+            for action in delivery.run.actions {
+                switch action {
+                case .forward(let address):
+                    await ruleMail(.forward, about: message, to: [MailAddress(name: nil, address: address)], text: nil,
+                                   send: !delivery.draftOnly)
+                case .autoReply(let text):
+                    guard shouldAutoReply(to: message) else { continue }
+                    await ruleMail(.reply, about: message, to: nil, text: text, send: !delivery.draftOnly)
+                case .runShortcut(let name):
+                    var c = URLComponents(string: "shortcuts://run-shortcut")
+                    c?.queryItems = [URLQueryItem(name: "name", value: name), URLQueryItem(name: "input", value: "text"),
+                                     URLQueryItem(name: "text", value: message.messageID.flatMap(MessageLink.url)?.absoluteString ?? message.subject)]
+                    if let url = c?.url { Platform.openExternally(url) }
+                default:
+                    continue
+                }
+            }
+        }
+        if !deliveries.isEmpty { reloadOutbox() }
+    }
+
+    /// Auto-replies never go to robots or lists, and at most once a day per person.
+    private func shouldAutoReply(to message: StoredMessage) -> Bool {
+        guard message.category == .primary, !SignatureInfo.looksAutomated(message.fromAddress) else { return false }
+        var log = UserDefaults.standard.dictionary(forKey: "rules.autoReplied") as? [String: Date] ?? [:]
+        let sender = message.fromAddress.lowercased()
+        if let last = log[sender], Date().timeIntervalSince(last) < 86_400 { return false }
+        log[sender] = Date()
+        UserDefaults.standard.set(log, forKey: "rules.autoReplied")
+        return true
+    }
+
+    private func ruleMail(_ kind: ComposeKind, about message: StoredMessage, to: [MailAddress]?, text: String?, send: Bool) async {
+        guard let account = accounts.first(where: { $0.id == message.accountID }),
+              let raw = try? await rawMessage(message) else { return }
+        let parsed = MIMEParser.parse(raw)
+        var draft = Self.draft(kind, replyingTo: parsed, raw: raw, account: account)
+        if let to { draft.message.to = to }
+        let body = NSMutableAttributedString(string: text.map { $0 + "\n" } ?? "", attributes: RichTextEditor.baseAttributes)
+        body.append(draft.body)
+        guard let id = saveDraft(draft.message, body: body, accountID: account.id, kind: kind, originalLocalID: message.id) else { return }
+        if send, let item = try? store.outboxItem(id: id), let outgoing = item.message {
+            _ = try? await syncs[account.id]?.queue(outgoing, kind: kind, originalLocalID: message.id, replacingDraft: id)
+        }
     }
 }

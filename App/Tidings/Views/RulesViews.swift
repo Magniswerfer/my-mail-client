@@ -419,7 +419,7 @@ struct ConditionEditor: View {
 }
 
 enum ActionKind: CaseIterable, Hashable {
-    case category, pin, markRead, replyLater, done, snooze, folder, notify
+    case category, pin, markRead, replyLater, done, snooze, folder, notify, forward, autoReply, shortcut
 
     static var available: [ActionKind] { allCases }
 
@@ -433,6 +433,9 @@ enum ActionKind: CaseIterable, Hashable {
         case .snooze: String(localized: "Snooze")
         case .folder: String(localized: "Move to folder")
         case .notify: String(localized: "Notify me")
+        case .forward: String(localized: "Forward to")
+        case .autoReply: String(localized: "Reply with")
+        case .shortcut: String(localized: "Run shortcut")
         }
     }
 
@@ -446,6 +449,9 @@ enum ActionKind: CaseIterable, Hashable {
         case .snooze: self = .snooze
         case .moveToFolder: self = .folder
         case .notify: self = .notify
+        case .forward: self = .forward
+        case .autoReply: self = .autoReply
+        case .runShortcut: self = .shortcut
         }
     }
 
@@ -459,6 +465,9 @@ enum ActionKind: CaseIterable, Hashable {
         case .snooze: .snooze(hours: 24)
         case .folder: .moveToFolder("")
         case .notify: .notify
+        case .forward: .forward(to: "")
+        case .autoReply: .autoReply(text: "")
+        case .shortcut: .runShortcut(name: "")
         }
     }
 }
@@ -498,6 +507,17 @@ struct ActionEditor: View {
                 }
                 .labelsHidden()
                 .fixedSize()
+            case .forward(let to):
+                TextField("address", text: Binding(get: { to }, set: { action = .forward(to: $0) }),
+                          prompt: Text(verbatim: "anna@example.com"))
+                    .frame(maxWidth: 260)
+            case .autoReply(let text):
+                TextField("message", text: Binding(get: { text }, set: { action = .autoReply(text: $0) }), axis: .vertical)
+                    .lineLimit(1...4)
+                    .frame(maxWidth: 300)
+            case .runShortcut(let name):
+                TextField("shortcut name", text: Binding(get: { name }, set: { action = .runShortcut(name: $0) }))
+                    .frame(maxWidth: 220)
             default:
                 EmptyView()
             }

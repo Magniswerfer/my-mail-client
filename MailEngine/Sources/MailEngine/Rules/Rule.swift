@@ -25,7 +25,7 @@ public struct Rule: Codable, Sendable, Hashable, Identifiable {
     }
 
     /// A rule needs at least one condition and one action to do anything.
-    public var isComplete: Bool { !conditions.isEmpty && !actions.isEmpty }
+    public var isComplete: Bool { !conditions.isEmpty && !actions.isEmpty && actions.allSatisfy(\.isComplete) }
 
     /// Whether any condition needs the on-device model (slower; runs after the cheap ones).
     public var usesLanguageModel: Bool {
@@ -110,6 +110,31 @@ public enum RuleAction: Codable, Sendable, Hashable {
     case moveToFolder(String)
     /// Show a notification (delivered by the app).
     case notify
+    /// Forward the message (the app sends it; rules with "about" conditions leave a draft, SPEC §6).
+    case forward(to: String)
+    /// Answer with this text (never to automated senders, at most once a day per person).
+    case autoReply(text: String)
+    /// Run a Shortcut with a link to the message.
+    case runShortcut(name: String)
+
+    /// Carried out by the app after the engine pass (they need the composer, Shortcuts or the UI).
+    public var isAppDelivered: Bool {
+        switch self {
+        case .notify, .forward, .autoReply, .runShortcut: true
+        default: false
+        }
+    }
+
+    /// Whether the action has what it needs (an address, a text, a name, a folder).
+    public var isComplete: Bool {
+        switch self {
+        case .forward(let to): to.contains("@")
+        case .autoReply(let text): !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .runShortcut(let name): !name.trimmingCharacters(in: .whitespaces).isEmpty
+        case .moveToFolder(let path): !path.isEmpty
+        default: true
+        }
+    }
 
     /// Whether the action takes the conversation out of the Inbox. A rule applies at most one.
     var leavesInbox: Bool {

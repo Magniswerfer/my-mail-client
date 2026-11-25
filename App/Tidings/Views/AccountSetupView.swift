@@ -142,6 +142,7 @@ struct SettingsView: View {
             Tab("Bundles", systemImage: "square.stack.3d.up") { BundleSettings() }
             Tab("Assistant", systemImage: "sparkles") { AssistantSettings() }
             Tab("Notifications", systemImage: "bell.badge") { NotificationSettings() }
+            Tab("Snippets", systemImage: "text.badge.plus") { SnippetsSettings() }
             Tab("General", systemImage: "gearshape") {
                 Form {
                     Section("Accounts") {

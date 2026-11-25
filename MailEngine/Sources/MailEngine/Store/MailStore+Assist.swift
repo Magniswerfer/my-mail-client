@@ -25,14 +25,20 @@ public struct AutoDraft: Sendable, Codable, Hashable, FetchableRecord, Persistab
     public var messageID: Int64
     public var createdAt: Date
     public var dismissed: Bool
+    /// A follow-up to your own unanswered mail, or a reply to mail that asks you something.
+    public var kind: Kind
 
-    public init(threadID: String, accountID: String, outboxID: Int64?, messageID: Int64, createdAt: Date = Date(), dismissed: Bool = false) {
+    public enum Kind: String, Sendable, Codable, DatabaseValueConvertible { case followUp, reply }
+
+    public init(threadID: String, accountID: String, outboxID: Int64?, messageID: Int64, createdAt: Date = Date(),
+                dismissed: Bool = false, kind: Kind = .followUp) {
         self.threadID = threadID
         self.accountID = accountID
         self.outboxID = outboxID
         self.messageID = messageID
         self.createdAt = createdAt
         self.dismissed = dismissed
+        self.kind = kind
     }
 }
 
@@ -83,6 +89,11 @@ extension MailStore {
                 t.column("dismissed", .boolean).notNull().defaults(to: false)
             }
         }
+        m.registerMigration("v18-reply-drafts") { db in
+            try db.alter(table: "autoDraft") { t in
+                t.add(column: "kind", .text).notNull().defaults(to: "followUp")
+            }
+        }
     }
 
     // MARK: Summaries
@@ -126,6 +137,35 @@ extension MailStore {
             guard !others.contains(where: { SignatureInfo.looksAutomated($0.address) }) else { return false }
             let text = MailStore.ownText(m.plainText ?? m.preview)
             return text.count >= 40                                              // not a bare "Thanks!"
+        }
+        .prefix(limit).map { $0 }
+    }
+
+    /// Recent Primary mail from a person, addressed to you (To, not just Cc), that looks like it
+    /// asks you something, newest first, with nothing drafted for it yet.
+    public func replyCandidates(accountID: String, ownAddresses: Set<String>, maxDays: Int = 2,
+                                now: Date = Date(), limit: Int = 5) throws -> [StoredMessage] {
+        let own = Set(ownAddresses.map { $0.lowercased() })
+        guard !own.isEmpty else { return [] }
+        let oldest = now.addingTimeInterval(-Double(maxDays) * 86_400)
+        let rows = try db.read { db in
+            try StoredMessage.fetchAll(db, sql: """
+                SELECT m.* FROM message m JOIN (
+                    SELECT threadID, max(date) AS d FROM message WHERE accountID = ? AND threadID IS NOT NULL GROUP BY threadID
+                ) t ON m.threadID = t.threadID AND m.date = t.d
+                WHERE m.accountID = ? AND m.mailbox = 'INBOX' AND m.category = 'primary' AND m.date >= ?
+                  AND lower(m.fromAddress) NOT IN (\(own.map { _ in "?" }.joined(separator: ",")))
+                  AND m.threadID NOT IN (SELECT threadID FROM autoDraft)
+                ORDER BY m.date DESC LIMIT ?
+                """, arguments: StatementArguments([accountID, accountID, oldest] + own.sorted() + [limit * 4] as [any DatabaseValueConvertible]))
+        }
+        return rows.filter { m in
+            guard !SignatureInfo.looksAutomated(m.fromAddress), m.riskLevel == .none else { return false }
+            // You're on To. `recipients` is To + Cc, so check the To list isn't just Cc: approximate
+            // with "one of the first three addresses is yours".
+            let listed = AddressParser.parse(m.recipients).prefix(3).map { $0.address.lowercased() }
+            guard listed.contains(where: own.contains) else { return false }
+            return NeedsReply.likely(subject: m.subject, text: m.plainText ?? m.preview)
         }
         .prefix(limit).map { $0 }
     }

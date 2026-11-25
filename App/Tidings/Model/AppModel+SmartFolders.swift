@@ -11,6 +11,7 @@ extension AppModel {
     /// Built-in names in your language; yours as you named them.
     func displayName(_ folder: SmartFolder) -> String {
         switch folder.id {
+        case SmartFolder.readLater.id: String(localized: "Read Later")
         case SmartFolder.attachments.id: String(localized: "Attachments")
         case SmartFolder.waitingForReply.id: String(localized: "Waiting for Reply")
         case SmartFolder.receiptsThisYear.id: String(localized: "Receipts This Year")

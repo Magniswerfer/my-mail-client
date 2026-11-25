@@ -10,6 +10,8 @@ enum AssistSettings {
     static let workdayStartKey = "assist.workdayStart"
     static let workdayEndKey = "assist.workdayEnd"
     static let sendAndDoneKey = "compose.sendAndDone"
+    static let replyDraftsKey = "assist.replyDrafts"
+    static var replyDrafts: Bool { UserDefaults.standard.object(forKey: replyDraftsKey) as? Bool ?? true }
     static var sendAndDone: Bool { UserDefaults.standard.object(forKey: sendAndDoneKey) as? Bool ?? true }
 
     static var summaries: Bool { UserDefaults.standard.object(forKey: summariesKey) as? Bool ?? true }
@@ -62,6 +64,7 @@ extension AppModel {
         guard AssistSettings.autoDrafts, autoDraftTask == nil else { return }
         autoDraftTask = Task { [weak self] in
             await self?.draftFollowUps()
+            await self?.draftReplies()
             self?.autoDraftTask = nil
         }
     }
@@ -88,6 +91,35 @@ extension AppModel {
                     try store.saveAutoDraft(AutoDraft(threadID: threadID, accountID: account.id, outboxID: outboxID, messageID: id))
                 } catch {
                     // Offline or the message is gone: try again after the next sync.
+                    continue
+                }
+            }
+        }
+        reloadOutbox()
+    }
+
+    /// Replies to recent mail that asks you something. Only with Apple Intelligence: a template
+    /// reply would be noise. Never sent by itself.
+    private func draftReplies() async {
+        guard AssistSettings.replyDrafts, let writer = assistant else { return }
+        for account in accounts {
+            let candidates = (try? store.replyCandidates(accountID: account.id, ownAddresses: Set(account.addresses), limit: 3)) ?? []
+            for incoming in candidates {
+                guard let id = incoming.id, let threadID = incoming.threadID else { continue }
+                do {
+                    let raw = try await rawMessage(incoming)
+                    let parsed = MIMEParser.parse(raw)
+                    let draft = Self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
+                    let digest = ThreadDigest(subject: incoming.subject, messages: messages(inThread: threadID),
+                                              ownAddresses: Set(account.addresses))
+                    let sender = parsed.from.first.map(IntroReply.firstName)
+                    guard let text = await writer.reply(digest, to: sender) else { continue }
+                    let body = NSMutableAttributedString(string: text, attributes: RichTextEditor.baseAttributes)
+                    body.append(draft.body)
+                    let outboxID = saveDraft(draft.message, body: body, accountID: account.id, kind: .reply, originalLocalID: id)
+                    try store.saveAutoDraft(AutoDraft(threadID: threadID, accountID: account.id, outboxID: outboxID,
+                                                      messageID: id, kind: .reply))
+                } catch {
                     continue
                 }
             }

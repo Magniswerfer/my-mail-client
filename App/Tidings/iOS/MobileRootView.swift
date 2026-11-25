@@ -72,6 +72,18 @@ struct MobileRootView: View {
             SnoozePicker().presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(isPresented: $model.isPaletteShown) {
+            CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $model.isFolderPickerShown) {
+            FolderPicker().padding(.top, 8).presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
+        .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
+        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
+        .quickLookPreview($model.quickLookURL)
+        .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
+        .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
         .fullScreenCover(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
@@ -124,6 +136,17 @@ struct MobileRootView: View {
                 }
             }
         }
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button("Command Palette", systemImage: "command") { model.isPaletteShown = true }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("Rules…", systemImage: "line.3.horizontal.decrease.circle") { model.isRulesShown = true }
+                Button("Senders…", systemImage: "person.2") { model.isSendersShown = true }
+                Button("Attachments…", systemImage: "paperclip") { model.isAttachmentsShown = true }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+        }
         ToolbarItem(placement: .bottomBar) {
             SidebarStatus()
         }
@@ -151,6 +174,7 @@ struct MobileRootView: View {
             Menu {
                 if let thread = model.targetThreads.first {
                     MoveMenuContent(thread: thread)
+                    Button("Move to Folder…", systemImage: "folder") { model.isFolderPickerShown = true }
                     Divider()
                     Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk) }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash) }
@@ -167,6 +191,7 @@ struct MobileRootView: View {
                 Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
                 Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
                 Button("Reply Later", systemImage: "arrowshape.turn.up.left.circle") { model.toggleReplyLater() }
+                Button("Read Later", systemImage: "book") { model.readLater() }
                 Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")

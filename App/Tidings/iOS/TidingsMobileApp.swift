@@ -28,16 +28,19 @@ struct TidingsMobileApp: App {
             case .active:
                 model.start()
                 model.checkForNewMail()
+                Task { await WakeReminders.cancel() }
             case .background:
-                Self.scheduleRefresh()
+                Self.scheduleRefresh(next: model.nextDueDate)
+                Task { await model.scheduleWakeReminders() }
                 suspendGracefully()
             default:
                 break
             }
         }
         .backgroundTask(.appRefresh(Self.refreshTaskID)) {
-            await Self.scheduleRefresh()
             await Self.model.backgroundCatchUp()
+            await Self.scheduleRefresh(next: Self.model.nextDueDate)
+            await Self.model.scheduleWakeReminders()
         }
     }
 
@@ -68,9 +71,11 @@ struct TidingsMobileApp: App {
     }
 
     /// iOS decides when this actually runs (typically every 15–60 minutes, based on use).
-    @MainActor static func scheduleRefresh() {
+    /// Asks for the next refresh at the next snooze wake or scheduled send, or in 15 minutes.
+    @MainActor static func scheduleRefresh(next: Date? = nil) {
         let request = BGAppRefreshTaskRequest(identifier: refreshTaskID)
-        request.earliestBeginDate = Date().addingTimeInterval(15 * 60)
+        let soon = Date().addingTimeInterval(15 * 60)
+        request.earliestBeginDate = next.map { min(max($0, Date().addingTimeInterval(60)), soon) } ?? soon
         try? BGTaskScheduler.shared.submit(request)
     }
 }

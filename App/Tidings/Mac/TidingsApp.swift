@@ -12,6 +12,7 @@ struct TidingsApp: App {
         let model = AppModel()
         model.start()
         _model = State(initialValue: model)
+        GlobalHotKey.shared.registerCopyCode { [weak model] in model?.copyLatestCode() }
     }
 
     var body: some Scene {
@@ -60,6 +61,8 @@ struct TidingsApp: App {
                 Button("Add to Reminders") { model.addToReminders() }
                     .keyboardShortcut("r", modifiers: [.command, .control])
                 Button("Copy Link to Message") { model.copyLink() }
+                Button("Copy Latest Login Code") { model.copyLatestCode() }
+                Button("Read Later") { model.readLater() }
                 Divider()
                 Button("Mark Done") { model.perform(.done) }
                     .keyboardShortcut("e", modifiers: [.command, .option])
@@ -395,6 +398,7 @@ struct RootView: View {
         case "f": model.compose(.forward)
         case "l": model.toggleReplyLater()
         case "M": model.toggleMute()
+        case "R": model.readLater()
         case "?": model.isShortcutsShown = true
         default: return .ignored
         }

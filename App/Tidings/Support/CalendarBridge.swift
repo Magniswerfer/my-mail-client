@@ -62,6 +62,19 @@ import MailEngine
     enum Failure: Error { case noAccess, noList }
 
     /// A reminder in the default list, with an optional due date (and an alert then).
+    /// A plain event (flights, reservations from Highlights).
+    func addEvent(title: String, start: Date, end: Date, location: String?, url: URL?) throws {
+        guard hasAccess else { throw Failure.noAccess }
+        let event = EKEvent(eventStore: store)
+        event.calendar = store.defaultCalendarForNewEvents
+        event.title = title
+        event.startDate = start
+        event.endDate = max(end, start.addingTimeInterval(900))
+        event.location = location
+        event.url = url
+        try store.save(event, span: .thisEvent, commit: true)
+    }
+
     func addReminder(title: String, notes: String?, url: URL?, due: Date?) async throws {
         if EKEventStore.authorizationStatus(for: .reminder) != .fullAccess {
             guard EKEventStore.authorizationStatus(for: .reminder) == .notDetermined,

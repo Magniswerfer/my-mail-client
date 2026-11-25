@@ -11,6 +11,9 @@ public protocol MailWriter: Sendable {
     func summarize(_ thread: ThreadDigest) async -> String?
     /// A short, polite nudge in the language of the original: greeting and text, no signature.
     func followUp(_ request: FollowUpRequest) async -> String?
+    /// A reply to a message that asks you something: greeting and answer, no signature. The
+    /// model doesn't know your plans, so it answers what it can and leaves [brackets] for the rest.
+    func reply(_ thread: ThreadDigest, to sender: String?) async -> String?
 }
 
 /// A conversation prepared for the model: each message's own words (no quoted history),
@@ -136,6 +139,29 @@ public struct FoundationModelsWriter: MailWriter {
                 My email:
                 \(request.lastMessage)
                 """, generating: WrittenText.self)
+            return Self.clean(response.content.text)
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    public func reply(_ thread: ThreadDigest, to sender: String?) async -> String? {
+        #if canImport(FoundationModels)
+        let session = LanguageModelSession(instructions: """
+            You draft the user's ("Me") reply to the newest message of an email conversation. Use \
+            the same language and tone as that message. Start with a short greeting using the \
+            sender's first name if given, then a blank line, then a brief answer (two to five \
+            sentences). You don't know the user's calendar, preferences or facts that aren't in the \
+            conversation: where an answer needs them, write a short placeholder in square \
+            brackets, like [time that suits me]. Never invent facts, commitments or dates. No \
+            sign-off, no subject line.
+            """)
+        let who = sender.map { "Sender's first name: \($0)\n" } ?? ""
+        do {
+            let response = try await session.respond(to: who + thread.prompt, generating: WrittenText.self)
             return Self.clean(response.content.text)
         } catch {
             return nil

@@ -22,7 +22,8 @@ public struct SmartFolder: Codable, Sendable, Hashable, Identifiable {
                                                     symbol: "hourglass")
     public static let receiptsThisYear = SmartFolder(id: "builtin.receipts", name: "Receipts This Year",
                                                      query: "category:transactions after:thisyear", symbol: "receipt")
-    public static let builtIn = [attachments, waitingForReply, receiptsThisYear]
+    public static let readLater = SmartFolder(id: "builtin.readLater", name: "Read Later", query: "is:readlater", symbol: "book")
+    public static let builtIn = [readLater, attachments, waitingForReply, receiptsThisYear]
 
     public var isBuiltIn: Bool { id.hasPrefix("builtin.") }
 }
