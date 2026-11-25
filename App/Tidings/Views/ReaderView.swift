@@ -223,6 +223,17 @@ struct PrivacyBar: View {
     }
 }
 
+#if os(macOS)
+/// The message is laid out at its full height inside the reader's scroll view and never scrolls
+/// itself, but a web view still swallows scroll-wheel events: hand them to the reader, or the
+/// conversation won't scroll while the pointer is over a message body.
+final class PassthroughScrollWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        nextResponder?.scrollWheel(with: event)
+    }
+}
+#endif
+
 /// HTML mail in a locked-down web view: no JavaScript, links open in the browser, height follows
 /// content. Remote loads are blocked except images when allowed (SPEC §8); `cid:` parts are
 /// served from the message itself.
@@ -244,7 +255,11 @@ struct PrivacyBar: View {
         #if os(iOS)
         config.dataDetectorTypes = [.link, .phoneNumber, .address, .calendarEvent]
         #endif
+        #if os(macOS)
+        let view = PassthroughScrollWebView(frame: .zero, configuration: config)
+        #else
         let view = WKWebView(frame: .zero, configuration: config)
+        #endif
         view.navigationDelegate = context.coordinator
         #if os(macOS)
         view.setValue(false, forKey: "drawsBackground")
