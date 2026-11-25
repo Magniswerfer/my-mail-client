@@ -74,7 +74,11 @@ extension AppModel {
     func moveSender(to category: MailCategory, thread: ThreadSummary? = nil) {
         isCategoryPickerShown = false
         guard let thread = thread ?? targetThreads.first else { return }
-        let sender = thread.latest.fromAddress
+        moveSender(to: category, address: thread.latest.fromAddress, name: thread.latest.senderDisplay)
+    }
+
+    /// "Always for this sender", by address (the Senders screen).
+    func moveSender(to category: MailCategory, address sender: String, name: String) {
         let previous = (try? store.db.read { db in
             try Row.fetchAll(db, sql: "SELECT id, category, classificationReason FROM message WHERE lower(fromAddress) = ?",
                              arguments: [sender.lowercased()])
@@ -94,7 +98,7 @@ extension AppModel {
         }
         registerCategoryUndo(undo)
         reload()
-        show(Toast(message: String(localized: "\(thread.latest.senderDisplay) → \(category.title), now and in future"),
+        show(Toast(message: String(localized: "\(name) → \(category.title), now and in future"),
                    symbol: category.symbol, undoAction: undo))
     }
 

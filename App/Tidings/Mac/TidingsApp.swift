@@ -108,6 +108,10 @@ struct TidingsApp: App {
                 Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!model.isSearching)
+                Button("Senders…") { model.isSendersShown = true }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                Button("Unsubscribe…") { if let address = model.listSenderOfSelection { model.requestUnsubscribe(address: address) } }
+                    .disabled(model.listSenderOfSelection == nil)
                 Button("Rules…") { model.isRulesShown = true }
                     .keyboardShortcut("r", modifiers: [.command, .option])
                 Button("New Rule from Message…") { model.newRule(from: model.targetThreads.first) }
@@ -205,6 +209,8 @@ struct RootView: View {
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
+        .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
+        .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
         .sheet(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
@@ -303,7 +309,7 @@ struct RootView: View {
     private var isOverlayOpen: Bool {
         model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
             || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
-            || model.editingSmartFolder != nil
+            || model.editingSmartFolder != nil || model.isSendersShown || model.unsubscribeCandidate != nil
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

@@ -51,6 +51,11 @@ extension AppModel {
                        isEnabled: isSearching && searchScope != nil) { self.toggleSearchEverywhere() },
             AppCommand(id: "saveSearch", title: String(localized: "Save Search as Smart Folder…"), symbol: "folder.badge.plus", keys: "⌘S",
                        isEnabled: isSearching) { self.saveCurrentSearch() },
+            AppCommand(id: "senders", title: String(localized: "Senders…"), symbol: "person.2", keys: "⌥⌘S") { self.isSendersShown = true },
+            AppCommand(id: "unsubscribe", title: String(localized: "Unsubscribe…"), symbol: "hand.raised", keys: nil,
+                       isEnabled: listSenderOfSelection != nil) {
+                if let address = self.listSenderOfSelection { self.requestUnsubscribe(address: address) }
+            },
             AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: "⌥⌘R") {
                 self.isRulesShown = true
             },

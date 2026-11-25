@@ -1,6 +1,316 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Tidings tells %@ you want no more of their mail. Nothing opens.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings fortæller %@, at du ikke vil have mere mail fra dem. Intet åbnes."
+          }
+        }
+      }
+    },
+    "Their unsubscribe page on %@ opens in your browser.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deres afmeldingsside på %@ åbnes i din browser."
+          }
+        }
+      }
+    },
+    "the web": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nettet"
+          }
+        }
+      }
+    },
+    "Tidings sends an unsubscribe email to %@. You can undo it for a few seconds.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings sender en afmeldingsmail til %@. Du kan fortryde i nogle sekunder."
+          }
+        }
+      }
+    },
+    "No mail from them on this device": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen mail fra dem på denne enhed"
+          }
+        }
+      }
+    },
+    "Couldn't read their message: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke læse deres besked: %@"
+          }
+        }
+      }
+    },
+    "%@ doesn't offer a way to unsubscribe": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ tilbyder ingen måde at afmelde sig på"
+          }
+        }
+      }
+    },
+    "Their server didn't accept it. Try their unsubscribe link in the message.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deres server tog ikke imod det. Prøv afmeldingslinket i beskeden."
+          }
+        }
+      }
+    },
+    "Couldn't send the unsubscribe email: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke sende afmeldingsmailen: %@"
+          }
+        }
+      }
+    },
+    "Unsubscribed from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeldt fra %@"
+          }
+        }
+      }
+    },
+    "Last 90 days": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seneste 90 dage"
+          }
+        }
+      }
+    },
+    "Last year": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seneste år"
+          }
+        }
+      }
+    },
+    "All time": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altid"
+          }
+        }
+      }
+    },
+    "Filter senders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrér afsendere"
+          }
+        }
+      }
+    },
+    "Senders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendere"
+          }
+        }
+      }
+    },
+    "Period": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Periode"
+          }
+        }
+      }
+    },
+    "Lists only": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun lister"
+          }
+        }
+      }
+    },
+    "Only senders of newsletters and other bulk mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun afsendere af nyhedsbreve og anden massemail"
+          }
+        }
+      }
+    },
+    "Unsubscribe…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld…"
+          }
+        }
+      }
+    },
+    "Mark Their Inbox Mail Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markér deres indbakkemail som færdig"
+          }
+        }
+      }
+    },
+    "Always Put Them in": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læg dem altid i"
+          }
+        }
+      }
+    },
+    "Show Their Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis deres mail"
+          }
+        }
+      }
+    },
+    "1 message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 besked"
+          }
+        }
+      }
+    },
+    "%lld messages": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld beskeder"
+          }
+        }
+      }
+    },
+    "%lld in Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld i indbakken"
+          }
+        }
+      }
+    },
+    "Unsubscribed %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeldt %@"
+          }
+        }
+      }
+    },
+    "Unsubscribe": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld"
+          }
+        }
+      }
+    },
+    "Unsubscribe from %@?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld fra %@?"
+          }
+        }
+      }
+    },
+    "Unsubscribe and Mark 1 Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld og markér 1 som færdig"
+          }
+        }
+      }
+    },
+    "Unsubscribe and Mark %lld Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld og markér %lld som færdige"
+          }
+        }
+      }
+    },
+    "Senders…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendere…"
+          }
+        }
+      }
+    },
     "%lld new messages": {
       "localizations": {
         "da": {

@@ -131,6 +131,7 @@ public final class MailStore: Sendable {
         registerRuleMigrations(&m)
         registerSmartFolderMigrations(&m)
         registerMuteMigrations(&m)
+        registerUnsubscribeMigrations(&m)
         return m
     }
 
