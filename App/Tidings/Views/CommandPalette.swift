@@ -105,6 +105,7 @@ extension AppModel {
             AppCommand(id: "inviteDecline", title: String(localized: "Decline Invitation"), symbol: "xmark.circle", keys: "⌃⌘N",
                        isEnabled: canAnswer) { self.respondToSelectedInvite(.declined) },
         ]
+        list += dateSuggestionCommands
         for account in accounts {
             for box in mailboxes where box.accountID == account.id && box.role == .archive {
                 list.append(AppCommand(id: "goArchive-\(account.id)", title: String(localized: "Go to Archive"), symbol: "archivebox",

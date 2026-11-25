@@ -47,9 +47,17 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
         let iMorgen = try #require(extract("Vi ses i morgen kl. 10.30 til kaffe", sent: monday).first)
         #expect(iMorgen.start == at(2026, 2, 3, 10, 30))
         let tuesday = try #require(extract("Næste tirsdag kl 9 har vi møde med revisoren.", sent: monday).first)
-        #expect(tuesday.start == at(2026, 2, 3, 9))
+        #expect(tuesday.start == at(2026, 2, 10, 9), "\"næste tirsdag\" on a Monday is next week's")
+        let plainTuesday = try #require(extract("Tirsdag kl 9 har vi møde med revisoren.", sent: monday).first)
+        #expect(plainTuesday.start == at(2026, 2, 3, 9))
+        let nextFriday = try #require(extract("Næste fredag kl. 19 er der fest.", sent: monday).first)
+        #expect(nextFriday.start == at(2026, 2, 6, 19), "further ahead than tomorrow: the coming one")
         let friday = try #require(extract("Join us on Friday at 7pm for drinks!", sent: monday).first)
         #expect(friday.start == at(2026, 2, 6, 19))
+        // Sent on a Wednesday: "next Thursday" isn't tomorrow, "Thursday" is.
+        let nextThursday = try #require(extract("Our webinar is next Thursday at 16:00 GMT.").first)
+        #expect(nextThursday.start == at(2026, 12, 3, 17))
+        #expect(try #require(extract("Webinar on Thursday at 16:00").first).start == at(2026, 11, 26, 16))
     }
 
     @Test func explicitDateWithRange() throws {

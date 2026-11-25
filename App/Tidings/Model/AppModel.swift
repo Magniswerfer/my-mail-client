@@ -353,6 +353,7 @@ final class AppModel {
             reload()
             scheduleRefinement()
             scheduleAutoDrafts()
+            scheduleEventScan()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message

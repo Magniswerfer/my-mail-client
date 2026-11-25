@@ -27,6 +27,7 @@ struct ReaderView: View {
                         if let found = model.invite(inThread: threadID) {
                             InviteCard(message: found.message, invite: found.invite)
                         }
+                        DateSuggestionSlot(threadID: threadID)
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread)
@@ -37,6 +38,7 @@ struct ReaderView: View {
                 .frame(maxWidth: .infinity)
             }
             .id(threadID)
+            .dateSuggestions(threadID: threadID, model: model)
         } else {
             ContentUnavailableView("No conversation selected", systemImage: "envelope.open",
                                    description: Text("Use j and k to move through your mail."))

@@ -89,6 +89,34 @@ public enum TestMailFactory {
         return seeds
     }
 
+    /// Mail that mentions plans, for trying calendar suggestions: a sentence, a webinar written
+    /// in another zone, a booking in schema.org JSON-LD. Not part of `mailbox()` (its tests count those).
+    public static func datePlans(now: Date = Date()) -> [Seed] {
+        var seeds: [Seed] = []
+        var n = 0
+        func id() -> String { n += 1; return "plan-\(n)-\(Int(now.timeIntervalSince1970))@tidings.test" }
+        func ago(_ hours: Double) -> Date { now.addingTimeInterval(-hours * 3600) }
+        let mette = MailAddress(name: "Mette Holm", address: "mette@example.dk")
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: mette, to: [me], subject: "Middag hos os", date: ago(2), id: id(),
+            body: "Hej Magnus,\n\nVil I komme til middag hos os i morgen kl. 19? Vi laver risotto.\nSted: Vesterbrogade 12, 1620 København V\n\nKh Mette"), flags: []))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "Swift Weekly", address: "events@swiftweekly.dev"), to: [me],
+            subject: "Reminder: Swift Concurrency webinar", date: ago(7), id: id(),
+            body: "Hi Magnus,\n\nOur webinar on strict concurrency is next Thursday at 16:00 GMT. Join here: https://zoom.us/j/1234567\n\nSee you there!"), flags: []))
+        let dinner = Calendar(identifier: .gregorian).date(byAdding: .day, value: 6, to: now) ?? now
+        let dinnerDay = dinner.formatted(.iso8601.year().month().day())
+        let booking = """
+            <script type="application/ld+json">{"@context":"http://schema.org","@type":"FoodEstablishmentReservation",
+            "reservationNumber":"TBL-4821","reservationStatus":"http://schema.org/ReservationConfirmed","partySize":2,
+            "startTime":"\(dinnerDay)T19:30:00","reservationFor":{"@type":"FoodEstablishment","name":"Restaurant Barr",
+            "address":{"@type":"PostalAddress","streetAddress":"Strandgade 93","postalCode":"1401","addressLocality":"København K"}}}</script>
+            <p>Tak for din reservation til 2 personer. Vi glæder os til at se dig.</p>
+            """
+        seeds.append(Seed(mailbox: "INBOX", raw: html(from: MailAddress(name: "Restaurant Barr", address: "booking@restaurantbarr.example"),
+            subject: "Din bordreservation er bekræftet", date: ago(9), id: id(), html: booking, bulk: false), flags: []))
+
+        return seeds
+    }
+
     // MARK: Builders
 
     static let dateFormatter: DateFormatter = {
@@ -199,11 +227,11 @@ public enum TestMailFactory {
 
 /// Seeds the local test server. Hard-refuses anything but localhost.
 public enum TestServerSeeder {
-    public static func seed(endpoint: IMAPEndpoint, password: String, now: Date = Date()) async throws -> Int {
+    public static func seed(endpoint: IMAPEndpoint, password: String, now: Date = Date(), datePlans: Bool = false) async throws -> Int {
         guard endpoint.host == "127.0.0.1" || endpoint.host == "localhost" else {
             throw MailSessionError.commandFailed(command: "seed", detail: "seeding is only allowed against localhost")
         }
-        let seeds = TestMailFactory.mailbox(now: now)
+        let seeds = TestMailFactory.mailbox(now: now) + (datePlans ? TestMailFactory.datePlans(now: now) : [])
         return try await MailSession.open(endpoint: endpoint, password: password) { session in
             for box in Set(seeds.map(\.mailbox)) where box != "INBOX" {
                 try await session.ensureMailbox(box)

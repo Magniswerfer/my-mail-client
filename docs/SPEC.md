@@ -72,6 +72,11 @@ Three layers, cheapest first:
 ### Highlights (v1)
 Flights/travel, packages, receipts/invoices, calendar events/invites, OTP/2FA codes, reservations, bills/subscriptions. schema.org JSON-LD first, LLM fallback. Each has an action (add to Calendar, copy code, track, open booking). Global hotkey: copy latest OTP.
 
+**Shipped: dates → calendar suggestions** (engine `Highlights/`, all on device):
+- After each sync, received mail from the last 45 days is scanned once (not Sent/Drafts/Trash/Junk, not your own mail, not Advertising, not messages with an iTIP invite, which have their own card). Results are stored per message in `eventSuggestion` (`v14-event-suggestions`), keyed by account + Message-ID, so they and your Dismiss survive a move to Archive. Opening older mail scans that conversation on the spot.
+- Layers, cheapest first: (1) schema.org JSON-LD in the HTML: `Event` and subtypes, `EventReservation`, `FlightReservation`, `LodgingReservation`, `FoodEstablishmentReservation` (cancelled ones skipped). If present, it wins. (2) `NSDataDetector` over the sender's own words (quotes, attributions and forwarded blocks stripped) plus the subject. Relative dates ("i morgen", "næste tirsdag", "on Friday") are re-anchored to the sent date, year-less dates take the next occurrence, and times are read in the sender's zone (from the Date header offset) unless the text names one ("14:00 CET"). Danish/English plan words raise confidence. History, paperwork, deliveries, opening hours, past dates and quoted text are dropped. (3) Foundation Models (guided yes/no + title, ~0.4 s) only for uncertain candidates (a time with no plan word, a bare date) and fallback titles, at most 12 per pass. Without Apple Intelligence, uncertain ones are kept only in Primary mail.
+- Reader: a quiet card ("Add to Calendar: Middag hos os · fre. 27. nov. 19.00"), up to three per message, showing the source sentence and the written time when it's in another zone. **Add…** (⌃⌘E, ⌘K "Add Date to Calendar…") opens an editable event sheet (title, place, all-day, start/end, notes with the sentence and a `tidings://` link) and saves through the EventKit bridge, with Undo. **Dismiss** (✕, ⌘K) is remembered per message. To try it on the local server: `tidings-probe seed-test-server --user dates --date-plans`, then run the dev copy with `-TidingsDevUser dates`.
+
 ### Meeting invitations (M4.6)
 - Recognised from any `text/calendar` / `application/ics` / `.ics` part (iTIP, RFC 5546): Apple, Google, Outlook/Exchange (Windows TZIDs and VTIMEZONE resolved), Zoom, etc. The calendar alternative is not shown as an attachment.
 - Invites, updates, cancellations and counter-proposals for you → **Primary** (reason "A meeting invitation for you"); attendees' answers to your invites → **Updates**. Bulk webinar blasts that don't name you fall through to the normal rules.
@@ -200,7 +205,7 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
 | **M4.8 · Flow** ✅ (CI-built; engine tested) | Send and Done, pre-send check, dark message bodies, Reply Later + Answer Now, message links + Reminders/Things/Shortcuts, shortcuts sheet |
 | **M5 · Rules** | rules incl. NL, smart folders, semantic search |
-| **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
+| **M6 · Polish** | Highlights (dates → calendar suggestions shipped early; see §5), notifications, newsletter/Senders tools, read-later, attachments |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
 | **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
 | **iOS-2 · Same state everywhere** | CloudKit for sender rules, corrections, bundle schedules, invite answers (M7 brought forward) |

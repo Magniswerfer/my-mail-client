@@ -87,12 +87,22 @@ public struct EventSuggestion: Sendable, Codable, Hashable, Identifiable {
     /// As a calendar event the EventKit bridge can save (a PUBLISH: nobody to answer). `uid`
     /// links the calendar copy back to this suggestion.
     public func calendarInvite(uid: String, notes: String? = nil) -> CalendarInvite {
+        .calendarEvent(uid: uid, summary: title, start: start, end: end ?? (isAllDay ? start.addingTimeInterval(86_400) : nil),
+                       isAllDay: isAllDay, timeZoneID: timeZoneID, location: location, notes: notes,
+                       conferenceURL: ConferenceLink.find(in: [location, url, sourceText]), url: url)
+    }
+}
+
+extension CalendarInvite {
+    /// An event for your own calendar only (PUBLISH): no organizer, no guests, nobody to answer.
+    /// All-day dates are UTC midnights, `end` exclusive.
+    public static func calendarEvent(uid: String, summary: String, start: Date, end: Date?, isAllDay: Bool,
+                                     timeZoneID: String?, location: String?, notes: String?,
+                                     conferenceURL: String? = nil, url: String? = nil) -> CalendarInvite {
         CalendarInvite(
-            method: .publish, uid: uid, sequence: 0, recurrenceID: nil,
-            summary: title, start: start, end: end ?? (isAllDay ? start.addingTimeInterval(86_400) : nil),
-            isAllDay: isAllDay, timeZoneID: isAllDay ? nil : timeZoneID,
-            location: location, notes: notes, organizer: nil, attendees: [], isCancelled: false,
-            recurrenceRule: nil, conferenceURL: ConferenceLink.find(in: [location, url, sourceText]), url: url
+            method: .publish, uid: uid, sequence: 0, recurrenceID: nil, summary: summary, start: start, end: end,
+            isAllDay: isAllDay, timeZoneID: isAllDay ? nil : timeZoneID, location: location, notes: notes,
+            organizer: nil, attendees: [], isCancelled: false, recurrenceRule: nil, conferenceURL: conferenceURL, url: url
         )
     }
 }

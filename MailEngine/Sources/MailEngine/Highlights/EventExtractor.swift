@@ -75,7 +75,8 @@ struct TextDates {
     enum Day: Equatable {
         case explicit(yearGiven: Bool)
         case relative(days: Int)
-        case weekday(Int)       // Calendar weekday, 1 = Sunday
+        /// Calendar weekday (1 = Sunday); `next` for "next Friday" / "næste fredag".
+        case weekday(Int, next: Bool)
         case none
     }
 
@@ -234,10 +235,12 @@ struct TextDates {
             return (candidate < sentStart.addingTimeInterval(-60 * 86_400) ? sentYear + 1 : sentYear, m, d)
         case .relative(let days):
             return cal.date(byAdding: .day, value: days, to: sentStart).flatMap(ymd)
-        case .weekday(let weekday):
+        case .weekday(let weekday, let next):
             let today = cal.component(.weekday, from: input.sent)
             var delta = (weekday - today + 7) % 7
-            if delta == 0 { delta = 7 }
+            // "fredag" said on a Friday is next week's; so is "next Thursday" said on a
+            // Wednesday (tomorrow would be "tomorrow").
+            if delta == 0 || (next && delta == 1) { delta += 7 }
             return cal.date(byAdding: .day, value: delta, to: sentStart).flatMap(ymd)
         case .none:
             return nil
@@ -303,6 +306,7 @@ struct TextDates {
     static let numericDatePattern = regex(#"(?<![\d:])(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?(?![\d:])"#)
     static let isoDatePattern = regex(#"\b\d{4}-\d{2}-\d{2}\b"#)
     static let yearPattern = regex(#"\b(19|20)\d{2}\b"#)
+    static let nextPattern = regex(#"\b(next|næste|kommende|coming)\b"#)
     static let pastPattern = regex(#"\b(last|previous|past|sidste|forrige|yesterday|i\s*går|i\s*forgårs|ago|siden)\b"#)
     static let inDaysPattern = regex(#"\b(?:in|om)\s+(\d{1,2})\s+(?:days|dage)\b"#)
     static let relativeWords: [(NSRegularExpression, Int)] = [
@@ -344,7 +348,7 @@ struct TextDates {
             return .relative(days: days)
         }
         for (pattern, weekday) in weekdayWords where pattern.firstMatch(in: text, range: all) != nil {
-            return .weekday(weekday)
+            return .weekday(weekday, next: nextPattern.firstMatch(in: text, range: all) != nil)
         }
         return .none
     }
