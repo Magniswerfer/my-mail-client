@@ -3,7 +3,9 @@ import Foundation
 /// A parsed search query with Gmail-compatible operators (SPEC §7).
 ///
 /// Supported: `from:` `to:` `subject:` `category:` `in:` `has:attachment` `is:unread` `is:read`
-/// `before:YYYY-MM-DD` `after:YYYY-MM-DD` `larger:5M` `smaller:100K`, quoted phrases, and `-term` exclusion.
+/// `is:pinned` `is:waiting` (you wrote last), `before:`/`after:` with `YYYY-MM-DD`, `today`,
+/// `thisweek`, `thismonth`, `thisyear` or a relative `30d`/`6w`/`3m`/`1y`, `larger:5M` `smaller:100K`,
+/// quoted phrases, and `-term` exclusion.
 public struct SearchQuery: Sendable, Hashable {
     public var terms: [String] = []
     public var phrases: [String] = []
@@ -15,6 +17,9 @@ public struct SearchQuery: Sendable, Hashable {
     public var mailbox: String?
     public var hasAttachment: Bool?
     public var unread: Bool?
+    public var pinned: Bool?
+    /// Conversations where the newest message is one you sent ("waiting for reply").
+    public var waiting: Bool?
     public var before: Date?
     public var after: Date?
     public var largerThan: Int?
@@ -60,6 +65,8 @@ public struct SearchQuery: Sendable, Hashable {
             case "has" where value.lowercased() == "attachment": hasAttachment = true
             case "is" where value.lowercased() == "unread": unread = true
             case "is" where value.lowercased() == "read": unread = false
+            case "is" where value.lowercased() == "pinned": pinned = true
+            case "is" where value.lowercased() == "waiting": waiting = true
             case "before": if let d = Self.date(value) { before = d } else { terms.append(w) }
             case "after": if let d = Self.date(value) { after = d } else { terms.append(w) }
             case "larger": if let n = Self.size(value) { largerThan = n } else { terms.append(w) }
@@ -156,7 +163,26 @@ public struct SearchQuery: Sendable, Hashable {
         return tokens
     }
 
-    static func date(_ s: String) -> Date? {
+    static func date(_ s: String, now: Date = Date(), calendar: Calendar = .current) -> Date? {
+        let lower = s.lowercased()
+        switch lower {
+        case "today", "idag": return calendar.startOfDay(for: now)
+        case "thisweek": return calendar.dateInterval(of: .weekOfYear, for: now)?.start
+        case "thismonth": return calendar.dateInterval(of: .month, for: now)?.start
+        case "thisyear", "iår": return calendar.dateInterval(of: .year, for: now)?.start
+        default: break
+        }
+        // Relative: 30d, 6w, 3m, 1y ago.
+        if let unit = lower.last, let n = Int(lower.dropLast()), n >= 0 {
+            let component: Calendar.Component? = switch unit {
+            case "d": .day
+            case "w": .weekOfYear
+            case "m": .month
+            case "y": .year
+            default: nil
+            }
+            if let component { return calendar.date(byAdding: component, value: -n, to: calendar.startOfDay(for: now)) }
+        }
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current

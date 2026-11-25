@@ -168,6 +168,24 @@ extension MailStore {
             let latest = try latestRows.map { try StoredMessage(row: $0) }
             var arrived: [String: Date] = [:]
             for row in latestRows { if let t: String = row["threadID"] { arrived[t] = row["arrived"] } }
+            return try Self.summaries(latest: latest, arrived: arrived, ownAddresses: ownAddresses, db: db)
+        }
+    }
+
+    /// Conversations for search results and smart folders: each represented by the given
+    /// message (the newest that matched), wherever it is, newest first as given.
+    public func threads(representedBy messageIDs: [Int64], ownAddresses: Set<String> = []) throws -> [ThreadSummary] {
+        guard !messageIDs.isEmpty else { return [] }
+        return try db.read { db in
+            let byID = Dictionary(uniqueKeysWithValues: try StoredMessage.fetchAll(db, keys: messageIDs).compactMap { m in m.id.map { ($0, m) } })
+            let latest = messageIDs.compactMap { byID[$0] }
+            return try Self.summaries(latest: latest, arrived: [:], ownAddresses: ownAddresses, db: db)
+        }
+    }
+
+    /// Thread rows for the given newest messages: counts, people, pin/snooze/Reply Later.
+    static func summaries(latest: [StoredMessage], arrived: [String: Date], ownAddresses: Set<String>, db: Database) throws -> [ThreadSummary] {
+        do {
             let threadIDs = latest.compactMap(\.threadID)
             guard !threadIDs.isEmpty else { return [] }
             var counts: [String: (Int, Int, [String])] = [:]

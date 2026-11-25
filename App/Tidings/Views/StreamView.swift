@@ -136,6 +136,12 @@ struct EmptyStream: View {
             } description: {
                 Text("Nothing left to deal with. New mail will show up here.")
             }
+        case .smartFolder:
+            ContentUnavailableView {
+                Label("Nothing matches", systemImage: "folder.badge.gearshape")
+            } description: {
+                Text("This smart folder's search finds nothing right now.")
+            }
         case .replyLater:
             ContentUnavailableView {
                 Label("Nothing set aside", systemImage: "arrowshape.turn.up.left.circle")

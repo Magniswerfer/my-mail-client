@@ -47,6 +47,8 @@ extension AppModel {
                        keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
             AppCommand(id: "moveFolder", title: String(localized: "Move to Folder…"), symbol: "folder", keys: "V",
                        isEnabled: hasSelection) { self.isFolderPickerShown = true },
+            AppCommand(id: "saveSearch", title: String(localized: "Save Search as Smart Folder…"), symbol: "folder.badge.plus", keys: "⌘S",
+                       isEnabled: isSearching) { self.saveCurrentSearch() },
             AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: "⌥⌘R") {
                 self.isRulesShown = true
             },
@@ -118,6 +120,10 @@ extension AppModel {
                                    symbol: category.symbol, keys: "M", isEnabled: hasSelection) { self.moveConversations(self.targetThreads, to: category) })
             list.append(AppCommand(id: "moveSender-\(category.rawValue)", title: String(localized: "Always Put This Sender in \(category.title)"),
                                    symbol: category.symbol, keys: nil, isEnabled: hasSelection) { self.moveSender(to: category) })
+        }
+        for folder in allSmartFolders {
+            list.append(AppCommand(id: "smartFolder-\(folder.id)", title: String(localized: "Go to \(displayName(folder))"),
+                                   symbol: folder.symbol, keys: nil) { self.selection = .smartFolder(folder.id) })
         }
         return list
     }

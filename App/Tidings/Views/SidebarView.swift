@@ -50,6 +50,8 @@ struct SidebarView: View {
                 }
             }
 
+            SmartFolderSection()
+
             // Drop a conversation here to move it (and teach the classifier).
             Section("Categories") {
                 ForEach(MailCategory.allCases, id: \.self) { category in

@@ -80,6 +80,50 @@ public struct SearchEngine: Sendable {
         return SearchHits(hits: hits, duration: clock.now - start)
     }
 
+    // MARK: Conversations (smart folders)
+
+    /// The conversations a query matches, newest first: for each, the id of its newest
+    /// matching message. Smart folders list these; any mailbox counts.
+    public func conversations(_ query: SearchQuery, limit: Int = 500) throws -> [Int64] {
+        let plan = Self.plan(query)
+        return try store.db.read { db in
+            let keys: [Int64]
+            if let match = plan.match {
+                keys = try Int64.fetchAll(db, sql: """
+                    SELECT max(m.sortKey) AS k FROM message_fts f JOIN message m ON m.sortKey = f.rowid
+                    WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid")) \(plan.messageSQL)
+                    GROUP BY coalesce(m.threadID, m.id) ORDER BY k DESC LIMIT \(limit)
+                    """, arguments: Self.arguments([match] + plan.rowidArguments + plan.messageArguments))
+            } else {
+                keys = try Int64.fetchAll(db, sql: """
+                    SELECT max(m.sortKey) AS k FROM message m
+                    WHERE 1 \(plan.rowidSQL("m.sortKey")) \(plan.messageSQL)
+                    GROUP BY coalesce(m.threadID, m.id) ORDER BY k DESC LIMIT \(limit)
+                    """, arguments: Self.arguments(plan.rowidArguments + plan.messageArguments))
+            }
+            guard !keys.isEmpty else { return [] }
+            let ids = try Row.fetchAll(db, sql: "SELECT id, sortKey FROM message WHERE sortKey IN (\(keys.map(String.init).joined(separator: ",")))")
+            let idByKey = Dictionary(uniqueKeysWithValues: ids.map { ($0["sortKey"] as Int64, $0["id"] as Int64) })
+            return keys.compactMap { idByKey[$0] }
+        }
+    }
+
+    /// How many conversations a query matches (smart folder counts).
+    public func conversationCount(_ query: SearchQuery) throws -> Int {
+        let plan = Self.plan(query)
+        return try store.db.read { db in
+            if let match = plan.match {
+                return try Int.fetchOne(db, sql: """
+                    SELECT count(DISTINCT coalesce(m.threadID, m.id)) FROM message_fts f JOIN message m ON m.sortKey = f.rowid
+                    WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid")) \(plan.messageSQL)
+                    """, arguments: Self.arguments([match] + plan.rowidArguments + plan.messageArguments)) ?? 0
+            }
+            return try Int.fetchOne(db, sql: """
+                SELECT count(DISTINCT coalesce(m.threadID, m.id)) FROM message m WHERE 1 \(plan.rowidSQL("m.sortKey")) \(plan.messageSQL)
+                """, arguments: Self.arguments(plan.rowidArguments + plan.messageArguments)) ?? 0
+        }
+    }
+
     // MARK: Phase 2
 
     public func facets(_ query: SearchQuery) throws -> SearchFacets {
@@ -181,6 +225,17 @@ public struct SearchEngine: Sendable {
         if let box = q.mailbox { p.messageClauses.append("m.mailbox = ? COLLATE NOCASE"); p.messageArguments.append(box) }
         if let u = q.unread {
             p.messageClauses.append(u ? "instr(m.flags, '\\Seen') = 0" : "instr(m.flags, '\\Seen') > 0")
+        }
+        if let pinned = q.pinned {
+            p.messageClauses.append(pinned ? "instr(m.flags, '\\Flagged') > 0" : "instr(m.flags, '\\Flagged') = 0")
+        }
+        if q.waiting == true {
+            // A message you sent that is still the newest in its conversation.
+            p.messageClauses.append("""
+                m.threadID IS NOT NULL
+                AND m.mailbox IN (SELECT path FROM mailboxState WHERE accountID = m.accountID AND role = 'sent')
+                AND NOT EXISTS (SELECT 1 FROM message later WHERE later.threadID = m.threadID AND later.date > m.date)
+                """)
         }
         if let n = q.largerThan { p.messageClauses.append("m.size > ?"); p.messageArguments.append(n) }
         if let n = q.smallerThan { p.messageClauses.append("m.size < ?"); p.messageArguments.append(n) }

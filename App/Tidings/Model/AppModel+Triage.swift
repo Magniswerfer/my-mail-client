@@ -74,6 +74,8 @@ extension AppModel {
         case .inbox, .category, .outbox, .replyLater: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
+        // Results come from any folder: act where the selected conversation is.
+        case .smartFolder: targetThreads.first?.latest.mailbox ?? "INBOX"
         }
     }
 
@@ -148,7 +150,10 @@ extension AppModel {
 
     /// Whether an action takes the conversation out of the list on screen.
     func removesFromCurrentView(_ kind: TriageKind) -> Bool {
-        switch kind {
+        // A smart folder is a search: whether the conversation still belongs is up to the
+        // search, and the list refreshes right after the action.
+        if case .smartFolder = selection { return false }
+        return switch kind {
         // Set aside: it leaves the Inbox and categories for Set Aside (and the Inbox's Reply
         // Later row). Elsewhere (Snoozed, folders) it only gets marked.
         case .replyLater:

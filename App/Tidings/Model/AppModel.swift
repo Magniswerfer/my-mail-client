@@ -10,6 +10,8 @@ enum SidebarItem: Hashable {
     case outbox
     case category(MailCategory)
     case mailbox(accountID: String, path: String)
+    /// A saved search (SPEC §7), by id.
+    case smartFolder(String)
 }
 
 /// One row in the stream: a conversation, or an Inbox-style bundle of conversations.
@@ -142,6 +144,14 @@ final class AppModel {
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
+    // Smart folders (SPEC §7): yours; the built-in ones live in `SmartFolder.builtIn`.
+    var smartFolders: [SmartFolder] = []
+    /// Conversations each smart folder finds right now.
+    var smartFolderCounts: [String: Int] = [:]
+    /// The saved search being named or edited.
+    var editingSmartFolder: SmartFolder?
+    @ObservationIgnored var smartFolderCountTask: Task<Void, Never>?
+
     // Rules (SPEC §6)
     var rules: [Rule] = []
     /// Conversations each rule acted on in the last 7 days.
@@ -243,6 +253,7 @@ final class AppModel {
         reload()
         reloadOutbox()
         loadRules()
+        loadSmartFolders()
         scheduleDeliveryRefresh()
         Self.shared = self
     }
@@ -416,6 +427,7 @@ final class AppModel {
         case .category(let c): c.title
         case .mailbox(let accountID, let path):
             mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
+        case .smartFolder(let id): smartFolder(id: id).map(displayName) ?? String(localized: "Smart Folder")
         }
     }
 
@@ -448,12 +460,15 @@ final class AppModel {
                 for thread in threads where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
             case .mailbox(let accountID, let path):
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
+            case .smartFolder(let id):
+                threads = try smartFolder(id: id).map(smartFolderThreads) ?? []
             }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
             inboxUnreadCount = try inbox().filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
             replyLaterCount = try inbox().filter(\.isReplyLater).count
+            scheduleSmartFolderCounts()
         } catch {
             lastError = String(describing: error)
         }

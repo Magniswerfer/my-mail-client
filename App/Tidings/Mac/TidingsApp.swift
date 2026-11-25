@@ -102,6 +102,9 @@ struct TidingsApp: App {
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
                 Divider()
+                Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(!model.isSearching)
                 Button("Rules…") { model.isRulesShown = true }
                     .keyboardShortcut("r", modifiers: [.command, .option])
                 Button("New Rule from Message…") { model.newRule(from: model.targetThreads.first) }
@@ -197,6 +200,7 @@ struct RootView: View {
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
+        .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
         .sheet(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
@@ -288,6 +292,7 @@ struct RootView: View {
     private var isOverlayOpen: Bool {
         model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
             || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
+            || model.editingSmartFolder != nil
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

@@ -1,6 +1,136 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Waiting for Reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Venter på svar"
+          }
+        }
+      }
+    },
+    "Receipts This Year": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kvitteringer i år"
+          }
+        }
+      }
+    },
+    "Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smart mappe"
+          }
+        }
+      }
+    },
+    "Couldn't save your smart folders: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke gemme dine smarte mapper: %@"
+          }
+        }
+      }
+    },
+    "Smart Folders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smarte mapper"
+          }
+        }
+      }
+    },
+    "Finds 1 conversation right now.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder 1 samtale lige nu."
+          }
+        }
+      }
+    },
+    "Finds %lld conversations right now.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder %lld samtaler lige nu."
+          }
+        }
+      }
+    },
+    "Anything you can type in search works, like is:waiting, is:pinned, category:newsletters, after:30d.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alt, du kan skrive i søgningen, virker, fx is:waiting, is:pinned, category:newsletters, after:30d."
+          }
+        }
+      }
+    },
+    "Edit Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redigér smart mappe"
+          }
+        }
+      }
+    },
+    "New Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny smart mappe"
+          }
+        }
+      }
+    },
+    "Nothing matches": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet passer"
+          }
+        }
+      }
+    },
+    "This smart folder's search finds nothing right now.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den smarte mappes søgning finder intet lige nu."
+          }
+        }
+      }
+    },
+    "Save Search as Smart Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem søgning som smart mappe…"
+          }
+        }
+      }
+    },
     "Describe the rule": {
       "localizations": {
         "da": {
