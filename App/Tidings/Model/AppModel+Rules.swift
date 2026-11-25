@@ -107,6 +107,7 @@ extension AppModel {
                 self.reload()
             }
             await self.deliverNotifications(arrived: arrived, ruleRuns: notify)
+            self.indexAttachmentsInBackground()
         }
     }
 

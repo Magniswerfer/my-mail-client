@@ -1,5 +1,6 @@
 #if os(macOS)
 import MailEngine
+import QuickLook
 import SwiftUI
 
 @main
@@ -110,6 +111,8 @@ struct TidingsApp: App {
                 Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!model.isSearching)
+                Button("Attachments…") { model.isAttachmentsShown = true }
+                    .keyboardShortcut("a", modifiers: [.command, .control])
                 Button("Senders…") { model.isSendersShown = true }
                     .keyboardShortcut("s", modifiers: [.command, .option])
                 Button("Unsubscribe…") { if let address = model.listSenderOfSelection { model.requestUnsubscribe(address: address) } }
@@ -212,6 +215,8 @@ struct RootView: View {
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
         .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
+        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
+        .quickLookPreview($model.quickLookURL)
         .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
         .sheet(item: $model.replySession) { session in
@@ -312,6 +317,7 @@ struct RootView: View {
         model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
             || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
             || model.editingSmartFolder != nil || model.isSendersShown || model.unsubscribeCandidate != nil
+            || model.isAttachmentsShown
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

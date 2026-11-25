@@ -150,6 +150,11 @@ final class AppModel {
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
+    // Attachments (SPEC §11)
+    var isAttachmentsShown = false
+    /// What Quick Look shows (nil closes it).
+    var quickLookURL: URL?
+
     // Senders and unsubscribe (SPEC §11)
     var isSendersShown = false
     var unsubscribeCandidate: UnsubscribeRequest?

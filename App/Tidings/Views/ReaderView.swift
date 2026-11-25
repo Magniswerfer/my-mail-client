@@ -24,7 +24,7 @@ struct ReaderView: View {
                                 Label("Muted: new replies skip the Inbox", systemImage: "bell.slash")
                                     .font(.callout).foregroundStyle(.secondary)
                                 Button("Unmute") { model.unmute(threadID: threadID) }
-                                    .buttonStyle(.link)
+                                    .buttonStyle(.borderless)
                             }
                         }
                         SummaryLine(threadID: threadID, messageCount: messages.count)
@@ -154,10 +154,26 @@ struct MessageCard: View {
             if !files.isEmpty {
                 HStack {
                     ForEach(files, id: \.self) { a in
-                        Label(a.filename ?? a.mimeType, systemImage: "doc")
+                        Button { model.preview(a, in: message) } label: {
+                            HStack(spacing: 6) {
+                                FileIcon(info: a).frame(width: 16, height: 16)
+                                Text(a.filename ?? a.mimeType).lineLimit(1)
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(a.size), countStyle: .file))
+                                    .foregroundStyle(.secondary)
+                            }
                             .font(.caption)
                             .padding(.horizontal, 10).padding(.vertical, 6)
-                            .glassEffect(.regular, in: .capsule)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                        .help("Quick Look")
+                        .contextMenu {
+                            Button("Quick Look", systemImage: "eye") { model.preview(a, in: message) }
+                            Button("Open", systemImage: "arrow.up.forward.app") { model.openAttachment(a, in: message) }
+                            #if os(macOS)
+                            Button("Save…", systemImage: "square.and.arrow.down") { model.saveAttachment(a, in: message) }
+                            #endif
+                        }
                     }
                 }
             }
@@ -174,6 +190,9 @@ struct MessageCard: View {
         do {
             let raw = try await model.rawMessage(message)
             let parsed = MIMEParser.parse(raw)
+            if message.attachmentList == nil, let id = message.id {
+                try? model.store.setAttachmentList(parsed.attachments, messageID: id)
+            }
             showImages = model.allowsRemoteImages(from: message.fromAddress)
             body_ = LoadedBody(
                 html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,

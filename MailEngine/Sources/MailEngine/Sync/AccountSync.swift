@@ -311,6 +311,7 @@ public actor AccountSync {
             category: category
         )
         message.inReplyTo = parsed.inReplyTo.first
+        message.attachmentList = parsed.attachments.filter { !$0.isInline }
         if let invite = parsed.invite {
             message.invite = invite
             message.inviteUID = invite.uid

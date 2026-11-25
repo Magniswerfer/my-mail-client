@@ -113,3 +113,32 @@ import Testing
         #expect(try engine.contact(for: SearchQuery(parsing: "anna has:attachment")) == nil)   // operators: no card
     }
 }
+
+@Suite(.serialized) struct AttachmentBrowserTests {
+    @Test func listsAreKeptAtSyncAndFilesComeBackFromTheMessage() async throws {
+        guard let f = try await TriageIntegrationTests().fixture() else { return }
+        let entries = try f.store.attachmentEntries()
+        let entry = try #require(entries.first)
+        #expect(entries.allSatisfy { !$0.info.isInline })
+        let message = try #require(try f.store.message(id: entry.messageLocalID))
+        let raw = try await f.sync.rawMessage(message)
+        let file = try #require(MIMEParser.attachmentFile(entry.info, in: raw))
+        #expect(file.filename == entry.filename)
+        #expect(!file.data.isEmpty)
+        // Nothing left to index: everything came with the sync.
+        #expect(try await f.sync.indexAttachmentsFromCache() == 0)
+    }
+
+    @Test func missingListsAreFilledFromTheCache() async throws {
+        guard let f = try await TriageIntegrationTests().fixture() else { return }
+        let entry = try #require(try f.store.attachmentEntries().first)
+        let message = try #require(try f.store.message(id: entry.messageLocalID))
+        _ = try await f.sync.rawMessage(message)          // now cached
+        try await f.store.db.write { try $0.execute(sql: "UPDATE message SET attachmentList = NULL WHERE id = ?", arguments: [entry.messageLocalID]) }
+        let gone = try f.store.attachmentEntries().contains { $0.messageLocalID == entry.messageLocalID }
+        #expect(!gone)
+        #expect(try await f.sync.indexAttachmentsFromCache() == 1)
+        let back = try f.store.attachmentEntries().contains { $0.messageLocalID == entry.messageLocalID }
+        #expect(back)
+    }
+}

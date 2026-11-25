@@ -1,6 +1,156 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Couldn't save %@: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke gemme %@: %@"
+          }
+        }
+      }
+    },
+    "Couldn't open %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke åbne %@"
+          }
+        }
+      }
+    },
+    "the attachment": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vedhæftningen"
+          }
+        }
+      }
+    },
+    "All": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle"
+          }
+        }
+      }
+    },
+    "Images": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Billeder"
+          }
+        }
+      }
+    },
+    "PDFs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF'er"
+          }
+        }
+      }
+    },
+    "Documents": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokumenter"
+          }
+        }
+      }
+    },
+    "No attachments": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen vedhæftninger"
+          }
+        }
+      }
+    },
+    "Files people send you show up here.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filer, folk sender dig, vises her."
+          }
+        }
+      }
+    },
+    "File, sender or subject": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fil, afsender eller emne"
+          }
+        }
+      }
+    },
+    "Kind": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        }
+      }
+    },
+    "Quick Look": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lynoversigt"
+          }
+        }
+      }
+    },
+    "Save…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem…"
+          }
+        }
+      }
+    },
+    "Show Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis samtale"
+          }
+        }
+      }
+    },
+    "Attachments…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæftninger…"
+          }
+        }
+      }
+    },
     "Unmuted": {
       "localizations": {
         "da": {
