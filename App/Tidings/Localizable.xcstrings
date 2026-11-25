@@ -1,6 +1,86 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Describe the rule": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskriv reglen"
+          }
+        }
+      }
+    },
+    "Move mail about shoes from shops to Advertising": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt mail om sko fra butikker til Reklamer"
+          }
+        }
+      }
+    },
+    "Draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lav udkast"
+          }
+        }
+      }
+    },
+    "Couldn't turn that into a rule. Try saying what mail it's for and what to do with it.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke lave det om til en regel. Prøv at sige, hvilken mail den gælder, og hvad der skal ske med den."
+          }
+        }
+      }
+    },
+    "Write it in your own words; the on-device model fills in the rule below for you to check.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv det med dine egne ord; modellen på enheden udfylder reglen herunder, så du kan tjekke den."
+          }
+        }
+      }
+    },
+    "The on-device model checked the %lld likeliest messages. Mark right ✓ or wrong ✗ to teach it.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modellen på enheden har tjekket de %lld mest sandsynlige beskeder. Markér rigtigt ✓ eller forkert ✗ for at lære den op."
+          }
+        }
+      }
+    },
+    "Right: this matches": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rigtigt: denne passer"
+          }
+        }
+      }
+    },
+    "Wrong: this doesn't match": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forkert: denne passer ikke"
+          }
+        }
+      }
+    },
     "Couldn't save your rules: %@": {
       "localizations": {
         "da": {

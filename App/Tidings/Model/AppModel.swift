@@ -150,8 +150,11 @@ final class AppModel {
     /// The rule open in the editor (new or existing).
     var editingRule: Rule?
     @ObservationIgnored var ruleTask: Task<Void, Never>?
-    /// Decides "about …" conditions on device (M5.3); nil until then.
-    @ObservationIgnored var ruleJudge: (any RuleJudge)?
+    /// Decides "about …" conditions on device; nil until the embedding model has loaded, or
+    /// when neither embeddings nor Foundation Models are available.
+    var ruleJudge: OnDeviceRuleJudge?
+    /// Turns a sentence into a rule (Foundation Models); nil without Apple Intelligence.
+    @ObservationIgnored let ruleDrafter: (any RuleDrafter)? = FoundationModelsRuleDrafter()
 
     // Contact sidebar
     var isContactPanelShown = false
@@ -262,7 +265,11 @@ final class AppModel {
             let store = self.store
             Task.detached { [weak self] in
                 let loaded = Refinement.onDevice(store: store)
-                await MainActor.run { self?.refinement = loaded }
+                let judge = OnDeviceRuleJudge(store: store, embedder: loaded?.embedder)
+                await MainActor.run {
+                    self?.refinement = loaded
+                    self?.ruleJudge = judge
+                }
             }
         }
         for account in accounts where syncs[account.id] == nil {

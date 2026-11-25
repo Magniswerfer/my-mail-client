@@ -81,18 +81,39 @@ public struct RuleEngine: Sendable {
 
     // MARK: Preview
 
-    /// Inbox mail the rule would match, newest first ("would have matched 143").
+    /// How many messages a preview asks the on-device model about (≈0.6 s each).
+    public static let modelPreviewLimit = 30
+
+    /// Inbox mail the rule would match, newest first ("would have matched 143"). With an
+    /// "about …" condition, only the likeliest `modelPreviewLimit` messages (by embedding
+    /// similarity, after the cheap conditions) are put to the model.
     public func preview(_ rule: Rule, store: MailStore, limit: Int = 2000) async throws -> [StoredMessage] {
         var probe = rule
         probe.isEnabled = true
-        guard probe.isComplete || !probe.conditions.isEmpty else { return [] }
+        guard !probe.conditions.isEmpty else { return [] }
         if probe.actions.isEmpty { probe.actions = [.notify] }   // matching doesn't depend on actions
+        var candidates = try store.inboxMessages(limit: limit)
+        let abouts = probe.conditions.compactMap { if case .about(let a) = $0 { a } else { nil } }
+        if let about = abouts.first {
+            if probe.matchAll {
+                let cheap = probe.conditions.filter { if case .about = $0 { false } else { true } }
+                candidates = candidates.filter { message in
+                    let body = LazyBody(message: message)
+                    return cheap.allSatisfy { evaluate($0, message, body) }
+                }
+            }
+            if let ranking = judge as? OnDeviceRuleJudge {
+                candidates = Array(ranking.ranked(candidates, by: about.description).prefix(Self.modelPreviewLimit))
+            } else {
+                candidates = Array(candidates.prefix(Self.modelPreviewLimit))
+            }
+        }
         var hits: [StoredMessage] = []
-        for message in try store.inboxMessages(limit: limit) {
+        for message in candidates {
             try Task.checkCancellation()
             if await matches(probe, message) { hits.append(message) }
         }
-        return hits
+        return hits.sorted { $0.date > $1.date }
     }
 }
 

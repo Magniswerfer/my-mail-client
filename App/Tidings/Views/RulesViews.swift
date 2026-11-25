@@ -121,10 +121,31 @@ struct RuleEditor: View {
     @State private var preview: [StoredMessage] = []
     @State private var previewing = false
     @State private var applyNow = false
+    @State private var sentence = ""
+    @State private var drafting = false
+    @State private var draftFailed = false
 
     var body: some View {
         NavigationStack {
             Form {
+                if model.ruleDrafter != nil {
+                    Section {
+                        HStack {
+                            TextField("Describe the rule", text: $sentence,
+                                      prompt: Text("Move mail about shoes from shops to Advertising"))
+                                .onSubmit { draft() }
+                            if drafting {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button("Draft") { draft() }
+                                    .disabled(sentence.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                        }
+                    } footer: {
+                        Text(draftFailed ? String(localized: "Couldn't turn that into a rule. Try saying what mail it's for and what to do with it.")
+                                         : String(localized: "Write it in your own words; the on-device model fills in the rule below for you to check."))
+                    }
+                }
                 Section {
                     TextField("Name", text: $rule.name, prompt: Text("Shoe shops to Advertising"))
                 }
@@ -140,7 +161,7 @@ struct RuleEditor: View {
                         }
                     }
                     Menu {
-                        ForEach(ConditionKind.available, id: \.self) { kind in
+                        ForEach(ConditionKind.available(about: model.ruleJudge != nil), id: \.self) { kind in
                             Button(kind.title) { rule.conditions.append(kind.makeDefault()) }
                         }
                     } label: {
@@ -204,10 +225,23 @@ struct RuleEditor: View {
         } else {
             Text(preview.isEmpty ? String(localized: "Matches nothing in the Inbox right now.")
                                  : String(localized: "Matches \(preview.count) messages in the Inbox right now."))
-            ForEach(preview.prefix(8), id: \.id) { message in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(message.senderDisplay).font(.callout.weight(.medium))
-                    Text(message.subject).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            if rule.usesLanguageModel {
+                Text("The on-device model checked the \(RuleEngine.modelPreviewLimit) likeliest messages. Mark right ✓ or wrong ✗ to teach it.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(preview.prefix(rule.usesLanguageModel ? RuleEngine.modelPreviewLimit : 8), id: \.id) { message in
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(message.senderDisplay).font(.callout.weight(.medium))
+                        Text(message.subject).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    if rule.usesLanguageModel {
+                        Spacer()
+                        Button { teach(message, matches: true) } label: { Image(systemName: "checkmark.circle") }
+                            .buttonStyle(.borderless).help("Right: this matches")
+                        Button { teach(message, matches: false) } label: { Image(systemName: "xmark.circle") }
+                            .buttonStyle(.borderless).help("Wrong: this doesn't match")
+                    }
                 }
             }
             if !preview.isEmpty && rule.isComplete {
@@ -238,7 +272,7 @@ struct RuleEditor: View {
         // Let typing settle before going through the Inbox.
         try? await Task.sleep(for: .milliseconds(250))
         guard !Task.isCancelled else { return }
-        let found = (try? await model.ruleEngine.preview(rule, store: model.store)) ?? []
+        let found = (try? await model.ruleEngine.preview(model.calibrated(rule), store: model.store)) ?? []
         guard !Task.isCancelled else { return }
         preview = found
     }
@@ -248,8 +282,32 @@ struct RuleEditor: View {
             rule.name = rule.conditions.first?.summary ?? String(localized: "Untitled rule")
         }
         model.save(rule)
-        if applyNow { model.runOnInbox(rule) }
+        if applyNow, let saved = model.rules.first(where: { $0.id == rule.id }) { model.runOnInbox(saved) }
         model.editingRule = nil
+    }
+
+    private func draft() {
+        let text = sentence.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, !drafting else { return }
+        drafting = true
+        draftFailed = false
+        Task {
+            let drafted = await model.draftRule(text, replacing: rule)
+            drafting = false
+            if let drafted { rule = drafted } else { draftFailed = true }
+        }
+    }
+
+    /// ✓/✗ from the preview become examples for the model (every "about …" condition).
+    private func teach(_ message: StoredMessage, matches: Bool) {
+        let example = AboutCondition.Example(text: "\(message.senderDisplay): \(message.subject)", matches: matches)
+        rule.conditions = rule.conditions.map { condition in
+            guard case .about(var about) = condition else { return condition }
+            about.examples.removeAll { $0.text == example.text }
+            about.examples.append(example)
+            return .about(about)
+        }
+        if !matches { preview.removeAll { $0.id == message.id } }
     }
 }
 
@@ -258,8 +316,8 @@ struct RuleEditor: View {
 enum ConditionKind: CaseIterable, Hashable {
     case sender, recipient, subject, text, category, attachment, about
 
-    /// "About …" arrives with the on-device judge (M5.3).
-    static var available: [ConditionKind] { allCases.filter { $0 != .about } }
+    /// "About …" needs the on-device judge (embeddings and/or Foundation Models).
+    static func available(about: Bool) -> [ConditionKind] { about ? allCases : allCases.filter { $0 != .about } }
 
     var title: String {
         switch self {
@@ -307,7 +365,7 @@ struct ConditionEditor: View {
             Picker("", selection: Binding(get: { ConditionKind(condition) }, set: { kind in
                 condition = kind.makeDefault(keeping: textMatch)
             })) {
-                ForEach(ConditionKind.available, id: \.self) { Text($0.title).tag($0) }
+                ForEach(ConditionKind.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .labelsHidden()
             .fixedSize()

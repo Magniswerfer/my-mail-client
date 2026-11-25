@@ -146,3 +146,99 @@ import Testing
         #expect(preview.contains { $0.threadID == target.threadID })
     }
 }
+
+/// "About …" conditions with a fake embedder (keyword axes) and a fake model.
+@Suite struct AboutConditionTests {
+    /// Two axes: shoes and invoices. Everything else is noise on a third axis.
+    struct AxisEmbedder: TextEmbedder {
+        let dimension = 3
+        func embed(_ text: String) -> [Float]? {
+            let t = text.lowercased()
+            var v: [Float] = [t.contains("sko") || t.contains("shoe") ? 1 : 0, t.contains("faktura") || t.contains("invoice") ? 1 : 0, 0.3]
+            let n = sqrt(v.reduce(0) { $0 + $1 * $1 })
+            v = v.map { $0 / n }
+            return v
+        }
+    }
+
+    final class CountingVerifier: AboutVerifier, @unchecked Sendable {
+        var asked: [String] = []
+        func verify(_ condition: AboutCondition, message: StoredMessage) async -> Bool? {
+            asked.append(message.subject)
+            return !message.subject.contains("Nike Air")   // the model disagrees about one
+        }
+    }
+
+    func store(_ subjects: [String]) throws -> MailStore {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tidings-about-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let s = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
+        let messages = subjects.enumerated().map { i, subject in
+            StoredMessage(accountID: "a", mailbox: "INBOX", uid: UInt32(i + 1), messageID: "m\(i)@x", threadID: "t\(i)", subject: subject,
+                          fromName: nil, fromAddress: "x@shop.dk", recipients: "me@x", date: Date().addingTimeInterval(-Double(i) * 60))
+        }
+        try s.upsert(messages.map { ($0, $0.subject) })
+        for m in try s.inboxMessages() { try s.saveEmbedding(AxisEmbedder().embed(MailStore.embeddingText(m))!, for: m.id!) }
+        return s
+    }
+
+    @Test func calibratedCutSkipsTheModelForUnrelatedMail() async throws {
+        let subjects = ["Nye sko", "Nike Air sko", "Faktura 123"] + (0..<40).map { "Nyhedsbrev \($0)" }
+        let s = try store(subjects)
+        let verifier = CountingVerifier()
+        let judge = try #require(OnDeviceRuleJudge(store: s, embedder: AxisEmbedder(), verifier: verifier))
+        let about = judge.calibrated(AboutCondition("shoes"))
+        #expect(about.threshold > 0.3)
+
+        let inbox = try s.inboxMessages()
+        let shoes = try #require(inbox.first { $0.subject == "Nye sko" })
+        let nike = try #require(inbox.first { $0.subject == "Nike Air sko" })
+        let invoice = try #require(inbox.first { $0.subject == "Faktura 123" })
+        #expect(await judge.isAbout(about, message: shoes) == true)
+        #expect(await judge.isAbout(about, message: nike) == false)      // passed the cut, model said no
+        #expect(await judge.isAbout(about, message: invoice) == false)
+        #expect(verifier.asked == ["Nye sko", "Nike Air sko"])           // never asked about the invoice
+
+        // Without a model, the calibrated cut decides on its own.
+        let embeddingsOnly = try #require(OnDeviceRuleJudge(store: s, embedder: AxisEmbedder(), verifier: nil))
+        #expect(await embeddingsOnly.isAbout(about, message: nike) == true)
+        #expect(await embeddingsOnly.isAbout(about, message: invoice) == false)
+    }
+
+    @Test func previewAsksTheModelOnlyAboutTheLikeliest() async throws {
+        let subjects = (0..<60).map { "Nyhedsbrev \($0)" } + ["Nye sko", "Nike Air sko"]
+        let s = try store(subjects)
+        let verifier = CountingVerifier()
+        let judge = try #require(OnDeviceRuleJudge(store: s, embedder: AxisEmbedder(), verifier: verifier))
+        let rule = Rule(name: "Shoes", conditions: [.about(AboutCondition("shoes"))], actions: [.pin])
+        let hits = try await RuleEngine(judge: judge).preview(rule, store: s)
+        #expect(hits.map(\.subject) == ["Nye sko"])
+        #expect(verifier.asked.count <= RuleEngine.modelPreviewLimit)
+        #expect(Set(verifier.asked.prefix(2)) == ["Nye sko", "Nike Air sko"])   // ranked first
+    }
+}
+
+@Suite struct RuleDraftGroundingTests {
+    @Test func inventedDetailsAreDroppedAndNamedCategoriesKept() {
+        // What the on-device model actually produced for these sentences.
+        let zalando = Rule(name: "Zalando", conditions: [.sender(TextMatch(.endsWith, "@zalando.dk")), .hasAttachment(true)],
+                           actions: [.markRead]).grounded(in: "Flyt alle mails fra zalando.dk til Reklamer og markér dem som læst")
+        #expect(zalando.conditions == [.sender(TextMatch(.endsWith, "@zalando.dk"))])
+        #expect(zalando.actions == [.setCategory(.advertising), .markRead])
+
+        let accountant = Rule(name: "a", conditions: [.about(AboutCondition("invoices from my accountant")),
+                                                     .sender(TextMatch(.endsWith, "@myaccountant.com"))],
+                              actions: [.pin]).grounded(in: "Pin mail from my accountant about invoices")
+        #expect(accountant.conditions == [.about(AboutCondition("invoices from my accountant"))])
+
+        let linkedIn = Rule(name: "l", conditions: [.subject(TextMatch(.contains, "LinkedIn")), .sender(TextMatch(.endsWith, "@zalando.dk"))],
+                            actions: [.setCategory(.primary), .snooze(hours: 24)]).grounded(in: "Udsæt alt fra LinkedIn til i morgen")
+        #expect(linkedIn.conditions == [.subject(TextMatch(.contains, "LinkedIn"))])
+        #expect(linkedIn.actions == [.snooze(hours: 24)])
+
+        let crypto = Rule(name: "c", conditions: [.category(.newsletters), .about(AboutCondition("crypto"))], actions: [.done])
+            .grounded(in: "Archive newsletters about crypto")
+        #expect(crypto.conditions.count == 2)
+        #expect(crypto.actions == [.done])   // "newsletters" is the condition, not a move
+    }
+}

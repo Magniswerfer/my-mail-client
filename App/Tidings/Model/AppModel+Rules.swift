@@ -20,6 +20,7 @@ extension AppModel {
 
     /// Adds or replaces a rule (matched by id); new rules go to the end.
     func save(_ rule: Rule) {
+        let rule = calibrated(rule)
         if let index = rules.firstIndex(where: { $0.id == rule.id }) {
             rules[index] = rule
         } else {
@@ -60,8 +61,29 @@ extension AppModel {
 
     // MARK: Running
 
-    /// The on-device stack for "about …" conditions (M5.3); nil means they never match.
+    /// With the on-device judge for "about …" conditions; without it they never match.
     var ruleEngine: RuleEngine { RuleEngine(judge: ruleJudge) }
+
+    /// Sets each "about …" condition's pre-filter cut from your Inbox (see `OnDeviceRuleJudge`).
+    func calibrated(_ rule: Rule) -> Rule {
+        guard let ruleJudge else { return rule }
+        var rule = rule
+        rule.conditions = rule.conditions.map { condition in
+            if case .about(let about) = condition { return .about(ruleJudge.calibrated(about)) }
+            return condition
+        }
+        return rule
+    }
+
+    /// "Describe the rule": a sentence → an editable rule, keeping the one being edited's id.
+    func draftRule(_ sentence: String, replacing rule: Rule) async -> Rule? {
+        guard let ruleDrafter else { return nil }
+        let folders = Array(Set(mailboxes.filter { $0.role != .inbox && $0.role != .sent && $0.role != .drafts }.map(\.path))).sorted()
+        guard var drafted = await ruleDrafter.draft(sentence, folders: folders) else { return nil }
+        drafted.id = rule.id
+        drafted.isEnabled = rule.isEnabled
+        return drafted
+    }
 
     /// After a sync (and the AI sorting pass that follows it): rules on whatever arrived.
     func scheduleRules() {

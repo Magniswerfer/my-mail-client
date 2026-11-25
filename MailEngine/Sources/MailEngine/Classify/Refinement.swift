@@ -192,7 +192,7 @@ public actor Refinement {
     public struct Report: Sendable { public var embedded = 0, trainedOn = 0, changed = 0, judged = 0 }
 
     let store: MailStore
-    let embedder: any TextEmbedder
+    public nonisolated let embedder: any TextEmbedder
     let judge: (any CategoryJudge)?
     var bundleThreshold: Float = 0.8
     var primaryThreshold: Float = 0.7      // ask the judge above this
