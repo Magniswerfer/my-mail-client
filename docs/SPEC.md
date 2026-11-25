@@ -199,9 +199,9 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M4.6 · Invites** ✅ (engine tested on Linux; app not yet built) | Recognise invites/updates/cancellations/replies, invite card, RSVP by iTIP reply, calendar add/update/remove, clashes, threading by event UID |
 | **M4.7 · Assistant** ✅ (CI-built; engine tested) | Auto Summarize, Auto Drafts (follow-ups), Instant Intro, Share Availability, contact sidebar |
 | **M4.8 · Flow** ✅ (CI-built; engine tested) | Send and Done, pre-send check, dark message bodies, Reply Later + Answer Now, message links + Reminders/Things/Shortcuts, shortcuts sheet |
-| **M5 · Rules** | rules incl. NL, smart folders, semantic search |
-| **M6 · Polish** | Highlights, notifications, newsletter/Senders tools, read-later, attachments |
+| **M5 · Rules** ✅ (CI-built; engine tested) | Ordered rules (all/any, stop processing) with structured and "is about …" (on-device) conditions, 11 actions, preview, run on existing mail, describe-a-rule; smart folders (⌘S, built-ins incl. Waiting for Reply, Read Later); semantic "Related" search |
+| **M6 · Polish** ✅ (CI-built; engine tested) | Highlights (JSON-LD + patterns; copy code ⌃⌥C), notifications + VIPs + Focus filter, one-click unsubscribe + Senders, Read Later (reader mode), Mute, attachment browser (Quick Look), ;snippets; auto drafts also reply to mail that asks you something |
 | **M7 · Sync & extend** | CloudKit, plugin hooks hardened, MCP server |
-| **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
+| **iOS-1 · iPhone app** (CI-built; not yet run on a device) — also ⌘K and Move to Folder as sheets; snooze/send-later reminders as local notifications | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
 | **iOS-2 · Same state everywhere** | CloudKit for sender rules, corrections, bundle schedules, invite answers (M7 brought forward) |
 | **iOS-3 · Push** | MailEngine on the server (Linux build: replace NaturalLanguage/FoundationModels/LZFSE/CF charsets behind protocols), IDLE per account, APNs for Primary/VIP/pinned, server-side send-later and snooze wake |
