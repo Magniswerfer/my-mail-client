@@ -121,6 +121,11 @@ final class AppModel {
     @ObservationIgnored var relatedTask: Task<Void, Never>?
     var isSavingSearch = false
 
+    // Newsletters & extras (M6)
+    var isSendersShown = false
+    var isAttachmentsShown = false
+    var unsubscribeRequest: UnsubscribeRequest?
+
     // Rules (M5)
     var rules: [MailRule] = []
     var ruleEditing: RuleEditing?
@@ -295,6 +300,7 @@ final class AppModel {
         }
         reload()
         reloadOutbox()
+        notifyNewMail()
     }
 
     private func handle(_ event: AccountSync.Event, account: AccountConfig) {
@@ -312,6 +318,7 @@ final class AppModel {
             scheduleRules()
             scheduleAutoDrafts()
             refreshSmartCounts()
+            notifyNewMail()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message

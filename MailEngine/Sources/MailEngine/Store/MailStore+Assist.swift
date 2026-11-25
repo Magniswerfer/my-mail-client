@@ -282,3 +282,39 @@ extension MailStore {
         }
     }
 }
+
+// MARK: - Notifications
+
+extension MailStore {
+    /// The people you write to most (from your last `sample` sent messages), for seeding VIPs.
+    public func topCorrespondents(ownAddresses: Set<String>, limit: Int = 10, sample: Int = 2_000) throws -> [MailAddress] {
+        let own = Set(ownAddresses.map { $0.lowercased() })
+        guard !own.isEmpty else { return [] }
+        let rows = try db.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT recipients FROM message WHERE lower(fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
+                ORDER BY date DESC LIMIT ?
+                """, arguments: StatementArguments(own.sorted() + [sample] as [any DatabaseValueConvertible]))
+        }
+        var counts: [String: (MailAddress, Int)] = [:]
+        for row in rows {
+            for a in AddressParser.parse(row) where !own.contains(a.address.lowercased()) && !SignatureInfo.looksAutomated(a.address) {
+                let key = a.address.lowercased()
+                counts[key] = (counts[key]?.0.name == nil ? a : counts[key]!.0, (counts[key]?.1 ?? 0) + 1)
+            }
+        }
+        return counts.values.filter { $0.1 >= 2 }.sorted { $0.1 > $1.1 }.prefix(limit).map(\.0)
+    }
+
+    /// Inbox messages newer than `afterID`, oldest first (for new-mail notifications).
+    public func inboxMessages(after afterID: Int64, limit: Int = 50) throws -> [StoredMessage] {
+        try db.read { db in
+            try StoredMessage.fetchAll(db, sql: "SELECT * FROM message WHERE mailbox = 'INBOX' AND id > ? ORDER BY id LIMIT ?",
+                                       arguments: [afterID, limit])
+        }
+    }
+
+    public func maxMessageID() throws -> Int64 {
+        try db.read { try Int64.fetchOne($0, sql: "SELECT max(id) FROM message") ?? 0 }
+    }
+}

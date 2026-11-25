@@ -293,6 +293,11 @@ public actor AccountSync {
             category: category
         )
         message.inReplyTo = parsed.inReplyTo.first
+        let highlights = HighlightExtractor.extract(parsed)
+        message.highlights = highlights.isEmpty ? nil : highlights
+        message.unsubscribe = UnsubscribeOptions.parse(parsed)
+        let files = parsed.attachments.filter { !$0.isInline }
+        message.attachments = files.isEmpty ? nil : files
         if let invite = parsed.invite {
             message.invite = invite
             message.inviteUID = invite.uid

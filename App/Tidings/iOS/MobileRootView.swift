@@ -73,6 +73,15 @@ struct MobileRootView: View {
         }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         .sheet(isPresented: $model.isSavingSearch) { SaveSearchSheet().presentationDetents([.medium]) }
+        .sheet(isPresented: $model.isSendersShown) { SendersView() }
+        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser() }
+        .confirmationDialog(model.unsubscribeRequest.map { String(localized: "Unsubscribe from \($0.name)?") } ?? "",
+                            isPresented: Binding(get: { model.unsubscribeRequest != nil }, set: { if !$0 { model.unsubscribeRequest = nil } }),
+                            titleVisibility: .visible, presenting: model.unsubscribeRequest) { request in
+            Button("Unsubscribe") { model.confirmUnsubscribe(request, markDone: false) }
+            Button("Unsubscribe and Mark Their Mail Done") { model.confirmUnsubscribe(request, markDone: true) }
+            Button("Cancel", role: .cancel) { model.unsubscribeRequest = nil }
+        }
         .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
         .sheet(isPresented: $model.isRulesShown) {
             NavigationStack {
@@ -188,6 +197,8 @@ struct MobileRootView: View {
                 Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
                 Button("Reply Later", systemImage: "arrowshape.turn.up.left.circle") { model.toggleReplyLater() }
                 Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
+                Button("Read Later", systemImage: "book") { model.readLater() }
+                Button("Mute", systemImage: "bell.slash") { model.toggleMute() }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
             } primaryAction: {

@@ -11,6 +11,7 @@ struct TidingsApp: App {
         let model = AppModel()
         model.start()
         _model = State(initialValue: model)
+        GlobalHotKey.shared.registerCopyCode { [weak model] in model?.copyLatestCode() }
     }
 
     var body: some Scene {
@@ -55,6 +56,11 @@ struct TidingsApp: App {
                 Button("Add to Reminders") { model.addToReminders() }
                     .keyboardShortcut("r", modifiers: [.command, .control])
                 Button("Copy Link to Message") { model.copyLink() }
+                Button("Copy Latest Login Code") { model.copyLatestCode() }
+                Divider()
+                Button("Mute Conversation") { model.toggleMute() }
+                Button("Read Later") { model.readLater() }
+                Button("Unsubscribe…") { model.requestUnsubscribe() }
                 Divider()
                 Button("Mark Done") { model.perform(.done) }
                     .keyboardShortcut("e", modifiers: [.command, .option])
@@ -92,6 +98,9 @@ struct TidingsApp: App {
                     .keyboardShortcut("/", modifiers: .command)
             }
             CommandMenu("Mailbox") {
+                Button("Senders…") { model.isSendersShown = true }
+                Button("Attachments…") { model.isAttachmentsShown = true }
+                Divider()
                 Button("Save Search as Smart Folder…") { model.isSavingSearch = true }
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(!model.isSearching)
@@ -192,6 +201,19 @@ struct RootView: View {
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         .sheet(isPresented: $model.isSavingSearch) { SaveSearchSheet() }
+        .sheet(isPresented: $model.isSendersShown) { SendersView() }
+        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser() }
+        .confirmationDialog(model.unsubscribeRequest.map { String(localized: "Unsubscribe from \($0.name)?") } ?? "",
+                            isPresented: Binding(get: { model.unsubscribeRequest != nil }, set: { if !$0 { model.unsubscribeRequest = nil } }),
+                            titleVisibility: .visible, presenting: model.unsubscribeRequest) { request in
+            Button("Unsubscribe") { model.confirmUnsubscribe(request, markDone: false) }
+            Button("Unsubscribe and Mark Their Mail Done") { model.confirmUnsubscribe(request, markDone: true) }
+            Button("Cancel", role: .cancel) { model.unsubscribeRequest = nil }
+        } message: { request in
+            Text(request.options.oneClick != nil ? "Tidings asks the list to remove you. Nothing else is sent."
+                 : request.options.mailto != nil ? "Tidings sends a short unsubscribe email to the list."
+                 : "The list's unsubscribe page opens in your browser.")
+        }
         .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
         .sheet(isPresented: $model.isRulesShown) {
             NavigationStack {
@@ -320,6 +342,8 @@ struct RootView: View {
         case "a": model.compose(.replyAll)
         case "f": model.compose(.forward)
         case "l": model.toggleReplyLater()
+        case "M": model.toggleMute()
+        case "R": model.readLater()
         case "?": model.isShortcutsShown = true
         default: return .ignored
         }

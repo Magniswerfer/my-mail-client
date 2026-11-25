@@ -141,6 +141,8 @@ struct SettingsView: View {
             Tab("Identities", systemImage: "person.crop.rectangle.stack") { IdentitiesSettings() }
             Tab("Bundles", systemImage: "square.stack.3d.up") { BundleSettings() }
             Tab("Rules", systemImage: "line.3.horizontal.decrease.circle") { RulesManager() }
+            Tab("Notifications", systemImage: "bell.badge") { NotificationSettings() }
+            Tab("Snippets", systemImage: "text.badge.plus") { SnippetsSettings() }
             Tab("Assistant", systemImage: "sparkles") { AssistantSettings() }
             Tab("General", systemImage: "gearshape") {
                 Form {

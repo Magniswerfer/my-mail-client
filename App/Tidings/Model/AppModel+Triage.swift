@@ -330,6 +330,10 @@ extension TriageKind {
         case .markUnread: "envelope.badge"
         case .replyLater: "arrowshape.turn.up.left.circle"
         case .clearReplyLater: "checkmark.circle"
+        case .mute: "bell.slash"
+        case .unmute: "bell"
+        case .readLater: "book"
+        case .clearReadLater: "book.closed"
         }
     }
 
@@ -350,6 +354,10 @@ extension TriageKind {
         case .markUnread: String(localized: "Marked unread")
         case .replyLater: count == 1 ? String(localized: "Set aside to reply later") : String(localized: "\(count) set aside to reply later")
         case .clearReplyLater: String(localized: "Removed from Reply Later")
+        case .mute: String(localized: "Muted")
+        case .unmute: String(localized: "Unmuted")
+        case .readLater: String(localized: "Saved to Read Later")
+        case .clearReadLater: String(localized: "Removed from Read Later")
         }
     }
 }

@@ -76,7 +76,9 @@ struct ComposeView: View {
         }
         .onAppear {
             if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
+            app.setSnippetContext(to: model.recipients(model.to), from: model.identity)
         }
+        .onChange(of: model.to) { app.setSnippetContext(to: model.recipients(model.to), from: model.identity) }
         .sheet(isPresented: $isSendLaterShown) { sendLaterSheet }
         .confirmationDialog(String(localized: "Send anyway?"), isPresented: Binding(
             get: { pendingSend != nil }, set: { if !$0 { pendingSend = nil } }

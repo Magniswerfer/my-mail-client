@@ -5,6 +5,7 @@ import SwiftUI
 extension SmartFolder {
     var localizedName: String {
         switch id {
+        case "builtin.readLater": String(localized: "Read Later")
         case "builtin.attachments": String(localized: "Attachments")
         case "builtin.waiting": String(localized: "Waiting for Reply")
         case "builtin.receipts": String(localized: "Receipts This Year")
@@ -25,6 +26,8 @@ extension AppModel {
         let ids: [String]
         if folder.query == SmartFolder.waitingQuery {
             ids = (try? store.waitingForReplyThreadIDs(ownAddresses: ownAddresses)) ?? []
+        } else if folder.query == SmartFolder.readLaterQuery {
+            ids = (try? store.threadIDs(withKeyword: readLaterKeyword)) ?? []
         } else {
             let hits = (try? SearchEngine(store: store).hits(SearchQuery(parsing: folder.query), limit: 400))?.hits ?? []
             ids = (try? store.threadIDs(forMessageIDs: hits.map(\.id))) ?? []

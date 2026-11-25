@@ -68,8 +68,16 @@ extension AppModel {
         ruleTask = Task { [weak self] in
             guard let self else { return }
             let waiting = (try? self.store.messagesAwaitingRules(ownAddresses: self.ownAddresses)) ?? []
-            if !waiting.isEmpty, self.rules.contains(where: \.isEnabled) {
-                _ = await self.run(rules: self.rules, on: waiting)
+            // Muted conversations: new mail goes straight to the Archive, read (SPEC §11).
+            let muted = waiting.filter { self.isMuted($0.threadID) }
+            for message in muted {
+                guard let threadID = message.threadID else { continue }
+                self.performQuietly(.markRead, threadID: threadID, accountID: message.accountID)
+                self.performQuietly(.done, threadID: threadID, accountID: message.accountID)
+            }
+            let rest = waiting.filter { m in !muted.contains { $0.id == m.id } }
+            if !rest.isEmpty, self.rules.contains(where: \.isEnabled) {
+                _ = await self.run(rules: self.rules, on: rest)
             }
             try? self.store.markSeenByRules(waiting)
             self.ruleTask = nil

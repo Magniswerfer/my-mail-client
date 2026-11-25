@@ -22,6 +22,7 @@ public struct SmartFolder: Codable, Sendable, Hashable, Identifiable {
     public static func builtIns(now: Date = Date(), calendar: Calendar = .current) -> [SmartFolder] {
         let year = calendar.component(.year, from: now)
         return [
+            SmartFolder(id: "builtin.readLater", name: "Read Later", query: SmartFolder.readLaterQuery, symbol: "book"),
             SmartFolder(id: "builtin.attachments", name: "Attachments", query: "has:attachment", symbol: "paperclip"),
             SmartFolder(id: "builtin.waiting", name: "Waiting for Reply", query: SmartFolder.waitingQuery, symbol: "hourglass"),
             SmartFolder(id: "builtin.receipts", name: "Receipts This Year", query: "category:transactions after:\(year)-01-01",
@@ -30,6 +31,7 @@ public struct SmartFolder: Codable, Sendable, Hashable, Identifiable {
     }
 
     public static let waitingQuery = "special:waiting"
+    public static let readLaterQuery = "special:readLater"
 }
 
 extension MailStore {

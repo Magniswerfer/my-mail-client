@@ -5600,6 +5600,906 @@
           }
         }
       }
+    },
+    "Code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kode"
+          }
+        }
+      }
+    },
+    "Parcel": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakke"
+          }
+        }
+      }
+    },
+    "Flight": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fly"
+          }
+        }
+      }
+    },
+    "Receipt": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kvittering"
+          }
+        }
+      }
+    },
+    "Reservation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reservation"
+          }
+        }
+      }
+    },
+    "Bill": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regning"
+          }
+        }
+      }
+    },
+    "Expected %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forventet %@"
+          }
+        }
+      }
+    },
+    "Booking %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Booking %@"
+          }
+        }
+      }
+    },
+    "%@ people": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ personer"
+          }
+        }
+      }
+    },
+    "Order %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordre %@"
+          }
+        }
+      }
+    },
+    "Due %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forfalder %@"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér"
+          }
+        }
+      }
+    },
+    "Track": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spor"
+          }
+        }
+      }
+    },
+    "Check In": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check ind"
+          }
+        }
+      }
+    },
+    "Manage": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Administrer"
+          }
+        }
+      }
+    },
+    "Remind Me": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Påmind mig"
+          }
+        }
+      }
+    },
+    "Pay": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betal"
+          }
+        }
+      }
+    },
+    "View Order": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ordre"
+          }
+        }
+      }
+    },
+    "Copy the code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér koden"
+          }
+        }
+      }
+    },
+    "Copied %@ from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopierede %1$@ fra %2$@"
+          }
+        }
+      }
+    },
+    "No login code in the last 20 minutes": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen loginkode de seneste 20 minutter"
+          }
+        }
+      }
+    },
+    "Pay %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betal %@"
+          }
+        }
+      }
+    },
+    "Copy Latest Login Code": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiér seneste loginkode"
+          }
+        }
+      }
+    },
+    "People in Primary, VIPs and replies": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personer i Primær, VIP'er og svar"
+          }
+        }
+      }
+    },
+    "VIPs only": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun VIP'er"
+          }
+        }
+      }
+    },
+    "Off": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra"
+          }
+        }
+      }
+    },
+    "VIP": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP"
+          }
+        }
+      }
+    },
+    "Removed %@ from VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernede %@ fra VIP'er"
+          }
+        }
+      }
+    },
+    "%@ is a VIP: you'll always be notified": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ er VIP: du får altid besked"
+          }
+        }
+      }
+    },
+    "Notify me about": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv mig besked om"
+          }
+        }
+      }
+    },
+    "Never for bundles or newsletters. A Focus can limit this to VIPs (Settings › Focus › Focus Filters).": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aldrig for bundter eller nyhedsbreve. Et fokus kan begrænse det til VIP'er (Indstillinger › Fokus › Fokusfiltre)."
+          }
+        }
+      }
+    },
+    "Suggest From My Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foreslå fra min mail"
+          }
+        }
+      }
+    },
+    "VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP'er"
+          }
+        }
+      }
+    },
+    "Mail from VIPs always notifies you, in any category. Suggestions are the people you write to most.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail fra VIP'er giver altid besked, i alle kategorier. Forslagene er dem, du skriver mest til."
+          }
+        }
+      }
+    },
+    "Tidings Notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings-notifikationer"
+          }
+        }
+      }
+    },
+    "Only notify about VIPs while this Focus is on.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv kun besked om VIP'er, mens dette fokus er slået til."
+          }
+        }
+      }
+    },
+    "Only VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun VIP'er"
+          }
+        }
+      }
+    },
+    "Usual notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normale notifikationer"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifikationer"
+          }
+        }
+      }
+    },
+    "Add or Remove Sender as VIP": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj eller fjern afsender som VIP"
+          }
+        }
+      }
+    },
+    "VIP: Always Notify Me": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIP: Giv altid besked"
+          }
+        }
+      }
+    },
+    "Muted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lydløs"
+          }
+        }
+      }
+    },
+    "Unmuted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyd slået til"
+          }
+        }
+      }
+    },
+    "Saved to Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemt til Læs senere"
+          }
+        }
+      }
+    },
+    "Removed from Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet fra Læs senere"
+          }
+        }
+      }
+    },
+    "Read Later": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læs senere"
+          }
+        }
+      }
+    },
+    "This sender doesn't offer a way to unsubscribe. Try a rule that marks their mail done.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsenderen tilbyder ikke afmelding. Prøv en regel, der markerer deres mail færdig."
+          }
+        }
+      }
+    },
+    "Unsubscribed from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeldt %@"
+          }
+        }
+      }
+    },
+    "Couldn't unsubscribe from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke afmelde %@"
+          }
+        }
+      }
+    },
+    "Unsubscribed": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeldt"
+          }
+        }
+      }
+    },
+    "%lld messages · %lld in Inbox · last %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld beskeder · %2$lld i indbakken · seneste %3$@"
+          }
+        }
+      }
+    },
+    "Unsubscribe…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld…"
+          }
+        }
+      }
+    },
+    "Mark All in Inbox Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markér alle i indbakken færdige"
+          }
+        }
+      }
+    },
+    "Always Put In": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læg altid i"
+          }
+        }
+      }
+    },
+    "Remove from VIPs": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern fra VIP'er"
+          }
+        }
+      }
+    },
+    "Make VIP": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gør til VIP"
+          }
+        }
+      }
+    },
+    "Show Their Mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis deres mail"
+          }
+        }
+      }
+    },
+    "Filter senders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrér afsendere"
+          }
+        }
+      }
+    },
+    "Senders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendere"
+          }
+        }
+      }
+    },
+    "Mailing Lists Only": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun mailinglister"
+          }
+        }
+      }
+    },
+    "Only senders you can unsubscribe from": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun afsendere, du kan afmelde"
+          }
+        }
+      }
+    },
+    "All": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle"
+          }
+        }
+      }
+    },
+    "Documents": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokumenter"
+          }
+        }
+      }
+    },
+    "Images": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Billeder"
+          }
+        }
+      }
+    },
+    "Kind": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        }
+      }
+    },
+    "Show Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis besked"
+          }
+        }
+      }
+    },
+    "No attachments yet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen vedhæftninger endnu"
+          }
+        }
+      }
+    },
+    "Attachments appear here as mail syncs.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæftninger dukker op her, efterhånden som mail synkroniseres."
+          }
+        }
+      }
+    },
+    "Filter by name, sender or subject": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrér efter navn, afsender eller emne"
+          }
+        }
+      }
+    },
+    "keyword": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nøgleord"
+          }
+        }
+      }
+    },
+    "Text": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekst"
+          }
+        }
+      }
+    },
+    "New Snippet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nyt tekststykke"
+          }
+        }
+      }
+    },
+    "Snippets": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekststykker"
+          }
+        }
+      }
+    },
+    "Type ;keyword and a space in a message to insert the text. {first} and {name} are the first recipient, {me} is you, {date} is today.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv ;nøgleord og et mellemrum i en besked for at indsætte teksten. {first} og {name} er første modtager, {me} er dig, {date} er i dag."
+          }
+        }
+      }
+    },
+    "Original Layout": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originalt layout"
+          }
+        }
+      }
+    },
+    "Reader Mode": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læsetilstand"
+          }
+        }
+      }
+    },
+    "Clean text for reading": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ren tekst til læsning"
+          }
+        }
+      }
+    },
+    "Unmute Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd til for samtale"
+          }
+        }
+      }
+    },
+    "Mute Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gør samtale lydløs"
+          }
+        }
+      }
+    },
+    "Senders…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendere…"
+          }
+        }
+      }
+    },
+    "Attachments…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedhæftninger…"
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd til"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lydløs"
+          }
+        }
+      }
+    },
+    "Unsubscribe from %@?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld %@?"
+          }
+        }
+      }
+    },
+    "Unsubscribe": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld"
+          }
+        }
+      }
+    },
+    "Unsubscribe and Mark Their Mail Done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afmeld og markér deres mail færdig"
+          }
+        }
+      }
+    },
+    "Tidings asks the list to remove you. Nothing else is sent.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings beder listen om at fjerne dig. Intet andet sendes."
+          }
+        }
+      }
+    },
+    "Tidings sends a short unsubscribe email to the list.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings sender en kort afmeldingsmail til listen."
+          }
+        }
+      }
+    },
+    "The list's unsubscribe page opens in your browser.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listens afmeldingsside åbner i din browser."
+          }
+        }
+      }
+    },
+    "Senders and Unsubscribe…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsendere og afmelding…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

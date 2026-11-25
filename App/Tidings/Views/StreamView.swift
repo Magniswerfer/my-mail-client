@@ -26,6 +26,9 @@ struct StreamView: View {
                             Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
                                 model.requestSweep(bundle: category)
                             }
+                            Button("Senders and Unsubscribe…", systemImage: "envelope.badge.shield.half.filled") {
+                                model.isSendersShown = true
+                            }
                         }
                     if model.expandedBundles.contains(category) {
                         ForEach(members) { thread in row(thread, inBundle: true) }
@@ -189,6 +192,9 @@ struct ThreadRow: View {
                 Text(m.subject)
                     .font(.subheadline.weight(unread ? .medium : .regular))
                     .lineLimit(1)
+                if let highlight = m.highlights?.first {
+                    HighlightChip(highlight: highlight, message: m)
+                }
                 Text(m.preview)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -316,6 +322,12 @@ struct ThreadActions: View {
         }
         Button("Copy Link to Message", systemImage: "link") { model.copyLink(thread: thread) }
         Button("New Rule for This Sender…", systemImage: "line.3.horizontal.decrease.circle") { model.newRule(forSenderOf: thread) }
+        Button("VIP: Always Notify Me", systemImage: "star") { model.toggleVIPForSelection(thread) }
+        Button(model.isMuted(thread.threadID) ? "Unmute" : "Mute", systemImage: "bell.slash") { model.toggleMute(thread) }
+        Button("Read Later", systemImage: "book") { model.readLater(thread) }
+        if thread.latest.unsubscribe != nil {
+            Button("Unsubscribe…", systemImage: "envelope.badge.shield.half.filled") { model.requestUnsubscribe(thread: thread) }
+        }
         Divider()
         Button("Mark Done", systemImage: "checkmark.circle") { model.perform(.done, on: [thread]) }
         Button("Snooze…", systemImage: "clock") {

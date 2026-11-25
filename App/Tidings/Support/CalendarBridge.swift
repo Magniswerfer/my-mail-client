@@ -57,6 +57,19 @@ import MailEngine
         .sorted { $0.startDate < $1.startDate }
     }
 
+    /// A plain event (flights, reservations from Highlights).
+    func addEvent(title: String, start: Date, end: Date, location: String?, url: URL?) throws {
+        guard hasAccess else { throw Failure.noAccess }
+        let event = EKEvent(eventStore: store)
+        event.calendar = store.defaultCalendarForNewEvents
+        event.title = title
+        event.startDate = start
+        event.endDate = max(end, start.addingTimeInterval(900))
+        event.location = location
+        event.url = url
+        try store.save(event, span: .thisEvent, commit: true)
+    }
+
     // MARK: Reminders
 
     enum Failure: Error { case noAccess, noList }

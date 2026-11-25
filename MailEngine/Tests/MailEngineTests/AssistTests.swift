@@ -271,3 +271,20 @@ private func message(_ uid: UInt32, thread: String, from: String, name: String? 
         #expect(try s.autoDraft(threadID: "ask")?.kind == .reply)
     }
 }
+
+@Suite struct NotificationQueryTests {
+    @Test func topCorrespondentsAndNewInbox() throws {
+        let s = try store()
+        var items: [(StoredMessage, String)] = []
+        for i in 0..<3 { items.append((message(UInt32(10 + i), thread: "a\(i)", from: me, to: "Anna Holm <anna@firma.dk>", daysAgo: Double(i)), "x")) }
+        for i in 0..<2 { items.append((message(UInt32(20 + i), thread: "b\(i)", from: me, to: "bo@firma.dk, noreply@x.dk", daysAgo: Double(i)), "x")) }
+        items.append((message(30, thread: "c", from: me, to: "cy@firma.dk", daysAgo: 1), "x"))
+        try s.upsert(items)
+        let top = try s.topCorrespondents(ownAddresses: [me])
+        #expect(top.map(\.address) == ["anna@firma.dk", "bo@firma.dk"], "twice or more, robots excluded")
+        #expect(top.first?.name == "Anna Holm")
+        let newest = try s.maxMessageID()
+        try s.upsert([(message(40, thread: "n", from: "x@y.dk", to: me, daysAgo: 0), "new")])
+        #expect(try s.inboxMessages(after: newest).map(\.uid) == [40])
+    }
+}

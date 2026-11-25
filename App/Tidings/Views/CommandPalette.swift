@@ -63,6 +63,19 @@ extension AppModel {
         list += [
             AppCommand(id: "saveSearch", title: String(localized: "Save Search as Smart Folder…"), symbol: "folder.badge.plus",
                        keys: "⌘S", isEnabled: isSearching) { self.isSavingSearch = true },
+            AppCommand(id: "mute", title: thread.map { isMuted($0.threadID) } == true ? String(localized: "Unmute Conversation") : String(localized: "Mute Conversation"),
+                       symbol: "bell.slash", keys: "⇧M", isEnabled: hasSelection) { self.toggleMute() },
+            AppCommand(id: "readLater", title: String(localized: "Read Later"), symbol: "book", keys: "⇧R",
+                       isEnabled: hasSelection) { self.readLater() },
+            AppCommand(id: "unsubscribe", title: String(localized: "Unsubscribe…"), symbol: "envelope.badge.shield.half.filled",
+                       keys: nil, isEnabled: hasSelection) { self.requestUnsubscribe() },
+            AppCommand(id: "senders", title: String(localized: "Senders…"), symbol: "person.3", keys: nil) { self.isSendersShown = true },
+            AppCommand(id: "attachments", title: String(localized: "Attachments…"), symbol: "paperclip", keys: nil) { self.isAttachmentsShown = true },
+            AppCommand(id: "vip", title: String(localized: "Add or Remove Sender as VIP"), symbol: "star", keys: nil,
+                       isEnabled: hasSelection) { self.toggleVIPForSelection() },
+            AppCommand(id: "copyCode", title: String(localized: "Copy Latest Login Code"), symbol: "key.fill", keys: "⌃⌥C") {
+                self.copyLatestCode()
+            },
             AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: nil) {
                 self.isRulesShown = true
             },
