@@ -1,5 +1,6 @@
 #if os(iOS)
 import MailEngine
+import QuickLook
 import SwiftUI
 
 /// iPhone: Inbox → conversation, with the sidebar one step back. iPad: the Mac's three columns.
