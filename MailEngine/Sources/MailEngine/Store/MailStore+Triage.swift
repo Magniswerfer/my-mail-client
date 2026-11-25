@@ -175,6 +175,17 @@ extension MailStore {
         }
     }
 
+    /// Snoozed conversations that come back after `now`, soonest first (one row per conversation).
+    public func upcomingSnoozes(after now: Date = Date(), limit: Int = 20) throws -> [StoredMessage] {
+        try db.read { db in
+            try StoredMessage.fetchAll(db, sql: """
+                SELECT * FROM message WHERE id IN (
+                    SELECT max(id) FROM message WHERE isSnoozed = 1 AND snoozedUntil > ? GROUP BY threadID
+                ) ORDER BY snoozedUntil LIMIT ?
+                """, arguments: [now, limit])
+        }
+    }
+
     public func nextSnoozeWake(accountID: String) throws -> Date? {
         try db.read {
             try Date.fetchOne($0, sql: "SELECT min(snoozedUntil) FROM message WHERE accountID = ? AND isSnoozed = 1",

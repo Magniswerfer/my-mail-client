@@ -76,6 +76,7 @@ struct FollowUpBanner: View {
     }
 
     private func waitingText(_ draft: AutoDraft) -> String {
+        if draft.kind == .reply { return String(localized: "A reply is drafted for you. Check the [brackets] before sending.") }
         let sent = (try? model.store.message(id: draft.messageID)) ?? nil
         let days = sent.map { max(1, Int(Date().timeIntervalSince($0.date) / 86_400)) } ?? AssistSettings.followUpDays
         return String(localized: "No reply in \(days) days. A follow-up is ready in Drafts.")
@@ -353,6 +354,7 @@ struct AssistantSettings: View {
     @AppStorage(AssistSettings.workdayStartKey) private var workdayStart = 9
     @AppStorage(AssistSettings.workdayEndKey) private var workdayEnd = 17
     @AppStorage(AssistSettings.sendAndDoneKey) private var sendAndDone = true
+    @AppStorage(AssistSettings.replyDraftsKey) private var replyDrafts = true
 
     var body: some View {
         Form {
@@ -378,6 +380,8 @@ struct AssistantSettings: View {
             }
             Section {
                 Toggle("Draft follow-ups when nobody replies", isOn: $autoDrafts)
+                Toggle("Draft replies to mail that asks you something", isOn: $replyDrafts)
+                    .disabled(model.assistant == nil)
                 Stepper("After \(followUpDays) days", value: $followUpDays, in: 2...14)
                     .disabled(!autoDrafts)
             } header: {

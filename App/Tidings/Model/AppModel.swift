@@ -1,5 +1,6 @@
 import Foundation
 import MailEngine
+import UserNotifications
 import Observation
 
 enum SidebarItem: Hashable {
@@ -185,6 +186,7 @@ final class AppModel {
         reloadOutbox()
         scheduleDeliveryRefresh()
         Self.shared = self
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
     }
 
     static let devAccount = AccountConfig(

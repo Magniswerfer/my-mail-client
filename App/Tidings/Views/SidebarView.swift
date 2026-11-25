@@ -27,11 +27,11 @@ struct SidebarView: View {
                         model.selection = .outbox
                         didPick?()
                     } label: {
-                        Label("Follow-ups", systemImage: "arrowshape.turn.up.right.circle")
+                        Label("Drafted for You", systemImage: "sparkles")
                             .badge(model.autoDrafts.count)
                     }
                     .buttonStyle(.plain)
-                    .help("Drafted follow-ups for conversations still waiting on a reply")
+                    .help("Follow-ups and replies Tidings drafted. Nothing is sent without you.")
                 }
                 if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
                     Label("Outbox", systemImage: "paperplane")

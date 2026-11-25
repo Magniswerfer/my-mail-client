@@ -72,6 +72,12 @@ struct MobileRootView: View {
             SnoozePicker().presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(isPresented: $model.isPaletteShown) {
+            CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $model.isFolderPickerShown) {
+            FolderPicker().padding(.top, 8).presentationDetents([.medium, .large])
+        }
         .fullScreenCover(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
@@ -124,6 +130,10 @@ struct MobileRootView: View {
                 }
             }
         }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { model.isPaletteShown = true } label: { Label("Command Palette", systemImage: "command") }
+                .keyboardShortcut("k", modifiers: .command)
+        }
         ToolbarItem(placement: .bottomBar) {
             SidebarStatus()
         }
@@ -151,6 +161,7 @@ struct MobileRootView: View {
             Menu {
                 if let thread = model.targetThreads.first {
                     MoveMenuContent(thread: thread)
+                    Button("Move to Folder…", systemImage: "folder") { model.isFolderPickerShown = true }
                     Divider()
                     Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk) }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash) }

@@ -4630,6 +4630,86 @@
           }
         }
       }
+    },
+    "Back in your Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbage i din indbakke"
+          }
+        }
+      }
+    },
+    "Ready to send": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klar til at sende"
+          }
+        }
+      }
+    },
+    "Open Tidings to send “%@”.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn Tidings for at sende “%@”."
+          }
+        }
+      }
+    },
+    "A reply is drafted for you. Check the [brackets] before sending.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et svar er skrevet til dig. Tjek [parenteserne] før du sender."
+          }
+        }
+      }
+    },
+    "Draft replies to mail that asks you something": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skriv svar på mail, der spørger dig om noget"
+          }
+        }
+      }
+    },
+    "Drafted for You": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skrevet til dig"
+          }
+        }
+      }
+    },
+    "Follow-ups and replies Tidings drafted. Nothing is sent without you.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opfølgninger og svar, Tidings har skrevet. Intet sendes uden dig."
+          }
+        }
+      }
+    },
+    "Reply drafted for you": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Svar skrevet til dig"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

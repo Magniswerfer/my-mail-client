@@ -242,3 +242,32 @@ private func message(_ uid: UInt32, thread: String, from: String, name: String? 
         #expect(try s.message(messageID: "nope@x") == nil)
     }
 }
+
+@Suite struct ReplyCandidateTests {
+    @Test func needsReplyHeuristic() {
+        #expect(NeedsReply.likely(subject: "Møde", text: "Hej Magnus, kan du sende tallene inden fredag?"))
+        #expect(NeedsReply.likely(subject: "Plan", text: "Please let me know which option works for you."))
+        #expect(!NeedsReply.likely(subject: "FYI", text: "Here are the notes from today. No action needed."))
+        #expect(!NeedsReply.likely(subject: "Re: x", text: "Thanks!\n\nOn Mon, Bo wrote:\n> Can you check?"), "a question only in the quote")
+    }
+
+    @Test func candidatesAreRecentPrimaryAsksToYou() throws {
+        let s = try store()
+        var ask = message(1, thread: "ask", from: "anna@firma.dk", name: "Anna", to: "Magnus <\(me)>", daysAgo: 0.5)
+        ask.bodyText = TextCompression.compress("Hej Magnus, kan du kigge på budgettet i morgen?")
+        var fyi = message(2, thread: "fyi", from: "bo@firma.dk", to: me, daysAgo: 0.5)
+        fyi.bodyText = TextCompression.compress("Til orientering: referatet ligger på drevet.")
+        var cc = message(3, thread: "cc", from: "cy@firma.dk", to: "a@x.dk, b@x.dk, c@x.dk, \(me)", daysAgo: 0.5)
+        cc.bodyText = ask.bodyText
+        var old = message(4, thread: "old", from: "di@firma.dk", to: me, daysAgo: 5)
+        old.bodyText = ask.bodyText
+        var bulk = message(5, thread: "bulk", from: "news@firma.dk", to: me, daysAgo: 0.5)
+        bulk.bodyText = ask.bodyText
+        bulk.category = .newsletters
+        try s.upsert([ask, fyi, cc, old, bulk].map { ($0, $0.plainText ?? "") })
+        #expect(try s.replyCandidates(accountID: "a", ownAddresses: [me]).map(\.threadID) == ["ask"])
+        try s.saveAutoDraft(AutoDraft(threadID: "ask", accountID: "a", outboxID: nil, messageID: 1, kind: .reply))
+        #expect(try s.replyCandidates(accountID: "a", ownAddresses: [me]).isEmpty)
+        #expect(try s.autoDraft(threadID: "ask")?.kind == .reply)
+    }
+}

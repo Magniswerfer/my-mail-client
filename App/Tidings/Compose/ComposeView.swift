@@ -396,7 +396,9 @@ struct OutboxView: View {
                 Text(message?.subject.isEmpty == false ? message!.subject : String(localized: "(no subject)")).font(.headline)
                 Text(message?.envelopeRecipients.joined(separator: ", ") ?? "").font(.caption).foregroundStyle(.secondary)
                 if let id = item.id, model.autoDrafts.contains(where: { $0.outboxID == id }) {
-                    Label("Follow-up drafted for you", systemImage: "sparkles").font(.caption).foregroundStyle(.purple)
+                    let kind = model.autoDrafts.first { $0.outboxID == id }?.kind
+                    Label(kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you", systemImage: "sparkles")
+                        .font(.caption).foregroundStyle(.purple)
                 }
                 if let error = item.lastError {
                     Text(error).font(.caption).foregroundStyle(item.state == .failed ? .red : .orange)

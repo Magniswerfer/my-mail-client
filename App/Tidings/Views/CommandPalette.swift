@@ -255,7 +255,7 @@ struct FolderPicker: View {
                 }
             }
         }
-        .frame(width: 420)
+        .macFrame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
         .shadow(radius: 30, y: 10)

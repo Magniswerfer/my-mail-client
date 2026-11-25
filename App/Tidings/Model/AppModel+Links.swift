@@ -122,3 +122,24 @@ extension AppModel {
         if let url = components.url { Platform.openExternally(url) }
     }
 }
+
+// MARK: - Things that must happen at a time (iPhone)
+
+extension AppModel {
+    /// Scheduled sends more than a minute away (the undo window is handled before suspending).
+    var scheduledSends: [OutboxItem] {
+        ((try? store.outbox()) ?? []).filter { $0.state == .queued && ($0.sendAt ?? .distantPast) > Date().addingTimeInterval(60) }
+    }
+
+    /// The next snooze wake or scheduled send.
+    var nextDueDate: Date? {
+        let snooze = (try? store.upcomingSnoozes(limit: 1))?.first?.snoozedUntil
+        let send = scheduledSends.compactMap(\.sendAt).min()
+        return [snooze, send].compactMap { $0 }.min()
+    }
+
+    func scheduleWakeReminders() async {
+        let snoozes = (try? store.upcomingSnoozes(limit: 30)) ?? []
+        await Notifier.shared.scheduleWakeReminders(snoozes: snoozes, scheduledSends: scheduledSends)
+    }
+}

@@ -184,3 +184,25 @@ public enum IntroReply {
         return first.prefix(1).uppercased() + first.dropFirst()
     }
 }
+
+// MARK: - Needs a reply? (Auto Drafts for incoming mail)
+
+/// Cheap signals that a message asks the reader something: a question, or a request phrase,
+/// in the sender's own words (quotes and signature ignored). Danish and English.
+public enum NeedsReply {
+    static let requests = [
+        "could you", "can you", "would you", "will you", "please", "let me know", "what do you think",
+        "are you available", "do you have time", "any thoughts", "when can", "please confirm",
+        "kan du", "vil du", "kunne du", "har du mulighed", "venligst", "lad mig vide", "giv lyd",
+        "hvad synes du", "hvad siger du", "passer det", "har du tid", "bekræft",
+    ]
+
+    public static func likely(subject: String, text: String) -> Bool {
+        let own = SendCheck.ownText(text)
+        guard own.count >= 15 else { return false }
+        let lower = own.lowercased()
+        // Questions near the end of the message are the strongest signal.
+        if own.contains("?") { return true }
+        return requests.contains { lower.contains($0) } || subject.trimmingCharacters(in: .whitespaces).hasSuffix("?")
+    }
+}
