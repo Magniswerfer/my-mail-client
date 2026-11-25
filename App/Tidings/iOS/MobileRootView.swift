@@ -71,23 +71,7 @@ struct MobileRootView: View {
         .sheet(isPresented: $model.isSnoozePickerShown, onDismiss: { model.snoozeTarget = nil }) {
             SnoozePicker().presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
-        .sheet(isPresented: $model.isPaletteShown) {
-            CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $model.isFolderPickerShown) {
-            FolderPicker().padding(.top, 8).presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
-        .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
-        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
-        .quickLookPreview($model.quickLookURL)
-        .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
-        .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
-        .sheet(item: $model.editingAICategory) { editing in AICategoryEditor(editing: editing).environment(model) }
-        .fullScreenCover(item: $model.replySession) { session in
-            ReplySessionView(session: session).environment(model)
-        }
+        .modifier(MobileToolSheets())
         .onOpenURL { url in model.open(url: url) }
         .sheet(isPresented: $model.isCategoryPickerShown) {
             CategoryPicker().presentationDetents([.medium])
@@ -213,6 +197,33 @@ extension AppModel {
             try? await Task.sleep(for: .milliseconds(250))
             if syncStatus.values.allSatisfy({ $0 == String(localized: "Up to date") }) { break }
         }
+    }
+}
+/// The tool sheets (palette, folder picker, rules, senders, attachments, editors, Answer Now),
+/// split out of the root view so the type-checker keeps up.
+private struct MobileToolSheets: ViewModifier {
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        content
+            .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+            .sheet(isPresented: $model.isPaletteShown) {
+                CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $model.isFolderPickerShown) {
+                FolderPicker().padding(.top, 8).presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
+            .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
+            .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
+            .quickLookPreview($model.quickLookURL)
+            .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
+            .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
+            .sheet(item: $model.editingAICategory) { editing in AICategoryEditor(editing: editing).environment(model) }
+            .fullScreenCover(item: $model.replySession) { session in
+                ReplySessionView(session: session).environment(model)
+            }
     }
 }
 #endif
