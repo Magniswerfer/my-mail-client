@@ -213,6 +213,9 @@ struct RootView: View {
             searchFocused = false
             streamFocused = true
         }
+        .onChange(of: isOverlayOpen) { _, open in
+            if !open { returnFocusToList() }
+        }
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in openWindow(id: "compose", value: id) }
@@ -270,6 +273,24 @@ struct RootView: View {
                 Label("Contact Info", systemImage: "person.crop.circle")
             }
             .help("Who this is (⌃⌘I)")
+        }
+    }
+
+    /// A picker, the palette or a sheet over the window. The V picker and ⌘K palette take focus
+    /// with their text field, and it goes nowhere when they close; sheets don't reliably hand it
+    /// back either. Either way J/K/E would stop working until you clicked the list.
+    private var isOverlayOpen: Bool {
+        model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
+            || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil
+    }
+
+    /// Keys go back to the list (and the conversation the action moved on to), unless the
+    /// action opened something else or went to search.
+    private func returnFocusToList() {
+        Task { @MainActor in
+            // After the overlay or sheet has finished closing, or the focus change is lost.
+            guard !isOverlayOpen, !searchFocused else { return }
+            streamFocused = true
         }
     }
 
