@@ -2,6 +2,9 @@ name: Build
 
 # Compiles both apps and runs the engine's unit tests on every push. Integration tests skip
 # themselves here (no local Dovecot/Mailpit), and nothing touches a real mail account.
+#
+# One job on one runner, steps in sequence: macOS runners are often short, and three parallel
+# jobs could each wait for (or never get) a machine.
 on:
   push:
   pull_request:
@@ -12,53 +15,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  engine:
-    name: Engine tests
+  build:
+    name: Engine tests, Mac app, iPhone app
     runs-on: macos-26
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - run: xcodebuild -version && swift --version
-      - name: swift test
+
+      - name: Engine tests
+        id: engine
+        continue-on-error: true
         run: |
           set -o pipefail
           swift test --package-path MailEngine 2>&1 | tee test.log
-      - name: Failures
-        if: failure()
-        run: |
-          errors=$(grep -E "error:|✘|recorded an issue" test.log | sed -E 's#^.*/MailEngine/#MailEngine/#' | sort -u | head -80)
-          printf '::error title=Engine test failures::%s\n' "$(printf '%s' "$errors" | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"
 
-  apps:
-    name: ${{ matrix.name }}
-    runs-on: macos-26
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Mac app
-            scheme: Tidings
-            destination: platform=macOS
-          - name: iPhone app
-            scheme: TidingsMobile
-            destination: generic/platform=iOS Simulator
-    steps:
-      - uses: actions/checkout@v5
-      - run: xcodebuild -version
-      - name: xcodebuild
+      - name: Mac app
+        id: mac
+        continue-on-error: true
         run: |
           set -o pipefail
-          xcodebuild build \
-            -project App/Tidings.xcodeproj \
-            -scheme "${{ matrix.scheme }}" \
-            -destination "${{ matrix.destination }}" \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            | tee build.log | grep -E "error:|warning: .*(Tidings|MailEngine)/|BUILD (SUCCEEDED|FAILED)" || true
-          grep -q "BUILD SUCCEEDED" build.log
-      - name: Errors
-        if: failure()
+          xcodebuild build -project App/Tidings.xcodeproj -scheme Tidings -destination "platform=macOS" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee mac.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" mac.log
+
+      - name: iPhone app
+        id: iphone
+        continue-on-error: true
         run: |
-          # One annotation carrying every distinct error, so it shows up on the commit's checks.
-          errors=$(grep -E "error:" build.log | sed -E 's#^.*/(App|MailEngine)/#\1/#' | sort -u | head -80)
-          echo "$errors"
-          printf '::error title=%s build errors::%s\n' "${{ matrix.scheme }}" "$(printf '%s' "$errors" | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"
+          set -o pipefail
+          xcodebuild build -project App/Tidings.xcodeproj -scheme TidingsMobile -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" ios.log
+
+      - name: Report
+        if: always()
+        run: |
+          # One annotation per failing part, carrying every distinct error, so it shows on the commit's checks.
+          annotate() {
+            local title="$1" errors="$2"
+            printf '::error title=%s::%s\n' "$title" "$(printf '%s' "$errors" | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"
+          }
+          failed=0
+          if [ "${{ steps.engine.outcome }}" != "success" ]; then
+            annotate "Engine test failures" "$(grep -E "error:|✘|recorded an issue" test.log | sed -E 's#^.*/MailEngine/#MailEngine/#' | sort -u | head -80)"; failed=1
+          fi
+          if [ "${{ steps.mac.outcome }}" != "success" ]; then
+            annotate "Tidings build errors" "$(grep -E "error:" mac.log | sed -E 's#^.*/(App|MailEngine)/#\1/#' | sort -u | head -80)"; failed=1
+          fi
+          if [ "${{ steps.iphone.outcome }}" != "success" ]; then
+            annotate "TidingsMobile build errors" "$(grep -E "error:" ios.log | sed -E 's#^.*/(App|MailEngine)/#\1/#' | sort -u | head -80)"; failed=1
+          fi
+          echo "engine=${{ steps.engine.outcome }} mac=${{ steps.mac.outcome }} iphone=${{ steps.iphone.outcome }}"
+          exit $failed
