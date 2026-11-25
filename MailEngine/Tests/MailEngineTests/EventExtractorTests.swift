@@ -143,6 +143,8 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
         #expect(extract("Document updated 3 days ago by Anna.").isEmpty)
         #expect(extract("Fakturadato: 20.11.2026. Betales senest 4.12.2026.").isEmpty)
         #expect(extract("Din pakke er afsendt og leveres fredag mellem kl. 8 og 16.").isEmpty)
+        #expect(extract("Din pakke kan afhentes fra torsdag kl. 12 i pakkeshoppen.").isEmpty)
+        #expect(extract("Tilbuddet gælder fra fredag kl. 8 i alle butikker.").isEmpty)
         #expect(extract("Black Friday-udsalg: slutter søndag kl. 23:59!").isEmpty)
         #expect(extract("Your subscription renews on 1 December 2026.").isEmpty)
         #expect(extract("Best,\nAnna\nKundeservice · Åbningstid: man–fre kl. 9–17 · Tlf. 70 20 30 40").isEmpty)
@@ -378,7 +380,7 @@ private struct FakeJudge: EventJudge {
         ]
         try s.upsert(messages.map { ($0, $0.plainText ?? "") })
         let judge = FakeJudge { candidate in
-            candidate.sourceText.contains("16") ? EventReview(isEvent: true, title: "Kaffe med Anna", location: "Café Norden")
+            candidate.sourceText.contains("16") ? EventReview(isEvent: true, title: "Kaffe med Anna", location: "hos os")
                 : candidate.sourceText.contains("17") ? EventReview(isEvent: false, title: "")
                 : EventReview(isEvent: true, title: "Frokost med Anna")
         }
@@ -389,7 +391,7 @@ private struct FakeJudge: EventJudge {
         let confirmed = try #require(try s.eventSuggestions(for: messages[0]))
         #expect(!confirmed.awaitingReview)
         #expect(confirmed.visible().first?.title == "Kaffe med Anna")
-        #expect(confirmed.visible().first?.location == nil, "a place the email doesn't name is ignored")
+        #expect(confirmed.visible().first?.location == nil, "a place the email doesn't name, or filler, is ignored")
         #expect(try s.eventSuggestions(for: messages[1])?.visible().isEmpty == true, "the model said no")
         #expect(try s.eventSuggestions(for: messages[2])?.visible().first?.title == "Frokost", "kept as is")
     }

@@ -142,7 +142,8 @@ public actor EventScanner {
             let title = verdict.title.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'.")))
             if !title.isEmpty, title.count <= 80 { s.title = title; s.titleIsGuess = false }
             if s.location == nil, let place = verdict.location?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !place.isEmpty, place.count <= 120, context.localizedCaseInsensitiveContains(place) {
+               !place.isEmpty, place.count <= 120, context.localizedCaseInsensitiveContains(place),
+               place.contains(where: { $0.isUppercase || $0.isNumber }) {   // a name or an address, not "hos os"
                 s.location = place
             }
             s.reviewedByModel = true
@@ -174,12 +175,13 @@ public struct FoundationModelsEventJudge: EventJudge {
 
     static let instructions = """
         You read one sentence from an email and a date and time found in it. Emails may be Danish or English.
-        Decide whether it describes something the reader could put in their calendar at that time: a meeting, \
-        appointment, booking, social plan, class, webinar, trip or event.
-        Not events: deadlines, delivery or shipping times, order, invoice or payment dates, opening hours, \
-        offers that end, things that already happened, dates mentioned in passing.
-        Write a calendar title of 2 to 6 words in the email's language, like "Middag hos Anna", "Produktwebinar" \
-        or "Coffee with Sam". If the plan is at the sender's home ("hos os", "at our place"), name the sender.
+        Say what the date is about. Only meetings, appointments, social plans, bookings, tickets, classes, talks \
+        and webinars are things the reader attends. Sending, finishing or delivering something by a time is a \
+        deadline or task; parcels are deliveries; sales and offers are offers; dates mentioned in passing are other.
+        Write a calendar title of 2 to 6 words in the same language as the sentence: a Danish sentence gets a \
+        Danish title ("Middag hos Anna", "Frokost med Bo"), an English sentence an English one ("Call with Sofie", \
+        "Swift webinar"). If the plan is at the sender's home ("hos os", "at our place"), say whose: "Middag hos Anna". \
+        Don't repeat words or copy filler like "hos os". The location is a place name or address the email gives, or empty.
         """
 
     public func review(_ candidate: EventSuggestion, subject: String, sender: String, context: String) async -> EventReview? {
@@ -201,7 +203,8 @@ public struct FoundationModelsEventJudge: EventJudge {
         do {
             let response = try await session.respond(to: prompt, generating: EventVerdict.self)
             let v = response.content
-            return EventReview(isEvent: v.isEvent, title: v.title, location: v.location.isEmpty ? nil : v.location)
+            return EventReview(isEvent: EventVerdict.eventKinds.contains(v.kind), title: v.title,
+                               location: v.location.isEmpty ? nil : v.location)
         } catch {
             return nil
         }
@@ -214,11 +217,17 @@ public struct FoundationModelsEventJudge: EventJudge {
 #if canImport(FoundationModels)
 @Generable
 struct EventVerdict {
-    @Guide(description: "true if this is a plan, appointment, booking or event the reader could attend at that time")
-    var isEvent: Bool
-    @Guide(description: "A calendar title, 2 to 6 words, in the email's language")
+    /// Picking a kind is more reliable for the small model than a bare yes/no.
+    static let eventKinds: Set<String> = ["meeting or appointment", "social plan", "booking or ticket", "class, talk or webinar"]
+
+    @Guide(description: "What the sentence's date is about", .anyOf([
+        "meeting or appointment", "social plan", "booking or ticket", "class, talk or webinar",
+        "deadline or task", "delivery or pickup", "offer or sale", "something that happened", "other mention",
+    ]))
+    var kind: String
+    @Guide(description: "A calendar title, 2 to 6 words, in the sentence's language")
     var title: String
-    @Guide(description: "The place, exactly as the email names it, or an empty string")
+    @Guide(description: "A place name or address from the email, or an empty string")
     var location: String
 }
 #endif
