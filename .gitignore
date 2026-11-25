@@ -10,3 +10,4 @@ App/build.log
 MailEngine/TestServer/certs/
 .claude/worktrees/
 App/build-ios/
+App/build-dev-ios/

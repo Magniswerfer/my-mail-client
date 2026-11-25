@@ -71,7 +71,7 @@ extension AppModel {
         guard !folder.isBuiltIn else { return }
         smartFolders.removeAll { $0.id == folder.id }
         persistSmartFolders()
-        if selection == .smartFolder(folder.id) { selection = .inbox }
+        if selection == .smartFolder(folder.id) { goToInbox() }
     }
 
     func moveSmartFolders(from source: IndexSet, to destination: Int) {

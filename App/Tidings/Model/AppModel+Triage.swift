@@ -283,7 +283,7 @@ extension AppModel {
     }
 
     /// Inbox conversations a sweep would mark done.
-    var sweepableCount: Int { selection == .inbox ? threads.filter { !$0.isPinned }.count : 0 }
+    var sweepableCount: Int { isInInbox ? threads.filter { !$0.isPinned }.count : 0 }
 
     // MARK: Sweep
 
@@ -291,7 +291,9 @@ extension AppModel {
     func requestSweep(bundle: MailCategory? = nil) {
         let candidates = threads.filter { !$0.isPinned && (bundle == nil || displayCategory($0) == bundle) }
         guard !candidates.isEmpty else { return }
-        let title = bundle.map { String(localized: "Mark all \($0.title) done?") } ?? String(localized: "Sweep the Inbox?")
+        let tabCategory: MailCategory? = if case .category(let c) = selection { c } else { nil }
+        let title = (bundle ?? tabCategory).map { String(localized: "Mark all \($0.title) done?") }
+            ?? String(localized: "Sweep the Inbox?")
         sweepCandidate = SweepRequest(threadIDs: candidates.map(\.threadID), title: title)
     }
 

@@ -44,12 +44,13 @@ enum StreamItem: Identifiable, Hashable {
 @MainActor @Observable
 final class AppModel {
     // Navigation
-    var selection: SidebarItem = .inbox {
+    var selection: SidebarItem = .category(.primary) {
         didSet {
             if selection != oldValue {
                 selectedThreadID = nil
                 selectionIndexHint = nil
                 heldCategories = [:]
+                isSelecting = false
             }
             // Choosing a place in the sidebar leaves search, so the click visibly goes there.
             endSearch()
@@ -71,6 +72,11 @@ final class AppModel {
     /// always including `selectedThreadID`, which stays the focus the reader shows. Empty when
     /// one row is selected. Triage acts on all of them (see `targetThreads`).
     var multiSelection: Set<String> = []
+    /// iPhone and iPad: Select mode, where taps tick conversations (into `multiSelection`)
+    /// instead of opening them, and the bottom bar acts on all ticked ones.
+    var isSelecting = false {
+        didSet { if !isSelecting { multiSelection = [] } }
+    }
     /// Where the selection last was in the list. If the selected conversation leaves the list
     /// without us moving it (another device, a sync), j/k/E carry on from here instead of
     /// starting over at the top.
@@ -136,6 +142,10 @@ final class AppModel {
     weak var undoManager: UndoManager?
     /// Set by the root view: opens a composer window for a draft id.
     @ObservationIgnored var openComposeWindow: ((Int64) -> Void)?
+    /// Mac: replies and forwards open inside the reading pane, under the conversation (like
+    /// Gmail and Outlook), one per conversation: conversation id → its draft. Moving to another
+    /// conversation keeps the draft here, so coming back shows it again; Pop Out moves it to a window.
+    var inlineDrafts: [String: Int64] = [:]
     var outboxItems: [OutboxItem] = []
     var draftItems: [OutboxItem] = []
     /// Follow-ups Tidings drafted for conversations still waiting on someone (Auto Drafts).
@@ -274,6 +284,7 @@ final class AppModel {
     init() {
         isDevServer = ProcessInfo.processInfo.arguments.contains("-TidingsDevServer")
             || ProcessInfo.processInfo.environment["TIDINGS_DEV_SERVER"] == "1"
+        CalendarBridge.shared.isEnabled = !isDevServer
         let devUser = UserDefaults.standard.string(forKey: "TidingsDevUser") ?? "magnus"
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(isDevServer ? (devUser == "magnus" ? "Tidings-Dev" : "Tidings-Dev-\(devUser)") : "Tidings", isDirectory: true)
@@ -495,7 +506,6 @@ final class AppModel {
             switch selection {
             case .inbox:
                 threads = try inbox()
-                if pinnedOnly { threads = threads.filter(\.isPinned) }
             case .outbox:
                 threads = []
             case .snoozed:
@@ -515,6 +525,8 @@ final class AppModel {
                 aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
                 threads = try inbox().filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
             }
+            // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
+            if pinnedOnly, isInInbox { threads = threads.filter(\.isPinned) }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
@@ -567,14 +579,20 @@ final class AppModel {
     }
 
     var streamItems: [StreamItem] {
-        guard selection == .inbox else { return threads.map(StreamItem.thread) }
+        guard selection == .inbox else {
+            // Pinned first everywhere (stable, so each list keeps its own order otherwise);
+            // Snoozed stays in wake-up order.
+            guard selection != .snoozed else { return threads.map(StreamItem.thread) }
+            return (threads.filter(\.isPinned) + threads.filter { !$0.isPinned }).map(StreamItem.thread)
+        }
         var items: [StreamItem] = []
         var bundles: [MailCategory: [ThreadSummary]] = [:]
         let later = threads.filter(\.isReplyLater)
         if !later.isEmpty { items.append(.replyLater(later)) }
         for thread in threads where !thread.isReplyLater {
             let category = displayCategory(thread)
-            if category == .primary { items.append(.thread(thread)) }
+            // A pinned conversation is its own row at the top, even from a bundled category.
+            if category == .primary || thread.isPinned { items.append(.thread(thread)) }
             else { bundles[category, default: []].append(thread) }
         }
         for (category, members) in bundles {
@@ -592,12 +610,13 @@ final class AppModel {
         }
     }
 
-    /// Reply Later sits on top, then bundles with new mail, then everything by time.
+    /// Pinned conversations sit on top, then Reply Later, then bundles with new mail, then
+    /// everything by time.
     private func tier(_ item: StreamItem) -> Int {
         switch item {
+        case .thread(let thread): thread.isPinned ? 3 : 0
         case .replyLater: 2
         case .bundle(let category, let members, _): isBundlePinned(category, members) ? 1 : 0
-        case .thread: 0
         }
     }
 

@@ -10,7 +10,8 @@ struct StreamView: View {
         list
         .listStyle(.inset)
         .safeAreaInset(edge: .top, spacing: 0) {
-            if model.currentCategoryTab != nil, !model.isSearching { CategoryTabs() }
+            // iPhone has the swipe bar at the bottom instead (PhoneBottomBar).
+            if model.currentCategoryTab != nil, !model.isSearching, !Platform.isPhone { CategoryTabs() }
         }
         .overlay {
             if model.threads.isEmpty { EmptyStream() }
@@ -40,7 +41,13 @@ struct StreamView: View {
         List(selection: Binding(get: { model.listSelection }, set: { model.setListSelection($0) })) { rows }
         #else
         @Bindable var model = model
-        List(selection: $model.selectedThreadID) { rows }
+        if model.isSelecting {
+            // Select mode: taps tick rows; the bottom bar acts on all of them.
+            List(selection: $model.multiSelection) { rows }
+                .environment(\.editMode, .constant(.active))
+        } else {
+            List(selection: $model.selectedThreadID) { rows }
+        }
         #endif
     }
 
@@ -68,7 +75,8 @@ struct StreamView: View {
                 }
             }
         }
-        if model.selection == .inbox, model.sweepableCount > 0 {
+        // On iPhone and iPad Sweep lives in the … menu instead.
+        if Platform.isMac, model.isInInbox, model.sweepableCount > 0 {
             SweepFooter(count: model.sweepableCount)
                 .selectionDisabled()
                 .listRowSeparator(.hidden)
@@ -181,6 +189,7 @@ struct EmptyStream: View {
 }
 
 struct ThreadRow: View {
+    @Environment(AppModel.self) private var model
     let thread: ThreadSummary
     var inBundle = false
 
@@ -223,6 +232,22 @@ struct ThreadRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                // A reply or follow-up Tidings wrote waits under the mail it answers (there's
+                // no separate list for them); click to open it.
+                if let draft = model.autoDraft(forThread: thread.threadID) {
+                    Button { model.reviewFollowUp(threadID: thread.threadID) } label: {
+                        // Icon and text side by side (a Label in an iPhone list row gets an
+                        // icon column and a wide gap).
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                            Text(draft.kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you")
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Open the draft. Nothing is sent without you.")
+                }
             }
         }
         .padding(.vertical, 4)
@@ -240,6 +265,16 @@ struct ThreadRow: View {
             Image(systemName: m.riskLevel == .danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
                 .font(.caption).foregroundStyle(m.riskLevel == .danger ? .red : .orange)
                 .accessibilityLabel(m.riskLevel == .danger ? "Looks like phishing" : "Be careful")
+        }
+        // You already answered the newest message (from here or another device: the IMAP flags).
+        if m.flags.contains("\\Answered") {
+            Image(systemName: "arrowshape.turn.up.left.fill").font(.caption).foregroundStyle(.secondary)
+                .help("You replied")
+                .accessibilityLabel("Replied")
+        } else if m.flags.contains("$Forwarded") {
+            Image(systemName: "arrowshape.turn.up.right.fill").font(.caption).foregroundStyle(.secondary)
+                .help("You forwarded it")
+                .accessibilityLabel("Forwarded")
         }
         if m.hasAttachments {
             Image(systemName: "paperclip").font(.caption).foregroundStyle(.secondary)

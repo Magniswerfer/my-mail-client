@@ -42,19 +42,17 @@ struct RulesView: View {
                 }
             }
             .navigationTitle("Rules")
-            .toolbar {
+            .sheetButtons {
                 if !inSettings {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { dismiss() }
-                    }
+                    Button("Close") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                 }
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
-                        .help("What your rules did, with Undo")
-                    Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
-                        .keyboardShortcut("n", modifiers: [.command, .option])
-                        .help("New Rule (⌥⌘N)")
-                }
+            } trailing: {
+                Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
+                    .help("What your rules did, with Undo")
+                Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
+                    .keyboardShortcut("n", modifiers: [.command, .option])
+                    .help("New Rule (⌥⌘N)")
             }
         }
         .macFrame(minWidth: 640, minHeight: 460)
@@ -202,19 +200,19 @@ struct RuleEditor: View {
             }
             .formStyle(.grouped)
             .navigationTitle(rule.name.isEmpty ? String(localized: "New Rule") : rule.name)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { model.editingRule = nil }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!rule.isComplete)
-                        .keyboardShortcut("s", modifiers: .command)
-                }
+            .sheetButtons {
+                Button("Cancel") { model.editingRule = nil }
+                    .keyboardShortcut(.cancelAction)
+            } trailing: {
+                Button("Save") { save() }
+                    .buttonStyle(.glassProminent)
+                    .disabled(!rule.isComplete)
+                    .keyboardShortcut("s", modifiers: .command)
             }
             .task(id: rule.conditions) { await refreshPreview() }
         }
-        .macFrame(minWidth: 620, minHeight: 620)
+        // Small enough to fit the main window's 560-pt minimum; the form scrolls.
+        .macFrame(minWidth: 620, minHeight: 420, idealHeight: 520)
     }
 
     @ViewBuilder private var previewContent: some View {
@@ -239,8 +237,10 @@ struct RuleEditor: View {
                         Spacer()
                         Button { teach(message, matches: true) } label: { Image(systemName: "checkmark.circle") }
                             .buttonStyle(.borderless).help("Right: this matches")
+                            .accessibilityLabel("Right: this matches")
                         Button { teach(message, matches: false) } label: { Image(systemName: "xmark.circle") }
                             .buttonStyle(.borderless).help("Wrong: this doesn't match")
+                            .accessibilityLabel("Wrong: this doesn't match")
                     }
                 }
             }
@@ -585,11 +585,14 @@ struct RuleHistoryView: View {
                 }
             }
             .navigationTitle("Rule History")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+            .sheetButtons {
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            } trailing: {
+                EmptyView()
             }
         }
-        .macFrame(minWidth: 560, minHeight: 440)
+        .macFrame(minWidth: 560, minHeight: 420, idealHeight: 440)
         .task { runs = (try? model.store.ruleRuns()) ?? [] }
     }
 }

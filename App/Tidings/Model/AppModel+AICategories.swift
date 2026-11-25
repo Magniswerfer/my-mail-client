@@ -35,10 +35,17 @@ enum CategoryTab: Hashable, Identifiable {
 extension AppModel {
     // MARK: Tabs
 
-    /// All, the six categories, then yours, in order.
+    /// Primary (where the Inbox opens), the other five categories, yours, and All always last.
     var categoryTabs: [CategoryTab] {
-        [.all] + MailCategory.allCases.map(CategoryTab.builtIn) + aiCategories.map { .ai($0.id) }
+        MailCategory.allCases.map(CategoryTab.builtIn) + aiCategories.map { .ai($0.id) } + [.all]
     }
+
+    /// Somewhere in the Inbox: All or one of its category tabs. The sidebar shows a single
+    /// Inbox row for all of them; the tabs above the list pick between them.
+    var isInInbox: Bool { currentCategoryTab != nil }
+
+    /// The sidebar's Inbox, ⌘1 and G I open on Primary; All is one of the tabs.
+    func goToInbox() { selection = .category(.primary) }
 
     /// The tab for what's on screen, if it's one of them.
     var currentCategoryTab: CategoryTab? {
@@ -95,7 +102,7 @@ extension AppModel {
     func delete(aiCategory: AICategory) {
         aiCategories.removeAll { $0.id == aiCategory.id }
         try? store.saveAICategories(aiCategories)
-        if selection == .aiCategory(aiCategory.id) { selection = .inbox }
+        if selection == .aiCategory(aiCategory.id) { goToInbox() }
         aiMembership = (try? store.aiCategoryMembership()) ?? [:]
     }
 

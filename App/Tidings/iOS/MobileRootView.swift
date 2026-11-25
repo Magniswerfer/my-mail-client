@@ -36,10 +36,18 @@ struct MobileRootView: View {
             }
             .navigationTitle(model.isSearching ? String(localized: "Search") : model.currentMailboxTitle)
             .navigationBarTitleDisplayMode(.large)
+            // Select mode says how many are ticked under the title (not in the crowded bottom bar).
+            .navigationSubtitle(model.isSelecting
+                ? (model.multiSelection.isEmpty ? String(localized: "Select conversations")
+                                                : String(localized: "\(model.multiSelection.count) selected"))
+                : "")
             .searchable(text: $model.searchText, placement: .navigationBarDrawer(displayMode: .automatic),
                         prompt: Text("Search mail"))
             .refreshable { await model.refresh() }
             .toolbar { streamToolbar }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if Platform.isPhone, !model.isSelecting, !model.isSearching { PhoneBottomBar() }
+            }
             .overlay(alignment: .bottom) {
                 if let toast = model.toast {
                     ToastView(toast: toast).padding(.bottom, 12)
@@ -69,7 +77,7 @@ struct MobileRootView: View {
         .onChange(of: compactColumn) { _, column in
             if column == .content, Platform.isPhone, model.selectedThreadID != nil { model.selectedThreadID = nil }
         }
-        .sheet(isPresented: $model.isSnoozePickerShown, onDismiss: { model.snoozeTarget = nil }) {
+        .sheet(isPresented: $model.isSnoozePickerShown, onDismiss: { model.snoozeTarget = nil; model.isSelecting = false }) {
             SnoozePicker().presentationDetents([.medium, .large])
         }
         .modifier(MobileToolSheets())
@@ -86,7 +94,9 @@ struct MobileRootView: View {
             Text("Pinned conversations stay. You can undo this.")
         }
         .sheet(item: $composeDraft) { draft in
-            NavigationStack { ComposeWindow(draftID: draft.id) }
+            // .id: a new draft while the sheet is up (Clear Suggestion) rebuilds the composer
+            // instead of keeping the old one's state.
+            NavigationStack { ComposeWindow(draftID: draft.id).id(draft.id) }
                 .environment(model)
                 .interactiveDismissDisabled()
         }
@@ -113,17 +123,34 @@ struct MobileRootView: View {
     }
 
     @ToolbarContentBuilder private var streamToolbar: some ToolbarContent {
-        if model.selection == .inbox {
+        // Nothing is ever "focused" on a phone, so the top-left button selects instead.
+        if !model.threads.isEmpty || model.isSelecting {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    model.pinnedOnly.toggle()
-                } label: {
-                    Label("Pinned Only", systemImage: model.pinnedOnly ? "pin.fill" : "pin")
+                Button(model.isSelecting ? String(localized: "Done") : String(localized: "Select")) {
+                    withAnimation(.snappy) { model.isSelecting.toggle() }
                 }
+                .fontWeight(model.isSelecting ? .semibold : .regular)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                if model.isSelecting {
+                    Button("Select All", systemImage: "checkmark.circle") {
+                        model.multiSelection = Set(model.visibleThreadIDs)
+                    }
+                    Divider()
+                }
+                if model.isInInbox {
+                    Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
+                        Label("Pinned Only", systemImage: "pin")
+                    }
+                    if model.sweepableCount > 0 {
+                        Button("Mark \(model.sweepableCount) Unpinned Done", systemImage: "checkmark.circle") {
+                            model.requestSweep()
+                        }
+                    }
+                    Divider()
+                }
                 Button("Command Palette", systemImage: "command") { model.isPaletteShown = true }
                     .keyboardShortcut("k", modifiers: .command)
                 Button("Rules…", systemImage: "line.3.horizontal.decrease.circle") { model.isRulesShown = true }
@@ -133,13 +160,56 @@ struct MobileRootView: View {
                 Label("More", systemImage: "ellipsis.circle")
             }
         }
-        ToolbarItem(placement: .bottomBar) {
-            SidebarStatus()
+        if model.isSelecting {
+            bulkActions
+        } else if !Platform.isPhone {
+            // (iPhone: categories and New Message are the glass PhoneBottomBar instead. The sync
+            // status is the small line under the sidebar.)
+            ToolbarSpacer(.flexible, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
+                Button { model.composeNew() } label: { Label("New Message", systemImage: "square.and.pencil") }
+            }
+        }
+    }
+
+    /// Select mode's bottom bar: what to do with every ticked conversation.
+    @ToolbarContentBuilder private var bulkActions: some ToolbarContent {
+        let chosen = model.targetThreads
+        let none = model.multiSelection.isEmpty
+        ToolbarItemGroup(placement: .bottomBar) {
+            Button { act(.done) } label: { Label("Done", systemImage: "checkmark") }
+                .disabled(none)
+            Button { model.isSnoozePickerShown = true } label: { Label("Snooze", systemImage: "clock") }
+                .disabled(none)
+            Button { act(chosen.allSatisfy(\.isPinned) ? .unpin : .pin) } label: {
+                Label("Pin", systemImage: !none && chosen.allSatisfy(\.isPinned) ? "pin.slash" : "pin")
+            }
+            .disabled(none)
         }
         ToolbarSpacer(.flexible, placement: .bottomBar)
-        ToolbarItem(placement: .bottomBar) {
-            Button { model.composeNew() } label: { Label("New Message", systemImage: "square.and.pencil") }
+        ToolbarItemGroup(placement: .bottomBar) {
+            Menu {
+                Button("Mark as Read", systemImage: "envelope.open") { act(.markRead) }
+                Button("Mark as Unread", systemImage: "envelope.badge") { act(.markUnread) }
+                Button("Set Aside", systemImage: "arrowshape.turn.up.left.circle") { act(.replyLater) }
+                Divider()
+                if let first = chosen.first {
+                    MoveMenuContent(thread: first, threads: chosen)
+                }
+                Button("Move to Folder…", systemImage: "folder") { model.isFolderPickerShown = true }
+                Button("Move to Junk", systemImage: "xmark.bin") { act(.junk) }
+                Button("Move to Trash", systemImage: "trash", role: .destructive) { act(.trash) }
+            } label: {
+                Label("More Actions", systemImage: "ellipsis")
+            }
+            .disabled(none)
         }
+    }
+
+    /// Acts on the ticked conversations, then leaves Select mode.
+    private func act(_ kind: TriageKind) {
+        model.perform(kind)
+        withAnimation(.snappy) { model.isSelecting = false }
     }
 
     @ToolbarContentBuilder private var readerToolbar: some ToolbarContent {
@@ -173,6 +243,7 @@ struct MobileRootView: View {
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
             Menu {
+                Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply) }
                 Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll) }
                 Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
                 Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
@@ -181,9 +252,8 @@ struct MobileRootView: View {
                 Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
-            } primaryAction: {
-                model.compose(.reply)
             }
+            // A tap opens the choices (as in Mail); Reply was hidden behind a long press.
             .disabled(none)
         }
     }
@@ -212,7 +282,7 @@ private struct MobileToolSheets: ViewModifier {
             .sheet(isPresented: $model.isPaletteShown) {
                 CommandPalette().padding(.top, 8).presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $model.isFolderPickerShown) {
+            .sheet(isPresented: $model.isFolderPickerShown, onDismiss: { model.isSelecting = false }) {
                 FolderPicker().padding(.top, 8).presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }

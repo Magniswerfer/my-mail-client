@@ -104,6 +104,7 @@ extension AppModel {
         let calendar = CalendarBridge.shared
         switch status {
         case .accepted, .tentative:
+            // The dev copy skips this quietly so the answer's Undo toast stays up.
             guard await calendar.requestAccess() else { return }
             do { try calendar.save(invite, tentative: status == .tentative) } catch {
                 lastError = String(localized: "Couldn't add it to your calendar: \(error.localizedDescription)")

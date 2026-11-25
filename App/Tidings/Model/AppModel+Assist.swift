@@ -141,7 +141,7 @@ extension AppModel {
 
     func reviewFollowUp(threadID: String) {
         guard let id = autoDraft(forThread: threadID)?.outboxID else { return }
-        openComposeWindow?(id)
+        openDraftInPlace(id, threadID: threadID)
     }
 
     func dismissFollowUp(threadID: String) {

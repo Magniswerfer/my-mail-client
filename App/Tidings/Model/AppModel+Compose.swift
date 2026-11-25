@@ -59,9 +59,51 @@ extension AppModel {
     func compose(_ kind: ComposeKind, thread: ThreadSummary? = nil) {
         guard let thread = thread ?? targetThreads.first,
               let account = accounts.first(where: { $0.id == thread.latest.accountID }) else { return }
-        Task {
-            if let id = await prepareDraft(kind, thread: thread, account: account) { openComposeWindow?(id) }
+        // A reply (or follow-up) Tidings drafted for this conversation is what Reply opens, ready
+        // to edit; the editor's Clear Suggestion starts over.
+        if kind == .reply, let suggested = autoDraft(forThread: thread.threadID)?.outboxID {
+            openDraftInPlace(suggested, threadID: thread.threadID)
+            return
         }
+        // Mac: a conversation with a reply already open in the reading pane keeps that one.
+        if Platform.isMac, let open = inlineDrafts[thread.threadID],
+           (try? store.outboxItem(id: open))?.state == .draft {
+            return
+        }
+        Task {
+            guard let id = await prepareDraft(kind, thread: thread, account: account) else { return }
+            openDraftInPlace(id, threadID: thread.threadID)
+        }
+    }
+
+    /// A reply or forward: in the reading pane under its conversation on the Mac, a window or
+    /// sheet elsewhere.
+    func openDraftInPlace(_ id: Int64, threadID: String) {
+        if Platform.isMac {
+            if selectedThreadID != threadID { selectedThreadID = threadID }
+            inlineDrafts[threadID] = id
+        } else {
+            openComposeWindow?(id)
+        }
+    }
+
+    /// Clear Suggestion: drop the text Tidings drafted (it won't draft this one again) and start
+    /// a plain reply in its place.
+    /// `inWindow`: the suggestion was open in a window or sheet, so the fresh reply opens there too.
+    func clearSuggestedReply(threadID: String, inWindow: Bool = false) {
+        guard let thread = (threads + targetThreads).first(where: { $0.threadID == threadID }) else { return }
+        try? store.dismissAutoDraft(threadID: threadID)
+        reloadOutbox()
+        Task {
+            guard let fresh = await prepareDraft(.reply, thread: thread) else { return }
+            if Platform.isMac && !inWindow { inlineDrafts[threadID] = fresh } else { openComposeWindow?(fresh) }
+        }
+    }
+
+    /// Pop Out: the inline reply moves to its own window (same draft, nothing lost).
+    func popOutInlineDraft(threadID: String) {
+        guard let id = inlineDrafts.removeValue(forKey: threadID) else { return }
+        openComposeWindow?(id)
     }
 
     /// Builds and stores a reply/forward draft for a conversation without opening it.

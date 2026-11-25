@@ -24,7 +24,7 @@ struct TidingsApp: App {
         }
         .commands {
             CommandGroup(after: .sidebar) {
-                Button("Go to Inbox") { model.selection = .inbox }
+                Button("Go to Inbox") { model.goToInbox() }
                     .keyboardShortcut("1", modifiers: .command)
                 Button("Go to Snoozed") { model.selection = .snoozed }
                     .keyboardShortcut("2", modifiers: .command)
@@ -185,7 +185,18 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.toast)
         } detail: {
-            ReaderView(threadID: model.readerThreadID)
+            VStack(spacing: 0) {
+                ReaderView(threadID: model.readerThreadID)
+                    .frame(maxHeight: .infinity)
+                // Reply / Reply All / Forward open here, under the conversation.
+                if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
+                    Divider()
+                    InlineComposer(threadID: threadID, draftID: draftID)
+                        .id(draftID)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: model.inlineDrafts)
                 .inspector(isPresented: $model.isContactPanelShown) {
                     ContactPanel()
                         .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
@@ -273,7 +284,7 @@ struct RootView: View {
         ToolbarItemGroup(placement: .navigation) {
             Button { model.composeNew() } label: { Label("New Message", systemImage: "square.and.pencil") }
                 .help("New Message (C or ⌘N)")
-            if model.selection == .inbox {
+            if model.isInInbox {
                 Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
                     Label("Pinned Only", systemImage: model.pinnedOnly ? "pin.fill" : "pin")
                 }
@@ -381,7 +392,7 @@ struct RootView: View {
         if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {
             pendingG = nil
             switch key {
-            case "i": model.selection = .inbox
+            case "i": model.goToInbox()
             case "s": model.selection = .snoozed
             case "l": model.selection = .replyLater
             case "a": model.goToArchive()

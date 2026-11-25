@@ -57,6 +57,12 @@ extension AppModel {
         Task {
             var methodName = ""
             switch request.method {
+            // The dev copy's seed mail carries real senders' unsubscribe links; never contact
+            // them. Mail unsubscribes are fine: they go to Mailpit.
+            case .oneClick(let url) where isDevServer, .web(let url) where isDevServer:
+                show(Toast(message: String(localized: "Dev copy: didn't contact \(url.host() ?? url.absoluteString)"),
+                           symbol: "hammer"))
+                methodName = "dev"
             case .oneClick(let url):
                 do {
                     try await Unsubscribe.postOneClick(url)

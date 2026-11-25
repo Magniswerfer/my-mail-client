@@ -31,7 +31,6 @@ struct ReaderView: View {
                             HighlightCards(highlights: highlights, message: latest)
                         }
                         SummaryLine(threadID: threadID, messageCount: messages.count)
-                        FollowUpBanner(threadID: threadID)
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {
                             RiskBanner(message: risky)
                         }
@@ -426,8 +425,10 @@ struct CategoryLine: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: message.category.symbol).accessibilityHidden(true)
-                Text(message.category.title).fontWeight(.medium)
+                Text(message.category.title).fontWeight(.medium).layoutPriority(1)
+                // The reason truncates: unwrapped, it made the whole reader wider than an iPhone.
                 Text("· \(message.reasonText ?? "")").foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.tail)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .accessibilityElement(children: .combine)
@@ -438,7 +439,7 @@ struct CategoryLine: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .fixedSize()
+        .fixedSize(horizontal: false, vertical: true)
         .help("Why it's here. Click to move it (M).")
     }
 }

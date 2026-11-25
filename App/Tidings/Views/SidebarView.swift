@@ -8,7 +8,16 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var model = model
-        List(selection: Binding(get: { model.selection }, set: { if let s = $0 { model.selection = s; didPick?() } })) {
+        // One Inbox row stands for All and every category tab: it stays selected while any of
+        // them shows, and picking it opens Primary.
+        let selection = Binding<SidebarItem?>(
+            get: { model.isInInbox ? .inbox : model.selection },
+            set: { picked in
+                guard let picked else { return }
+                if picked == .inbox { if !model.isInInbox { model.goToInbox() } } else { model.selection = picked }
+                didPick?()
+            })
+        List(selection: selection) {
             Section {
                 // `.tag` must be the outermost modifier, or the row can't be selected.
                 Label("Inbox", systemImage: "tray")
@@ -32,17 +41,6 @@ struct SidebarView: View {
                     }
                     .help("Conversations you set aside to reply to later (L)")
                     .tag(SidebarItem.replyLater)
-                if !model.autoDrafts.isEmpty {
-                    Button {
-                        model.selection = .outbox
-                        didPick?()
-                    } label: {
-                        Label("Drafted for You", systemImage: "sparkles")
-                            .badge(model.autoDrafts.count)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Follow-ups and replies Tidings drafted. Nothing is sent without you.")
-                }
                 if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
                     Label("Outbox", systemImage: "paperplane")
                         .badge(model.outboxItems.count)
@@ -50,46 +48,8 @@ struct SidebarView: View {
                 }
             }
 
+            // Categories (built-in and yours) are the tabs above the Inbox list, not sidebar rows.
             SmartFolderSection()
-
-            // Drop a conversation here to move it (and teach the classifier).
-            Section("Categories") {
-                ForEach(MailCategory.allCases, id: \.self) { category in
-                    Label {
-                        Text(category.title)
-                    } icon: {
-                        Image(systemName: category.symbol).foregroundStyle(category.tint)
-                    }
-                    .dropDestination(for: ThreadDrag.self) { items, _ in
-                        let threads = model.threads(for: items)
-                        guard !threads.isEmpty else { return false }
-                        model.moveConversations(threads, to: category)
-                        return true
-                    }
-                    .tag(SidebarItem.category(category))
-                }
-                ForEach(model.aiCategories) { category in
-                    Label {
-                        Text(category.name)
-                    } icon: {
-                        Image(systemName: category.symbol).foregroundStyle(.indigo)
-                    }
-                    .contextMenu {
-                        Button("Edit…", systemImage: "pencil") {
-                            model.editingAICategory = AICategoryEditing(category: category, isNew: false)
-                        }
-                        Button("Delete", systemImage: "trash", role: .destructive) { model.delete(aiCategory: category) }
-                    }
-                    .tag(SidebarItem.aiCategory(category.id))
-                }
-                .onMove { model.moveAICategories(from: $0, to: $1) }
-                Button {
-                    model.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
-                } label: {
-                    Label("New AI Category…", systemImage: "plus").foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
 
             ForEach(model.accounts) { account in
                 Section(model.accounts.count > 1 ? account.displayName : String(localized: "Folders")) {
@@ -98,9 +58,15 @@ struct SidebarView: View {
                     }
                 }
             }
+
+            // Sync status: a small centred line under the last section that scrolls with the
+            // list (as a pinned bar it floated over the rows).
+            SidebarStatus()
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .selectionDisabled()
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { SidebarStatus() }
     }
 
     @ViewBuilder
@@ -148,13 +114,11 @@ struct SidebarStatus: View {
             } else if let status = model.syncStatus.values.sorted().first {
                 Text(status)
             }
-            Spacer(minLength: 0)
         }
-        .font(.caption)
+        .font(.caption2)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 

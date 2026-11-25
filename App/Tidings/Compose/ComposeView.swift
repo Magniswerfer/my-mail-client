@@ -24,6 +24,69 @@ struct ComposeWindow: View {
     }
 }
 
+/// Mac: a reply or forward inside the reading pane, under its conversation (like Gmail and
+/// Outlook). Pop Out moves the same draft to a window; Discard throws it away; sending closes it.
+struct InlineComposer: View {
+    @Environment(AppModel.self) private var app
+    let threadID: String
+    let draftID: Int64
+    @State private var model: ComposeModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                ComposeView(model: model, close: { app.inlineDrafts[threadID] = nil },
+                            embeddedActions: AnyView(actions(model)))
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: 340)
+        .onAppear {
+            model = model ?? ComposeModel(draftID: draftID, app: app)
+            // Sent or discarded somewhere else in the meantime.
+            if model == nil { app.inlineDrafts[threadID] = nil }
+        }
+        .onDisappear { model?.saveNow() }
+    }
+
+    private func actions(_ model: ComposeModel) -> some View {
+        HStack(spacing: 10) {
+            if app.autoDrafts.contains(where: { $0.outboxID == draftID }) {
+                Button { app.clearSuggestedReply(threadID: threadID) } label: {
+                    Label("Clear Suggestion", systemImage: "sparkles")
+                }
+                .fixedSize()
+                .help("Tidings drafted this reply. Clear it to write your own.")
+            }
+            Button {
+                model.discard()
+                app.inlineDrafts[threadID] = nil
+                app.reloadOutbox()
+            } label: { Label("Discard", systemImage: "trash") }
+                .labelStyle(.iconOnly)
+                .help("Discard this draft")
+            Button {
+                model.saveNow()
+                app.popOutInlineDraft(threadID: threadID)
+            } label: { Label("Pop Out", systemImage: "arrow.up.forward.app") }
+                .labelStyle(.iconOnly)
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .help("Open in its own window (⇧⌘O)")
+        }
+    }
+}
+
+/// The composer's window title, only when it is the window's own content.
+private struct ComposeTitle: ViewModifier {
+    let title: String
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn { content.navigationTitle(title) } else { content }
+    }
+}
+
 struct ComposeView: View {
     @Environment(AppModel.self) private var app
     @Bindable var model: ComposeModel
@@ -69,7 +132,9 @@ struct ComposeView: View {
                 actionBar(embeddedActions)
             }
         }
-        .navigationTitle(model.subject.isEmpty ? String(localized: "New Message") : model.subject)
+        // An embedded composer (reading pane, Reply Later) must not retitle the main window.
+        .modifier(ComposeTitle(title: model.subject.isEmpty ? String(localized: "New Message") : model.subject,
+                               isOn: embeddedActions == nil))
         .toolbar { if embeddedActions == nil { toolbar } }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { model.attach(urls: urls) }
@@ -121,8 +186,10 @@ struct ComposeView: View {
                         }
                     }
                     .labelsHidden()
-                    .fixedSize()
-                    Spacer()
+                    // Full width on the Mac; on iPhone the long "Name <address>" truncates (fixed,
+                    // it made the whole composer wider than the screen).
+                    .fixedSize(horizontal: !Platform.isPhone, vertical: false)
+                    Spacer(minLength: 0)
                 }
             }
             row(String(localized: "To")) {
@@ -184,12 +251,17 @@ struct ComposeView: View {
 
     private func actionBar(_ extra: AnyView) -> some View {
         HStack(spacing: 10) {
-            Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help("Attach files (⌘⇧A)")
-            Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
-                .keyboardShortcut("a", modifiers: [.command, .option])
-                .help("Insert free times from your calendar (⌥⌘A)")
+            // Icons (with tooltips): the bar sits in a pane, where the words crowded out the
+            // host's own buttons next to Send.
+            Group {
+                Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .help("Attach files (⌘⇧A)")
+                Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
+                    .keyboardShortcut("a", modifiers: [.command, .option])
+                    .help("Insert free times from your calendar (⌥⌘A)")
+            }
+            .labelStyle(.iconOnly)
             Spacer(minLength: 12)
             extra
             sendButton
@@ -213,6 +285,18 @@ struct ComposeView: View {
             .help("Close and keep the draft")
         }
         #endif
+        // A reply Tidings drafted: clear it to write your own (iPhone sheet, Mac window).
+        if let suggestion = app.autoDrafts.first(where: { $0.outboxID == model.draftID }) {
+            ToolbarItem(placement: .secondaryAction) {
+                Button {
+                    // Mac: this window closes and the plain reply opens in a new one. iPhone: the
+                    // sheet stays up and swaps to it.
+                    if Platform.isMac { close() }
+                    app.clearSuggestedReply(threadID: suggestion.threadID, inWindow: true)
+                } label: { Label("Clear Suggestion", systemImage: "sparkles") }
+                    .help("Tidings drafted this reply. Clear it to write your own.")
+            }
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
                 .keyboardShortcut("a", modifiers: [.command, .shift])

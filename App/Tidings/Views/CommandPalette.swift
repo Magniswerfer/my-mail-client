@@ -22,6 +22,10 @@ extension AppModel {
             AppCommand(id: "compose", title: String(localized: "New Message"), symbol: "square.and.pencil", keys: "C") { self.composeNew() },
             AppCommand(id: "reply", title: String(localized: "Reply"), symbol: "arrowshape.turn.up.left", keys: "R",
                        isEnabled: hasSelection) { self.compose(.reply) },
+            AppCommand(id: "popOutReply", title: String(localized: "Pop Out Reply"), symbol: "arrow.up.forward.app", keys: "⇧⌘O",
+                       isEnabled: readerThreadID.map { inlineDrafts[$0] != nil } ?? false) {
+                if let id = self.readerThreadID { self.popOutInlineDraft(threadID: id) }
+            },
             AppCommand(id: "replyAll", title: String(localized: "Reply All"), symbol: "arrowshape.turn.up.left.2", keys: "A",
                        isEnabled: hasSelection) { self.compose(.replyAll) },
             AppCommand(id: "forward", title: String(localized: "Forward"), symbol: "arrowshape.turn.up.right", keys: "F",
@@ -44,7 +48,7 @@ extension AppModel {
                 self.perform(self.selection == .snoozed ? .unsnooze : .moveToInbox)
             },
             AppCommand(id: "sweep", title: String(localized: "Sweep Inbox (Done for all unpinned)"), symbol: "checkmark.rectangle.stack",
-                       keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
+                       keys: "⌘⇧E", isEnabled: isInInbox) { self.requestSweep() },
             AppCommand(id: "moveFolder", title: String(localized: "Move to Folder…"), symbol: "folder", keys: "V",
                        isEnabled: hasSelection) { self.isFolderPickerShown = true },
             AppCommand(id: "searchEverywhere", title: String(localized: "Search Everywhere"), symbol: "globe", keys: "⌥⌘F",
@@ -90,7 +94,7 @@ extension AppModel {
             AppCommand(id: "previous", title: String(localized: "Previous Conversation"), symbol: "chevron.up", keys: "K") { self.moveSelection(-1) },
             AppCommand(id: "selectBelow", title: String(localized: "Select This and Everything Below"), symbol: "list.bullet.below.rectangle",
                        keys: "⌘A", isEnabled: !threads.isEmpty && !isSearching) { self.selectFocusedAndBelow() },
-            AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.selection = .inbox },
+            AppCommand(id: "goInbox", title: String(localized: "Go to Inbox"), symbol: "tray", keys: "G I") { self.goToInbox() },
             AppCommand(id: "goSnoozed", title: String(localized: "Go to Snoozed"), symbol: "clock", keys: "G S") { self.selection = .snoozed },
             AppCommand(id: "goReplyLater", title: String(localized: "Go to Set Aside"), symbol: "arrowshape.turn.up.left.circle", keys: "G L") {
                 self.selection = .replyLater

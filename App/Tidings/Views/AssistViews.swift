@@ -50,39 +50,6 @@ struct SummaryLine: View {
     }
 }
 
-// MARK: - Auto Drafts
-
-/// "No reply yet. A follow-up is ready." on a conversation still waiting on someone.
-struct FollowUpBanner: View {
-    @Environment(AppModel.self) private var model
-    let threadID: String
-
-    var body: some View {
-        if let draft = model.autoDraft(forThread: threadID) {
-            HStack(spacing: 10) {
-                Image(systemName: "arrowshape.turn.up.right.circle.fill").foregroundStyle(.blue)
-                Text(waitingText(draft)).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                Button("Review") { model.reviewFollowUp(threadID: threadID) }
-                    .buttonStyle(.glassProminent)
-                Button("Discard") { model.dismissFollowUp(threadID: threadID) }
-                    .buttonStyle(.glass)
-            }
-            .font(.callout)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .glassEffect(.regular, in: .rect(cornerRadius: 14))
-            .help("Tidings drafted this because nobody has answered. It's never sent without you.")
-        }
-    }
-
-    private func waitingText(_ draft: AutoDraft) -> String {
-        if draft.kind == .reply { return String(localized: "A reply is drafted for you. Check the [brackets] before sending.") }
-        let sent = (try? model.store.message(id: draft.messageID)) ?? nil
-        let days = sent.map { max(1, Int(Date().timeIntervalSince($0.date) / 86_400)) } ?? AssistSettings.followUpDays
-        return String(localized: "No reply in \(days) days. A follow-up is ready in Drafts.")
-    }
-}
-
 // MARK: - Contact sidebar
 
 /// Who you're talking to: history, how quickly they answer, their links, recent conversations

@@ -7500,6 +7500,216 @@
           }
         }
       }
+    },
+    "Sweep Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryd indbakken"
+          }
+        }
+      }
+    },
+    "Dev copy: didn't contact %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dev-kopi: kontaktede ikke %@"
+          }
+        }
+      }
+    },
+    "The dev copy doesn't touch your calendar or reminders.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dev-kopien rører ikke din kalender eller dine påmindelser."
+          }
+        }
+      }
+    },
+    "Open the draft. Nothing is sent without you.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn udkastet. Intet sendes uden dig."
+          }
+        }
+      }
+    },
+    "Select": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg"
+          }
+        }
+      }
+    },
+    "Select All": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg alle"
+          }
+        }
+      }
+    },
+    "Select conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg samtaler"
+          }
+        }
+      }
+    },
+    "%lld selected": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld valgt"
+          }
+        }
+      }
+    },
+    "More Actions": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flere handlinger"
+          }
+        }
+      }
+    },
+    "Category %lld of %lld": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategori %lld af %lld"
+          }
+        }
+      }
+    },
+    "Swipe left or right to change category, or double-tap to choose one.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stryg til venstre eller højre for at skifte kategori, eller tryk to gange for at vælge en."
+          }
+        }
+      }
+    },
+    "Discard this draft": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kassér dette udkast"
+          }
+        }
+      }
+    },
+    "Pop Out": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn i vindue"
+          }
+        }
+      }
+    },
+    "Open in its own window (⇧⌘O)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn i sit eget vindue (⇧⌘O)"
+          }
+        }
+      }
+    },
+    "Pop Out Reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn svar i vindue"
+          }
+        }
+      }
+    },
+    "Clear Suggestion": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ryd forslag"
+          }
+        }
+      }
+    },
+    "Tidings drafted this reply. Clear it to write your own.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings har skrevet dette svar. Ryd det for at skrive dit eget."
+          }
+        }
+      }
+    },
+    "You replied": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du har svaret"
+          }
+        }
+      }
+    },
+    "You forwarded it": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du har videresendt den"
+          }
+        }
+      }
+    },
+    "Replied": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Besvaret"
+          }
+        }
+      }
+    },
+    "Forwarded": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videresendt"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

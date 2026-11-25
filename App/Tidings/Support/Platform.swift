@@ -12,6 +12,14 @@ typealias PlatformFont = UIFont
 /// The few things that differ between the Mac and iPhone apps, in one place, so shared views and
 /// models stay free of `#if`.
 enum Platform {
+    static var isMac: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
+    }
+
     static var isPhone: Bool {
         #if os(iOS)
         UIDevice.current.userInterfaceIdiom == .phone
@@ -78,12 +86,15 @@ enum Platform {
         #endif
     }
 
-    /// Where to turn calendar access back on.
-    static var calendarSettingsHint: String {
+    /// Where to turn calendar access back on (or why there's none, in the dev copy).
+    @MainActor static var calendarSettingsHint: String {
+        guard CalendarBridge.shared.isEnabled else {
+            return String(localized: "The dev copy doesn't touch your calendar or reminders.")
+        }
         #if os(macOS)
-        String(localized: "Allow calendar access in System Settings › Privacy & Security › Calendars.")
+        return String(localized: "Allow calendar access in System Settings › Privacy & Security › Calendars.")
         #else
-        String(localized: "Allow calendar access in Settings › Apps › Tidings › Calendars.")
+        return String(localized: "Allow calendar access in Settings › Apps › Tidings › Calendars.")
         #endif
     }
 }
@@ -161,11 +172,38 @@ extension View {
         #endif
     }
 
-    @ViewBuilder func macFrame(minWidth: CGFloat, minHeight: CGFloat) -> some View {
+    @ViewBuilder func macFrame(minWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat? = nil) -> some View {
         #if os(macOS)
-        frame(minWidth: minWidth, minHeight: minHeight)
+        frame(minWidth: minWidth, minHeight: minHeight, idealHeight: idealHeight)
         #else
         self
+        #endif
+    }
+
+    /// A sheet's buttons. On iPhone they go in the navigation toolbar. On the Mac they sit in a
+    /// bar under the content: toolbar items in a sheet opened from another sheet get clipped or
+    /// dropped there, and lose Escape and VoiceOver with them.
+    @ViewBuilder func sheetButtons<Leading: View, Trailing: View>(
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        #if os(macOS)
+        VStack(spacing: 0) {
+            self
+            Divider()
+            HStack(spacing: 8) {
+                leading()
+                Spacer()
+                trailing()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        #else
+        toolbar {
+            ToolbarItemGroup(placement: .cancellationAction) { leading() }
+            ToolbarItemGroup(placement: .primaryAction) { trailing() }
+        }
         #endif
     }
 }

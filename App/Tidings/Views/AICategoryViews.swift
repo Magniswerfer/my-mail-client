@@ -1,8 +1,8 @@
 import MailEngine
 import SwiftUI
 
-/// All · Primary · Transactions · … · your AI categories · +, above the Inbox. Tab / ⇧Tab
-/// (and ⌘] / ⌘[) move between them.
+/// Primary · Transactions · … · your AI categories · All · +, above the Inbox (the sidebar has
+/// one Inbox row for all of them). Tab / ⇧Tab (and ⌘] / ⌘[) move between them.
 struct CategoryTabs: View {
     @Environment(AppModel.self) private var model
 
@@ -53,6 +53,14 @@ struct CategoryTabs: View {
         }
         .buttonStyle(.plain)
         .help("Tab / ⇧Tab to switch")
+        // Drop a conversation on a category to move it (and teach the classifier).
+        .dropDestination(for: ThreadDrag.self) { items, _ in
+            guard case .builtIn(let category) = tab else { return false }
+            let threads = model.threads(for: items)
+            guard !threads.isEmpty else { return false }
+            model.moveConversations(threads, to: category)
+            return true
+        }
         .contextMenu {
             if case .ai(let id) = tab, let category = model.aiCategory(id: id) {
                 Button("Edit…", systemImage: "pencil") {

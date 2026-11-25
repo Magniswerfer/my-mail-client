@@ -241,4 +241,23 @@ import Testing
         #expect(crypto.conditions.count == 2)
         #expect(crypto.actions == [.done])   // "newsletters" is the condition, not a move
     }
+
+    @Test func aNamedSenderIsASenderNotATopic() {
+        // Found in the click-through: "about: Sofie Hansen" matched a dinner invite and a Nike ad.
+        let sofie = Rule(name: "s", conditions: [.about(AboutCondition("Sofie Hansen"))], actions: [.pin])
+            .grounded(in: "Fastgør mail fra Sofie Hansen")
+        #expect(sofie.conditions == [.sender(TextMatch(.contains, "Sofie Hansen"))])
+
+        let address = Rule(name: "a", conditions: [.about(AboutCondition("sofie@example.com"))], actions: [.pin])
+            .grounded(in: "Pin mail from sofie@example.com")
+        #expect(address.conditions == [.sender(TextMatch(.contains, "sofie@example.com"))])
+
+        // Lower-case descriptions and topics stay topics.
+        let accountant = Rule(name: "m", conditions: [.about(AboutCondition("my accountant"))], actions: [.pin])
+            .grounded(in: "Pin mail from my accountant")
+        #expect(accountant.conditions == [.about(AboutCondition("my accountant"))])
+        let crypto = Rule(name: "c", conditions: [.about(AboutCondition("Crypto"))], actions: [.done])
+            .grounded(in: "Archive mail about Crypto")
+        #expect(crypto.conditions == [.about(AboutCondition("Crypto"))])
+    }
 }

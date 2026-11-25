@@ -170,12 +170,14 @@ public struct FoundationModelsRuleDrafter: RuleDrafter {
 
             Conditions say which mail the rule is for:
             - sender, recipient, subject, text (subject or body): an operation (contains, doesNotContain, \
-            equals, beginsWith, endsWith) and a value. For mail from a domain such as zalando.dk, use \
-            sender endsWith "@zalando.dk". Never invent addresses or domains the user didn't write.
+            equals, beginsWith, endsWith) and a value. For mail from a named person or company \
+            ("fra Sofie Hansen", "from Zalando"), use sender contains that name. For mail from a domain \
+            such as zalando.dk, use sender endsWith "@zalando.dk". Never invent addresses or domains \
+            the user didn't write.
             - category: the mail's current category (only when the user says which mail, e.g. "newsletters about …").
             - hasAttachment.
-            - about: a topic or kind of sender in the user's own words that isn't a plain text match, \
-            e.g. "crypto" or "invoices from my accountant".
+            - about: a topic in the user's own words that isn't a plain text match, e.g. "crypto" or \
+            "invoices from my accountant". Never use about for a sender the user names.
             matchAll is true unless the user says "or".
 
             Actions say what to do with it:
@@ -306,7 +308,12 @@ extension Rule {
             return stem.count >= 3 && said.contains(stem)
         }
         var rule = self
-        rule.conditions = conditions.filter { condition in
+        rule.conditions = conditions.map { condition in
+            if case .about(let a) = condition, let sender = Self.namedSender(a.description, in: sentence) {
+                return .sender(TextMatch(.contains, sender))
+            }
+            return condition
+        }.filter { condition in
             switch condition {
             case .sender(let m), .recipient(let m), .subject(let m), .text(let m): return appears(m.value)
             case .hasAttachment: return ["attach", "vedhæft", "bilag"].contains { said.contains($0) }
@@ -324,5 +331,21 @@ extension Rule {
             rule.actions.insert(.setCategory(named), at: 0)
         }
         return rule
+    }
+
+    /// The small model sometimes turns "mail fra Sofie Hansen" into "about: Sofie Hansen", which
+    /// the judge then matches loosely. When the value comes right after "fra"/"from" and is a
+    /// name (capitalised words, as written) or an address/domain, it's a sender, not a topic.
+    /// "from my accountant" stays a topic.
+    static func namedSender(_ value: String, in sentence: String) -> String? {
+        let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else { return nil }
+        let said = sentence.lowercased()
+        guard ["fra ", "from "].contains(where: { said.contains($0 + v.lowercased()) }),
+              let range = sentence.range(of: v, options: .caseInsensitive) else { return nil }
+        let written = sentence[range]
+        let isAddress = written.contains("@") || (written.contains(".") && !written.contains(" "))
+        let isName = written.split(separator: " ").allSatisfy { $0.first?.isUppercase == true }
+        return isAddress || isName ? String(written) : nil
     }
 }

@@ -117,9 +117,11 @@ struct InviteCard: View {
                     Button("Remove from Calendar", systemImage: "calendar.badge.minus") { model.removeFromCalendar(invite) }
                 }
             } else if invite.method == .request, !isOrganizer, invite.organizer != nil {
-                answerButton(.accepted, title: String(localized: "Accept"), symbol: "checkmark", mine: mine)
-                answerButton(.tentative, title: String(localized: "Maybe"), symbol: "questionmark", mine: mine)
-                answerButton(.declined, title: String(localized: "Decline"), symbol: "xmark", mine: mine)
+                // Icons only when a narrow reading pane would truncate the words ("Acc…").
+                ViewThatFits(in: .horizontal) {
+                    answerButtons(mine: mine, compact: false)
+                    answerButtons(mine: mine, compact: true)
+                }
             }
             Spacer()
             if !invite.isCancelled {
@@ -135,6 +137,16 @@ struct InviteCard: View {
         .buttonStyle(.glass)
     }
 
+    @ViewBuilder private func answerButtons(mine: CalendarInvite.ParticipationStatus?, compact: Bool) -> some View {
+        let buttons = HStack(spacing: 8) {
+            answerButton(.accepted, title: String(localized: "Accept"), symbol: "checkmark", mine: mine)
+            answerButton(.tentative, title: String(localized: "Maybe"), symbol: "questionmark", mine: mine)
+            answerButton(.declined, title: String(localized: "Decline"), symbol: "xmark", mine: mine)
+        }
+        .fixedSize()
+        if compact { buttons.labelStyle(.iconOnly) } else { buttons.labelStyle(.titleAndIcon) }
+    }
+
     private func answerButton(_ status: CalendarInvite.ParticipationStatus, title: String, symbol: String,
                               mine: CalendarInvite.ParticipationStatus?) -> some View {
         let chosen = mine == status
@@ -146,6 +158,7 @@ struct InviteCard: View {
             Label(title, systemImage: chosen ? "\(symbol).circle.fill" : symbol)
         }
         .tint(chosenTint)
+        .help(title)
         .accessibilityAddTraits(chosen ? .isSelected : [])
         .help(chosen ? String(localized: "Your answer") : title)
     }

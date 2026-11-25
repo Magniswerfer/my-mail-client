@@ -19,11 +19,16 @@ import MailEngine
         set { UserDefaults.standard.set(newValue, forKey: "calendarLinks") }
     }
 
+    /// Off in the dev copy (`-TidingsDevServer`): it shares the user's real calendar and
+    /// reminders, so it must neither read nor write them. Set once at launch.
+    var isEnabled = true
+
     var status: EKAuthorizationStatus { EKEventStore.authorizationStatus(for: .event) }
-    var hasAccess: Bool { status == .fullAccess }
+    var hasAccess: Bool { isEnabled && status == .fullAccess }
     var wasDenied: Bool { status == .denied || status == .restricted || status == .writeOnly }
 
     func requestAccess() async -> Bool {
+        guard isEnabled else { return false }
         if hasAccess { return true }
         guard status == .notDetermined else { return false }
         // A fresh store for the request: it can be handed to EventKit without sharing ours.
@@ -59,7 +64,7 @@ import MailEngine
 
     // MARK: Reminders
 
-    enum Failure: Error { case noAccess, noList }
+    enum Failure: Error { case noAccess, noList, devCopy }
 
     /// A reminder in the default list, with an optional due date (and an alert then).
     /// A plain event (flights, reservations from Highlights).
@@ -76,6 +81,7 @@ import MailEngine
     }
 
     func addReminder(title: String, notes: String?, url: URL?, due: Date?) async throws {
+        guard isEnabled else { throw Failure.devCopy }
         if EKEventStore.authorizationStatus(for: .reminder) != .fullAccess {
             guard EKEventStore.authorizationStatus(for: .reminder) == .notDetermined,
                   (try? await EKEventStore().requestFullAccessToReminders()) == true else { throw Failure.noAccess }
@@ -106,6 +112,7 @@ import MailEngine
     /// Adds the event, or updates our copy (new time, place, title) when the invite changed.
     @discardableResult
     func save(_ invite: CalendarInvite, tentative: Bool = false) throws -> EKEvent {
+        guard isEnabled else { throw Failure.devCopy }
         let event = existingEvent(for: invite) ?? EKEvent(eventStore: store)
         if event.calendar == nil { event.calendar = store.defaultCalendarForNewEvents }
         // Never rewrite an event the calendar server owns; it's already up to date there.

@@ -156,7 +156,8 @@ public struct FoundationModelsWriter: MailWriter {
             sender's first name if given, then a blank line, then a brief answer (two to five \
             sentences). You don't know the user's calendar, preferences or facts that aren't in the \
             conversation: where an answer needs them, write a short placeholder in square \
-            brackets, like [time that suits me]. Never invent facts, commitments or dates. No \
+            brackets, in the reply's language, like [time that suits me] or [tidspunkt der passer \
+            mig]. Never invent facts, commitments or dates. No \
             sign-off, no subject line.
             """)
         let who = sender.map { "Sender's first name: \($0)\n" } ?? ""
@@ -174,7 +175,44 @@ public struct FoundationModelsWriter: MailWriter {
     static func clean(_ text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"“”"))
-        return trimmed.isEmpty ? nil : trimmed
+        let unsigned = stripSignOff(trimmed)
+        return unsigned.isEmpty ? nil : unsigned
+    }
+
+    /// Closings the model adds despite "no sign-off" (Danish and English), lower-cased.
+    static let closings: Set<String> = [
+        "best", "best regards", "regards", "kind regards", "warm regards", "all the best", "cheers",
+        "thanks", "thank you", "many thanks", "sincerely", "yours",
+        "mvh", "med venlig hilsen", "venlig hilsen", "hilsen", "kh", "kærlig hilsen",
+        "bedste hilsner", "de bedste hilsner", "tak", "mange tak",
+    ]
+
+    /// Drops a trailing "Best,\nMagnus" / "Mvh\nMagnus": the compose body adds the identity's
+    /// signature, so the name ended up there twice. A closing counts when it ends in a comma or
+    /// a short name line follows it; a final "Thanks!" on its own is kept as content.
+    public static func stripSignOff(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeLast() }
+        func closing(_ line: String) -> (isClosing: Bool, hasComma: Bool) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            let hasComma = t.hasSuffix(",")
+            let bare = t.trimmingCharacters(in: CharacterSet(charactersIn: ",.!")).lowercased()
+            return (closings.contains(bare), hasComma)
+        }
+        func isShortName(_ line: String) -> Bool {
+            let words = line.split(separator: " ")
+            return (1...3).contains(words.count) && words.allSatisfy { $0.first?.isUppercase == true }
+                && !line.contains(where: { ".?!:".contains($0) })
+        }
+        guard let last = lines.last else { return text }
+        var cut: Int?
+        if closing(last).isClosing && closing(last).hasComma {
+            cut = lines.count - 1
+        } else if lines.count >= 2, isShortName(last), closing(lines[lines.count - 2]).isClosing {
+            cut = lines.count - 2
+        }
+        guard let cut, cut > 0 else { return text }
+        return lines[..<cut].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

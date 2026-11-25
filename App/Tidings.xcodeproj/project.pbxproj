@@ -16,6 +16,7 @@
 		1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA0DB174A202248566399CE8 /* CalendarBridge.swift */; };
 		219457FC5BF45622AB8BDF30 /* Snippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9781C48BE6F25D01ADF92C /* Snippets.swift */; };
 		22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE746A738ECB396D4A3B489 /* AssistViews.swift */; };
+		2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8DE1053B517D234A2D453E /* CategorySwipeBar.swift */; };
 		2C2D7B77A2C8A1B594CB2A08 /* SendersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C863A5E8187EAFEB176353 /* SendersView.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
 		35383B4FCF5D678A9D5CBC90 /* AppModel+SmartFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */; };
@@ -148,6 +149,7 @@
 		EA7F045393AAD8ADDCFB0CF1 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		EB20E24D7CB79953FF737DD1 /* AppModel+AICategories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+AICategories.swift"; sourceTree = "<group>"; };
 		EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightViews.swift; sourceTree = "<group>"; };
+		EF8DE1053B517D234A2D453E /* CategorySwipeBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategorySwipeBar.swift; sourceTree = "<group>"; };
 		F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		F40D6E9799E037A8B47DD70D /* RulesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesViews.swift; sourceTree = "<group>"; };
 		F7C863A5E8187EAFEB176353 /* SendersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendersView.swift; sourceTree = "<group>"; };
@@ -301,6 +303,7 @@
 		E754B9778D8CE5E4AFAEEE87 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
+				EF8DE1053B517D234A2D453E /* CategorySwipeBar.swift */,
 				B1DB91C9DDBBE39459D38C1B /* Info.plist */,
 				F9D84A6766D82ADED898767E /* MobileRootView.swift */,
 				6DB767A15EA74F768D716A48 /* TidingsMobileApp.swift */,
@@ -486,6 +489,7 @@
 				68707389AD56CF88B5276561 /* AttachmentBrowser.swift in Sources */,
 				8457FC7736CB752FE8A55EAD /* BundleSchedule.swift in Sources */,
 				5B9DD7572A39D23B982D71BB /* CalendarBridge.swift in Sources */,
+				2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */,
 				A6AEC3CD061B15B401752417 /* CommandPalette.swift in Sources */,
 				3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */,
 				66C9AEC8FB6D3AFFAC4652AC /* ComposeView.swift in Sources */,
