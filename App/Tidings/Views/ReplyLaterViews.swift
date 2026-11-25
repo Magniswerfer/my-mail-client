@@ -228,7 +228,7 @@ struct ShortcutsView: View {
                               uniquingKeysWith: { a, _ in a })
         func pick(_ ids: [String]) -> [Entry] { ids.compactMap { byID[$0] } }
         return [
-            (String(localized: "Move around"), pick(["next", "previous", "goInbox", "goSnoozed", "goReplyLater", "goOutbox", "pinnedOnly"]) + [
+            (String(localized: "Move around"), pick(["next", "previous", "nextCategory", "previousCategory", "goInbox", "goSnoozed", "goReplyLater", "goOutbox", "pinnedOnly"]) + [
                 Entry(keys: "/", title: String(localized: "Search")),
                 Entry(keys: "⌘K", title: String(localized: "Command Palette")),
                 Entry(keys: "?", title: String(localized: "Keyboard Shortcuts")),

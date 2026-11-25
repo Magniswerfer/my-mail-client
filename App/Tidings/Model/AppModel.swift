@@ -12,6 +12,8 @@ enum SidebarItem: Hashable {
     case mailbox(accountID: String, path: String)
     /// A saved search (SPEC §7), by id.
     case smartFolder(String)
+    /// A category you described, sorted by the on-device model, by id.
+    case aiCategory(String)
 }
 
 /// One row in the stream: a conversation, or an Inbox-style bundle of conversations.
@@ -189,6 +191,13 @@ final class AppModel {
     /// Turns a sentence into a rule (Foundation Models); nil without Apple Intelligence.
     @ObservationIgnored let ruleDrafter: (any RuleDrafter)? = FoundationModelsRuleDrafter()
 
+    // AI categories (described in words, sorted on device)
+    var aiCategories: [AICategory] = []
+    /// threadID → AI category ids (one read per reload).
+    var aiMembership: [String: Set<String>] = [:]
+    var editingAICategory: AICategoryEditing?
+    @ObservationIgnored var aiCategoryTask: Task<Void, Never>?
+
     // Contact sidebar
     var isContactPanelShown = false
     /// Whose profile the panel shows; nil follows the open conversation.
@@ -291,6 +300,7 @@ final class AppModel {
         reloadOutbox()
         loadRules()
         loadSmartFolders()
+        loadAICategories()
         scheduleDeliveryRefresh()
         Self.shared = self
     }
@@ -466,6 +476,7 @@ final class AppModel {
         case .mailbox(let accountID, let path):
             mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
         case .smartFolder(let id): smartFolder(id: id).map(displayName) ?? String(localized: "Smart Folder")
+        case .aiCategory(let id): aiCategory(id: id)?.name ?? String(localized: "Category")
         }
     }
 
@@ -500,6 +511,9 @@ final class AppModel {
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
             case .smartFolder(let id):
                 threads = try smartFolder(id: id).map(smartFolderThreads) ?? []
+            case .aiCategory(let id):
+                aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
+                threads = try inbox().filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
             }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             if selection == .inbox { holdOpenBundles() }

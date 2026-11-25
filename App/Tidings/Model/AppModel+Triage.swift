@@ -118,7 +118,7 @@ extension AppModel {
     /// The mailbox the current view shows (where moves start from).
     var sourceMailbox: String {
         switch selection {
-        case .inbox, .category, .outbox, .replyLater: "INBOX"
+        case .inbox, .category, .outbox, .replyLater, .aiCategory: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
         // Results come from any folder: act where the selected conversation is.
@@ -210,7 +210,7 @@ extension AppModel {
         // Later row). Elsewhere (Snoozed, folders) it only gets marked.
         case .replyLater:
             switch selection {
-            case .inbox, .category: true
+            case .inbox, .category, .aiCategory: true
             default: false
             }
         // Taken off the pile: it leaves Set Aside.

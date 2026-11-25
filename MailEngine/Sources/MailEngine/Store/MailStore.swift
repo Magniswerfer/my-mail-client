@@ -139,6 +139,7 @@ public final class MailStore: Sendable {
         registerUnsubscribeMigrations(&m)
         registerAttachmentMigrations(&m)
         registerHighlightMigrations(&m)
+        registerAICategoryMigrations(&m)
         return m
     }
 

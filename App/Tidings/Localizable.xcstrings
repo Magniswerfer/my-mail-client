@@ -7300,6 +7300,206 @@
           }
         }
       }
+    },
+    "“%@” is ready. Without Apple Intelligence, add conversations to it yourself.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” er klar. Uden Apple Intelligence skal du selv lægge samtaler i den."
+          }
+        }
+      }
+    },
+    "Sorting your recent mail into “%@”…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sorterer din seneste mail i “%@”…"
+          }
+        }
+      }
+    },
+    "Removed from “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernet fra “%@”"
+          }
+        }
+      }
+    },
+    "Added to “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lagt i “%@”"
+          }
+        }
+      }
+    },
+    "New AI Category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny AI-kategori"
+          }
+        }
+      }
+    },
+    "Describe a category and let the on-device model sort mail into it": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskriv en kategori, og lad modellen på enheden sortere mail i den"
+          }
+        }
+      }
+    },
+    "Tab / ⇧Tab to switch": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab / ⇧Tab for at skifte"
+          }
+        }
+      }
+    },
+    "Investors": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Investorer"
+          }
+        }
+      }
+    },
+    "What belongs here": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvad hører hjemme her"
+          }
+        }
+      }
+    },
+    "Updates, questions and term sheets from our investors": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opdateringer, spørgsmål og term sheets fra vores investorer"
+          }
+        }
+      }
+    },
+    "Without Apple Intelligence on this device, Tidings can't sort into it by itself. You can still add conversations from their right-click menu.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uden Apple Intelligence på denne enhed kan Tidings ikke selv sortere i den. Du kan stadig lægge samtaler i den fra højreklikmenuen."
+          }
+        }
+      }
+    },
+    "Sorted on this device, as mail arrives. Your recent Inbox is sorted when you save. Fix mistakes from a conversation's right-click menu and it learns.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sorteres på denne enhed, når mail kommer. Din seneste indbakke sorteres, når du gemmer. Ret fejl fra en samtales højreklikmenu, så lærer den."
+          }
+        }
+      }
+    },
+    "Symbol": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbol"
+          }
+        }
+      }
+    },
+    "Nothing in your recent Inbox matches yet.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet i din seneste indbakke passer endnu."
+          }
+        }
+      }
+    },
+    "Would catch %lld recent conversations:": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ville fange %lld seneste samtaler:"
+          }
+        }
+      }
+    },
+    "New AI Category…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny AI-kategori…"
+          }
+        }
+      }
+    },
+    "Edit Category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger kategori"
+          }
+        }
+      }
+    },
+    "AI Categories": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI-kategorier"
+          }
+        }
+      }
+    },
+    "Next Category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Næste kategori"
+          }
+        }
+      }
+    },
+    "Previous Category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forrige kategori"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

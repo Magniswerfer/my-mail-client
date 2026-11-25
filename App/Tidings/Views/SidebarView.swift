@@ -68,6 +68,27 @@ struct SidebarView: View {
                     }
                     .tag(SidebarItem.category(category))
                 }
+                ForEach(model.aiCategories) { category in
+                    Label {
+                        Text(category.name)
+                    } icon: {
+                        Image(systemName: category.symbol).foregroundStyle(.indigo)
+                    }
+                    .contextMenu {
+                        Button("Edit…", systemImage: "pencil") {
+                            model.editingAICategory = AICategoryEditing(category: category, isNew: false)
+                        }
+                        Button("Delete", systemImage: "trash", role: .destructive) { model.delete(aiCategory: category) }
+                    }
+                    .tag(SidebarItem.aiCategory(category.id))
+                }
+                .onMove { model.moveAICategories(from: $0, to: $1) }
+                Button {
+                    model.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
+                } label: {
+                    Label("New AI Category…", systemImage: "plus").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
 
             ForEach(model.accounts) { account in

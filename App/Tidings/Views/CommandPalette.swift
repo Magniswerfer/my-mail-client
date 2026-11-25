@@ -54,6 +54,15 @@ extension AppModel {
             AppCommand(id: "attachments", title: String(localized: "Attachments…"), symbol: "paperclip", keys: "⌃⌘A") {
                 self.isAttachmentsShown = true
             },
+            AppCommand(id: "nextCategory", title: String(localized: "Next Category"), symbol: "chevron.right.circle", keys: "⇥") {
+                self.cycleCategory(1)
+            },
+            AppCommand(id: "previousCategory", title: String(localized: "Previous Category"), symbol: "chevron.left.circle", keys: "⇧⇥") {
+                self.cycleCategory(-1)
+            },
+            AppCommand(id: "newAICategory", title: String(localized: "New AI Category…"), symbol: "sparkles", keys: nil) {
+                self.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
+            },
             AppCommand(id: "readLater", title: String(localized: "Read Later"), symbol: "book", keys: "⇧R",
                        isEnabled: hasSelection) { self.readLater() },
             AppCommand(id: "copyCode", title: String(localized: "Copy Latest Login Code"), symbol: "key.fill", keys: "⌃⌥C") {

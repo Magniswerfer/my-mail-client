@@ -111,6 +111,7 @@ extension AppModel {
             }
             await self.deliverNotifications(arrived: arrived, ruleRuns: notify)
             self.indexAttachmentsInBackground()
+            self.scheduleAICategories()
         }
     }
 

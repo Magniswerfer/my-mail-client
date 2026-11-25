@@ -62,6 +62,14 @@ struct TidingsApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .control])
                 Button("Copy Link to Message") { model.copyLink() }
                 Button("Copy Latest Login Code") { model.copyLatestCode() }
+                Divider()
+                Button("Next Category") { model.cycleCategory(1) }
+                    .keyboardShortcut("]", modifiers: .command)
+                Button("Previous Category") { model.cycleCategory(-1) }
+                    .keyboardShortcut("[", modifiers: .command)
+                Button("New AI Category…") {
+                    model.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
+                }
                 Button("Read Later") { model.readLater() }
                 Divider()
                 Button("Mark Done") { model.perform(.done) }
@@ -222,6 +230,7 @@ struct RootView: View {
         .quickLookPreview($model.quickLookURL)
         .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
+        .sheet(item: $model.editingAICategory) { editing in AICategoryEditor(editing: editing).environment(model) }
         .sheet(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
@@ -357,6 +366,11 @@ struct RootView: View {
         // ⌘⌫: Move to Trash, like Apple Mail (only here, so text fields keep ⌘⌫ for themselves).
         if press.key == .delete, press.modifiers == .command, press.phase == .down {
             model.perform(.trash)
+            return .handled
+        }
+        // Tab / ⇧Tab: the next / previous category (Superhuman-style split inbox).
+        if press.key == .tab, press.modifiers.subtracting(.shift).isEmpty, press.phase == .down {
+            model.cycleCategory(press.modifiers.contains(.shift) ? -1 : 1)
             return .handled
         }
         guard press.modifiers.subtracting(.shift).isEmpty else { return .ignored }

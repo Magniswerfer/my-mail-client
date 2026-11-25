@@ -9,6 +9,9 @@ struct StreamView: View {
         ScrollViewReader { proxy in
         list
         .listStyle(.inset)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if model.currentCategoryTab != nil, !model.isSearching { CategoryTabs() }
+        }
         .overlay {
             if model.threads.isEmpty { EmptyStream() }
         }
@@ -331,6 +334,7 @@ struct ThreadActions: View {
         Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction(thread: thread) }
         Button(model.isMuted(thread.threadID) ? "Unmute" : "Mute", systemImage: "bell.slash") { model.toggleMute([thread]) }
         Button("Read Later", systemImage: "book") { model.readLater(thread) }
+        AICategoryMenu(thread: thread)
         Button(thread.isReplyLater ? "Remove from Reply Later" : "Reply Later", systemImage: "arrowshape.turn.up.left.circle") {
             model.perform(thread.isReplyLater ? .clearReplyLater : .replyLater, on: [thread])
         }

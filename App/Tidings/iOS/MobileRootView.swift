@@ -84,6 +84,7 @@ struct MobileRootView: View {
         .quickLookPreview($model.quickLookURL)
         .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
+        .sheet(item: $model.editingAICategory) { editing in AICategoryEditor(editing: editing).environment(model) }
         .fullScreenCover(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
