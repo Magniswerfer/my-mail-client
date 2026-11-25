@@ -45,7 +45,10 @@ struct AttachmentBrowser: View {
             .searchable(text: $filter, placement: .toolbar, prompt: Text("File, sender or subject"))
             .navigationTitle("Attachments")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                // A sheet on iPhone needs Close; a Mac window has its own close button.
+                if !Platform.isMac {
+                    ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Picker("Kind", selection: $kind) {
                         ForEach(AttachmentKind.allCases, id: \.self) { Text($0.title).tag($0) }

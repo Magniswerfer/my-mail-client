@@ -9,6 +9,10 @@ import Testing
                 == "Hi Sofie,\n\nYes, I'm available for a 15 minute call tomorrow. What time suits you?")
         #expect(FoundationModelsWriter.stripSignOff("Hej Anna,\n\nDet lyder godt.\n\nMvh\nMagnus") == "Hej Anna,\n\nDet lyder godt.")
         #expect(FoundationModelsWriter.stripSignOff("Hej Anna,\n\nDet lyder godt.\n\nMed venlig hilsen,") == "Hej Anna,\n\nDet lyder godt.")
+        // As seen in the Mac reading pane.
+        let peter = "Hej Peter,\n\nJeg har modtaget udkastet til kontrakten. Lad mig vide, hvis der er noget, jeg skal tage højde for.\n\nHilsen,\nMagnus"
+        #expect(FoundationModelsWriter.stripSignOff(peter)
+                == "Hej Peter,\n\nJeg har modtaget udkastet til kontrakten. Lad mig vide, hvis der er noget, jeg skal tage højde for.")
     }
 
     @Test func contentThatLooksLikeAClosingIsKept() {

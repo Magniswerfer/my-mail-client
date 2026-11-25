@@ -75,12 +75,6 @@ struct StreamView: View {
                 }
             }
         }
-        // On iPhone and iPad Sweep lives in the … menu instead.
-        if Platform.isMac, model.isInInbox, model.sweepableCount > 0 {
-            SweepFooter(count: model.sweepableCount)
-                .selectionDisabled()
-                .listRowSeparator(.hidden)
-        }
     }
 
     private func row(_ thread: ThreadSummary, inBundle: Bool = false) -> some View {
@@ -127,26 +121,7 @@ struct ThreadDrag: Codable, Transferable {
     }
 }
 
-/// Inbox's "sweep" at the end of the list: where you arrive once you've read what matters.
-struct SweepFooter: View {
-    @Environment(AppModel.self) private var model
-    let count: Int
-
-    var body: some View {
-        HStack {
-            Spacer()
-            Button {
-                model.requestSweep()
-            } label: {
-                Label("Mark \(count) Unpinned Done", systemImage: "checkmark.circle")
-            }
-            .buttonStyle(.glass)
-            .help("Everything that isn't pinned goes to the Archive (⌘⇧E). You can undo it.")
-            Spacer()
-        }
-        .padding(.vertical, 14)
-    }
-}
+// Sweep is only in the list's … menu (and ⌘⇧E, ⌘K), not a button at the end of the list.
 
 struct EmptyStream: View {
     @Environment(AppModel.self) private var model

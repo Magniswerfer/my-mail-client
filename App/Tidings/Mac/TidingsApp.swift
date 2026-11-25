@@ -144,6 +144,26 @@ struct TidingsApp: App {
         .defaultSize(width: 720, height: 600)
         .commands { TextFormattingCommands() }
 
+        // Rules, Senders and Attachments are windows of their own (as in Mail), with their
+        // buttons in a compact title bar rather than a sheet's bottom bar over the inbox.
+        Window("Rules", id: "rules") {
+            RulesView().environment(model)
+        }
+        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 720, height: 520)
+
+        Window("Senders", id: "senders") {
+            SendersView().environment(model)
+        }
+        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 760, height: 560)
+
+        Window("Attachments", id: "attachments") {
+            AttachmentBrowser().environment(model)
+        }
+        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 800, height: 560)
+
         Settings {
             SettingsView()
                 .environment(model)
@@ -177,7 +197,14 @@ struct RootView: View {
                 }
             }
             .focused($streamFocused)
-            .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 560)
+            // A wide max: when the list hit a narrow one, dragging the divider further pushed the
+            // extra width into the sidebar instead (it should keep its size, as in Mail).
+            .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 1200)
+            // As in Mail: the list column has its own title, subtitle and buttons, and the
+            // reader's buttons sit over the reader; both follow the divider when you drag it.
+            .navigationTitle(model.listTitle)
+            .navigationSubtitle(model.listSubtitle)
+            .toolbar { listToolbar }
             .overlay(alignment: .bottom) {
                 if let toast = model.toast {
                     ToastView(toast: toast).padding(.bottom, 16)
@@ -197,6 +224,8 @@ struct RootView: View {
                 }
             }
             .animation(.snappy, value: model.inlineDrafts)
+            .navigationSplitViewColumnWidth(min: 380, ideal: 640)
+            .toolbar { readerToolbar }
                 .inspector(isPresented: $model.isContactPanelShown) {
                     ContactPanel()
                         .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
@@ -204,8 +233,6 @@ struct RootView: View {
         }
         .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
         .searchFocused($searchFocused)
-        .toolbar { toolbar }
-        .navigationTitle(model.isSearching ? String(localized: "Search") : model.currentMailboxTitle)
         .overlay(alignment: .top) {
             if model.isPaletteShown {
                 ZStack(alignment: .top) {
@@ -235,11 +262,12 @@ struct RootView: View {
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
-        .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
-        .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
-        .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
+        // The menu, ⌘K and keys still set these flags; on the Mac they open (or bring forward) a window.
+        .onChange(of: model.isRulesShown) { _, show in if show { openWindow(id: "rules"); model.isRulesShown = false } }
+        .onChange(of: model.isSendersShown) { _, show in if show { openWindow(id: "senders"); model.isSendersShown = false } }
+        .onChange(of: model.isAttachmentsShown) { _, show in if show { openWindow(id: "attachments"); model.isAttachmentsShown = false } }
         .quickLookPreview($model.quickLookURL)
-        .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
+        .modifier(UnsubscribeConfirmation(isActive: !model.isSendersWindowOpen))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
         .sheet(item: $model.editingAICategory) { editing in AICategoryEditor(editing: editing).environment(model) }
         .sheet(item: $model.replySession) { session in
@@ -279,21 +307,42 @@ struct RootView: View {
         .onChange(of: undoManager) { _, manager in model.undoManager = manager }
     }
 
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        // Over the stream: write, and filter.
-        ToolbarItemGroup(placement: .navigation) {
+    /// Over the list: filter and more, at the column's trailing edge.
+    @ToolbarContentBuilder private var listToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Menu {
+                // In here rather than as a second pin button next to the reader's Pin (G P).
+                if model.isInInbox {
+                    Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
+                        Label("Pinned Only", systemImage: "pin")
+                    }
+                }
+                if model.isInInbox, model.sweepableCount > 0 {
+                    Button("Mark \(model.sweepableCount) Unpinned Done", systemImage: "checkmark.circle") { model.requestSweep() }
+                    Divider()
+                }
+                Button("Command Palette", systemImage: "command") { model.isPaletteShown = true }
+                Button("Rules…", systemImage: "line.3.horizontal.decrease.circle") { model.isRulesShown = true }
+                Button("Senders…", systemImage: "person.2") { model.isSendersShown = true }
+                Button("Attachments…", systemImage: "paperclip") { model.isAttachmentsShown = true }
+            } label: {
+                Label("More", systemImage: "ellipsis")
+            }
+            .menuIndicator(.hidden)
+            .help("More")
+        }
+    }
+
+    /// Over the reader, as in Mail: write, answer, triage (each its own glass group), then who
+    /// this is next to search at the window's trailing edge.
+    @ToolbarContentBuilder private var readerToolbar: some ToolbarContent {
+        let none = model.targetThreads.isEmpty
+        ToolbarItem(placement: .primaryAction) {
             Button { model.composeNew() } label: { Label("New Message", systemImage: "square.and.pencil") }
                 .help("New Message (C or ⌘N)")
-            if model.isInInbox {
-                Toggle(isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 })) {
-                    Label("Pinned Only", systemImage: model.pinnedOnly ? "pin.fill" : "pin")
-                }
-                .help(model.pinnedOnly ? "Showing pinned only (G P)" : "Show pinned only (G P)")
-            }
         }
-        // Over the reader: answer, then triage.
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItemGroup(placement: .primaryAction) {
-            let none = model.targetThreads.isEmpty
             Button { model.compose(.reply) } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
                 .help("Reply (R)").disabled(none)
             Button { model.compose(.replyAll) } label: { Label("Reply All", systemImage: "arrowshape.turn.up.left.2") }
@@ -301,9 +350,8 @@ struct RootView: View {
             Button { model.compose(.forward) } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
                 .help("Forward (F)").disabled(none)
         }
-        ToolbarSpacer(.fixed)
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItemGroup(placement: .primaryAction) {
-            let none = model.targetThreads.isEmpty
             Button { model.perform(.done) } label: { Label("Done", systemImage: "checkmark") }
                 .help("Mark Done (E)").disabled(none)
             Button { model.isSnoozePickerShown = true } label: { Label("Snooze", systemImage: "clock") }
@@ -325,6 +373,7 @@ struct RootView: View {
             .help("Move to another category (M) or folder (V)")
             .disabled(none)
         }
+        ToolbarSpacer(.flexible, placement: .primaryAction)
         ToolbarItem(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { model.isContactPanelShown }, set: { _ in model.toggleContactPanel() })) {
                 Label("Contact Info", systemImage: "person.crop.circle")

@@ -50,7 +50,10 @@ struct SendersView: View {
             .searchable(text: $filter, placement: .toolbar, prompt: Text("Filter senders"))
             .navigationTitle("Senders")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                // A sheet on iPhone needs Close; a Mac window has its own close button.
+                if !Platform.isMac {
+                    ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                }
                 ToolbarItemGroup(placement: .primaryAction) {
                     Picker("Period", selection: $period) {
                         ForEach(Period.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -63,6 +66,8 @@ struct SendersView: View {
         }
         .macFrame(minWidth: 680, minHeight: 520)
         .modifier(UnsubscribeConfirmation(isActive: true))
+        .onAppear { model.isSendersWindowOpen = Platform.isMac }
+        .onDisappear { model.isSendersWindowOpen = false }
         .task(id: TaskKey(period: period, revision: model.sendersRevision)) {
             senders = (try? model.store.senderStats(ownAddresses: model.ownAddresses, since: period.since)) ?? []
         }

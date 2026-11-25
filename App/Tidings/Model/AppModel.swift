@@ -169,6 +169,8 @@ final class AppModel {
 
     // Senders and unsubscribe (SPEC §11)
     var isSendersShown = false
+    /// Mac: the Senders window is open, so it (not the main window) asks before unsubscribing.
+    var isSendersWindowOpen = false
     var unsubscribeCandidate: UnsubscribeRequest?
     /// Bumped when sender data changes (the Senders screen reloads).
     var sendersRevision = 0
@@ -476,6 +478,24 @@ final class AppModel {
     // MARK: Loading
 
     var ownAddresses: Set<String> { Set(accounts.flatMap(\.addresses)) }
+
+    /// Mac list column title (as in Mail): "Inbox" for All and every category tab; the tab is
+    /// in the subtitle.
+    var listTitle: String {
+        if isSearching { return String(localized: "Search") }
+        return isInInbox ? String(localized: "Inbox") : currentMailboxTitle
+    }
+
+    /// Under the list title: "Primary · 20 conversations, 5 unread".
+    var listSubtitle: String {
+        guard !isSearching else { return "" }
+        let unread = threads.filter { $0.unreadCount > 0 }.count
+        let counts = unread > 0 ? String(localized: "\(threads.count) conversations, \(unread) unread")
+                                : String(localized: "\(threads.count) conversations")
+        guard isInInbox else { return counts }
+        let tab = selection == .inbox ? String(localized: "All") : currentMailboxTitle
+        return "\(tab) · \(counts)"
+    }
 
     var currentMailboxTitle: String {
         switch selection {

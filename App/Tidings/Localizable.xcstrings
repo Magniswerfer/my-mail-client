@@ -7710,6 +7710,16 @@
           }
         }
       }
+    },
+    "%lld conversations, %lld unread": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld samtaler, %lld ulæste"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

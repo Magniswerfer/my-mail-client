@@ -42,17 +42,20 @@ struct RulesView: View {
                 }
             }
             .navigationTitle("Rules")
-            .sheetButtons {
-                if !inSettings {
-                    Button("Close") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+            // Mac: its own window, so these sit in the compact title bar. iPhone: a sheet's toolbar.
+            .toolbar {
+                if !Platform.isMac && !inSettings {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
                 }
-            } trailing: {
-                Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
-                    .help("What your rules did, with Undo")
-                Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
-                    .keyboardShortcut("n", modifiers: [.command, .option])
-                    .help("New Rule (⌥⌘N)")
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
+                        .help("What your rules did, with Undo")
+                    Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
+                        .keyboardShortcut("n", modifiers: [.command, .option])
+                        .help("New Rule (⌥⌘N)")
+                }
             }
         }
         .macFrame(minWidth: 640, minHeight: 460)

@@ -186,9 +186,9 @@ struct ComposeView: View {
                         }
                     }
                     .labelsHidden()
-                    // Full width on the Mac; on iPhone the long "Name <address>" truncates (fixed,
-                    // it made the whole composer wider than the screen).
-                    .fixedSize(horizontal: !Platform.isPhone, vertical: false)
+                    // Not fixed: in a narrow pane (or on iPhone) the long "Name <address>" truncates
+                    // instead of making the whole composer wider than its space.
+                    .layoutPriority(-1)
                     Spacer(minLength: 0)
                 }
             }
@@ -249,7 +249,18 @@ struct ComposeView: View {
 
     // MARK: Action bar (embedded)
 
+    /// Labels where they fit; in a narrow reading pane every button becomes its icon (with its
+    /// tooltip) instead of the bar running off both edges.
     private func actionBar(_ extra: AnyView) -> some View {
+        ViewThatFits(in: .horizontal) {
+            actionRow(extra).labelStyle(.titleAndIcon)
+            actionRow(extra).labelStyle(.iconOnly)
+        }
+        .buttonStyle(.glass)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    private func actionRow(_ extra: AnyView) -> some View {
         HStack(spacing: 10) {
             // Icons (with tooltips): the bar sits in a pane, where the words crowded out the
             // host's own buttons next to Send.
@@ -268,9 +279,6 @@ struct ComposeView: View {
                 .buttonStyle(.glassProminent)
                 .fixedSize()
         }
-        .labelStyle(.titleAndIcon)
-        .buttonStyle(.glass)
-        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     // MARK: Toolbar
