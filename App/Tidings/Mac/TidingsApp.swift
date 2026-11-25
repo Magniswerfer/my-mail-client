@@ -50,6 +50,8 @@ struct TidingsApp: App {
                 Button("Reply to Introduction") { model.replyToIntroduction() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                 Divider()
+                Button("Mute Conversation") { model.toggleMute() }
+                    .disabled(model.targetThreads.isEmpty)
                 Button("Reply Later") { model.toggleReplyLater() }
                     .keyboardShortcut("l", modifiers: [.command, .option])
                 Button("Answer Reply Later Pile…") { model.startReplySession() }
@@ -386,6 +388,7 @@ struct RootView: View {
         case "a": model.compose(.replyAll)
         case "f": model.compose(.forward)
         case "l": model.toggleReplyLater()
+        case "M": model.toggleMute()
         case "?": model.isShortcutsShown = true
         default: return .ignored
         }

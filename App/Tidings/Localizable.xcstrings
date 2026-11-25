@@ -1,6 +1,86 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Unmuted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyd slået til"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd fra"
+          }
+        }
+      }
+    },
+    "Unmute": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd til"
+          }
+        }
+      }
+    },
+    "Muted. New replies skip the Inbox.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyd slået fra. Nye svar springer indbakken over."
+          }
+        }
+      }
+    },
+    "%lld conversations muted": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyd slået fra for %lld samtaler"
+          }
+        }
+      }
+    },
+    "Mute Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd fra for samtale"
+          }
+        }
+      }
+    },
+    "Unmute Conversation": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyd til for samtale"
+          }
+        }
+      }
+    },
+    "Muted: new replies skip the Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lyd slået fra: nye svar springer indbakken over"
+          }
+        }
+      }
+    },
     "Tidings tells %@ you want no more of their mail. Nothing opens.": {
       "localizations": {
         "da": {

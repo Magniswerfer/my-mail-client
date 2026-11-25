@@ -19,6 +19,14 @@ struct ReaderView: View {
                             .textSelection(.enabled)
                             .padding(.bottom, 4)
                         CategoryLine(message: first)
+                        if model.isMuted(threadID) {
+                            HStack(spacing: 6) {
+                                Label("Muted: new replies skip the Inbox", systemImage: "bell.slash")
+                                    .font(.callout).foregroundStyle(.secondary)
+                                Button("Unmute") { model.unmute(threadID: threadID) }
+                                    .buttonStyle(.link)
+                            }
+                        }
                         SummaryLine(threadID: threadID, messageCount: messages.count)
                         FollowUpBanner(threadID: threadID)
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {

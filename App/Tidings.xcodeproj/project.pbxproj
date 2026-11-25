@@ -48,6 +48,7 @@
 		8457FC7736CB752FE8A55EAD /* BundleSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6C0B607ECACC543430A53A /* BundleSchedule.swift */; };
 		846A2E5FD36CC42EBFB852D6 /* SmartFolderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 224ABE94EA64F0EB4460D8C8 /* SmartFolderViews.swift */; };
 		8575D7C1061414245FC0EEED /* AppModel+SmartFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */; };
+		8C6B64CB6A69AC6CF8F8338F /* AppModel+Mute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370FB84AB080DC7E92AAB295 /* AppModel+Mute.swift */; };
 		8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF8802ED3444B57EAECF71C /* ComposeModel.swift */; };
 		90913D2463B1317558749E39 /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A2F7CF09F07C275CE96257 /* Platform.swift */; };
 		924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069D57868E822292B8119DF2 /* AppModel+Invites.swift */; };
@@ -55,6 +56,7 @@
 		941987B2CC28100F18518280 /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
 		98741CDC0CC2211F1BDAF909 /* InviteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */; };
 		9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069D57868E822292B8119DF2 /* AppModel+Invites.swift */; };
+		9B187C02B0AFC59397932E2A /* AppModel+Mute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370FB84AB080DC7E92AAB295 /* AppModel+Mute.swift */; };
 		9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */; };
 		A6AEC3CD061B15B401752417 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
 		A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06689F64AABF98230DE8B430 /* ReaderView.swift */; };
@@ -97,6 +99,7 @@
 		2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCard.swift; sourceTree = "<group>"; };
 		2E6FE5C63F7F196349B28623 /* AppModel+Senders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Senders.swift"; sourceTree = "<group>"; };
 		3093CCE2E8C8B894ABAB5365 /* TidingsMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TidingsMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		370FB84AB080DC7E92AAB295 /* AppModel+Mute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Mute.swift"; sourceTree = "<group>"; };
 		40F3251184D524F3BBA0BD1D /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		48A2F7CF09F07C275CE96257 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
 		6DB767A15EA74F768D716A48 /* TidingsMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsMobileApp.swift; sourceTree = "<group>"; };
@@ -178,6 +181,7 @@
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
 				778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */,
+				370FB84AB080DC7E92AAB295 /* AppModel+Mute.swift */,
 				11CC3F3316BF8FC8367BE4BA /* AppModel+Rules.swift */,
 				2E6FE5C63F7F196349B28623 /* AppModel+Senders.swift */,
 				857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */,
@@ -383,6 +387,7 @@
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
 				E9C0BB88193E9E59D985DE08 /* AppModel+Links.swift in Sources */,
+				8C6B64CB6A69AC6CF8F8338F /* AppModel+Mute.swift in Sources */,
 				761447D37C9048D2BF85BAB8 /* AppModel+Rules.swift in Sources */,
 				74F75ED9A5B3460906737EC4 /* AppModel+Senders.swift in Sources */,
 				8575D7C1061414245FC0EEED /* AppModel+SmartFolders.swift in Sources */,
@@ -424,6 +429,7 @@
 				45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */,
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
 				EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */,
+				9B187C02B0AFC59397932E2A /* AppModel+Mute.swift in Sources */,
 				48FD1467A43E15F0FFF0584A /* AppModel+Rules.swift in Sources */,
 				C1B29A917C3E4020FE46FC3B /* AppModel+Senders.swift in Sources */,
 				35383B4FCF5D678A9D5CBC90 /* AppModel+SmartFolders.swift in Sources */,

@@ -1,0 +1,41 @@
+import Foundation
+import MailEngine
+
+/// Mute (SPEC §11): the conversation leaves the Inbox now, and new messages in it go straight
+/// to the Archive without a notification. Kept on this device.
+extension AppModel {
+    func isMuted(_ threadID: String) -> Bool {
+        (try? store.isMuted(threadID: threadID)) ?? false
+    }
+
+    /// ⇧M: mute (and mark done) the selected conversations, or unmute them if they all are.
+    func toggleMute(_ threads: [ThreadSummary]? = nil) {
+        let targets = threads ?? targetThreads
+        guard !targets.isEmpty else { return }
+        let ids = targets.map(\.threadID)
+        if ids.allSatisfy(isMuted) {
+            for id in ids { try? store.unmute(threadID: id) }
+            revision &+= 1
+            show(Toast(message: String(localized: "Unmuted"), symbol: "bell"))
+            return
+        }
+        for id in ids { try? store.mute(threadID: id) }
+        // Muting in the Inbox also takes it out of the Inbox; elsewhere it only mutes.
+        let box = sourceMailbox == "INBOX" ? perform(.done, on: targets, toast: false) : nil
+        let undo: @MainActor () -> Void = { [weak self] in
+            for id in ids { try? self?.store.unmute(threadID: id) }
+            if let box { self?.undo(box: box) }
+            self?.revision &+= 1
+        }
+        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
+        undoManager?.setActionName(String(localized: "Mute"))
+        show(Toast(message: ids.count == 1 ? String(localized: "Muted. New replies skip the Inbox.")
+                                          : String(localized: "\(ids.count) conversations muted"),
+                   symbol: "bell.slash", undoAction: undo))
+    }
+
+    func unmute(threadID: String) {
+        try? store.unmute(threadID: threadID)
+        revision &+= 1
+    }
+}

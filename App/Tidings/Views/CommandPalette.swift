@@ -81,6 +81,9 @@ extension AppModel {
         ]
         let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         list += [
+            AppCommand(id: "mute", title: thread.map { isMuted($0.threadID) } == true ? String(localized: "Unmute Conversation")
+                                                                                   : String(localized: "Mute Conversation"),
+                       symbol: "bell.slash", keys: "⇧M", isEnabled: hasSelection) { self.toggleMute() },
             AppCommand(id: "replyLater", title: thread?.isReplyLater == true ? String(localized: "Remove from Reply Later") : String(localized: "Reply Later"),
                        symbol: "arrowshape.turn.up.left.circle", keys: "L", isEnabled: hasSelection) { self.toggleReplyLater() },
             AppCommand(id: "replySession", title: String(localized: "Answer Reply Later Pile"), symbol: "arrowshape.turn.up.left.2.circle",

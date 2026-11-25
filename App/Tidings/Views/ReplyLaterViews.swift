@@ -233,7 +233,7 @@ struct ShortcutsView: View {
                 Entry(keys: "⌘K", title: String(localized: "Command Palette")),
                 Entry(keys: "?", title: String(localized: "Keyboard Shortcuts")),
             ]),
-            (String(localized: "Triage"), pick(["selectBelow", "done", "pin", "snooze", "replyLater", "moveFolder", "read", "inbox", "trash", "junk", "sweep", "undo"])
+            (String(localized: "Triage"), pick(["selectBelow", "done", "pin", "snooze", "mute", "replyLater", "moveFolder", "read", "inbox", "trash", "junk", "sweep", "undo"])
                 + [Entry(keys: "M", title: String(localized: "Move to Category…"))]),
             (String(localized: "Write"), pick(["compose", "reply", "replyAll", "forward", "introReply", "replySession"]) + [
                 Entry(keys: "⌘↩", title: AssistSettings.sendAndDone ? String(localized: "Send and Mark Done (replies)") : String(localized: "Send")),

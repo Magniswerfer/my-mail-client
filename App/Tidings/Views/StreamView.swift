@@ -326,6 +326,7 @@ struct ThreadActions: View {
         Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, thread: thread) }
         Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, thread: thread) }
         Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction(thread: thread) }
+        Button(model.isMuted(thread.threadID) ? "Unmute" : "Mute", systemImage: "bell.slash") { model.toggleMute([thread]) }
         Button(thread.isReplyLater ? "Remove from Reply Later" : "Reply Later", systemImage: "arrowshape.turn.up.left.circle") {
             model.perform(thread.isReplyLater ? .clearReplyLater : .replyLater, on: [thread])
         }
