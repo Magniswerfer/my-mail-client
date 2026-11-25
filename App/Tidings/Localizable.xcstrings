@@ -5470,6 +5470,136 @@
           }
         }
       }
+    },
+    "Waiting for Reply": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Venter på svar"
+          }
+        }
+      }
+    },
+    "Receipts This Year": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kvitteringer i år"
+          }
+        }
+      }
+    },
+    "Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smart mappe"
+          }
+        }
+      }
+    },
+    "Saved “%@” in the sidebar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemt “%@” i sidepanelet"
+          }
+        }
+      }
+    },
+    "Smart Folders": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smarte mapper"
+          }
+        }
+      }
+    },
+    "Delete Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet smart mappe"
+          }
+        }
+      }
+    },
+    "Conversations where you wrote last": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Samtaler, hvor du skrev sidst"
+          }
+        }
+      }
+    },
+    "Save as Smart Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem som smart mappe…"
+          }
+        }
+      }
+    },
+    "Keep this search in the sidebar (⌘S)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behold denne søgning i sidepanelet (⌘S)"
+          }
+        }
+      }
+    },
+    "Related": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relateret"
+          }
+        }
+      }
+    },
+    "Mail that means the same, in other words (on-device)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail, der betyder det samme med andre ord (på enheden)"
+          }
+        }
+      }
+    },
+    "Save as Smart Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem som smart mappe"
+          }
+        }
+      }
+    },
+    "Save Search as Smart Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem søgning som smart mappe…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

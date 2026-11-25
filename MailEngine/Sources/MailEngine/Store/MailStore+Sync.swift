@@ -152,16 +152,26 @@ extension MailStore {
 
     /// The stream: newest-first threads that have a message in `mailbox`.
     /// `ownAddresses` are left out of `participants`, so a thread reads "Anna", not "Anna, Magnus".
-    public func threads(mailbox: String, accountID: String? = nil, ownAddresses: Set<String> = [], limit: Int = 500) throws -> [ThreadSummary] {
-        try db.read { db in
-            var args: [any DatabaseValueConvertible] = [mailbox]
-            var accountFilter = ""
-            if let accountID { accountFilter = "AND accountID = ?"; args.append(accountID) }
+    /// With `threadIDs` instead of a mailbox: those conversations wherever they are (smart folders).
+    public func threads(mailbox: String?, threadIDs: [String]? = nil, accountID: String? = nil, ownAddresses: Set<String> = [],
+                        limit: Int = 500) throws -> [ThreadSummary] {
+        if let threadIDs, threadIDs.isEmpty { return [] }
+        return try db.read { db in
+            var args: [any DatabaseValueConvertible] = []
+            var filters: [String] = []
+            if let mailbox { filters.append("mailbox = ?"); args.append(mailbox) }
+            if let threadIDs {
+                filters.append("threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ",")))")
+                args += threadIDs as [any DatabaseValueConvertible]
+            }
+            if let accountID { filters.append("accountID = ?"); args.append(accountID) }
+            let accountFilter = ""
+            let whereClause = filters.isEmpty ? "1" : filters.joined(separator: " AND ")
             // A snoozed conversation that came back sorts by when it came back (surfacedAt).
             let latestRows = try Row.fetchAll(db, sql: """
                 SELECT m.*, t.arrived AS arrived FROM message m JOIN (
                     SELECT threadID, max(sortKey) AS k, max(coalesce(surfacedAt, date)) AS arrived FROM message
-                    WHERE mailbox = ? \(accountFilter) GROUP BY threadID
+                    WHERE \(whereClause) \(accountFilter) GROUP BY threadID
                 ) t ON m.sortKey = t.k
                 ORDER BY t.arrived DESC LIMIT \(limit)
                 """, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? }))

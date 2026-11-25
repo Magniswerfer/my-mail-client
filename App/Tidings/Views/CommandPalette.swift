@@ -61,6 +61,8 @@ extension AppModel {
         ]
         let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         list += [
+            AppCommand(id: "saveSearch", title: String(localized: "Save Search as Smart Folder…"), symbol: "folder.badge.plus",
+                       keys: "⌘S", isEnabled: isSearching) { self.isSavingSearch = true },
             AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: nil) {
                 self.isRulesShown = true
             },

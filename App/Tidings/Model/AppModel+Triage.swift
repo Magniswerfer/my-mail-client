@@ -71,7 +71,7 @@ extension AppModel {
     /// The mailbox the current view shows (where moves start from).
     var sourceMailbox: String {
         switch selection {
-        case .inbox, .category, .outbox: "INBOX"
+        case .inbox, .category, .outbox, .smart: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
         }

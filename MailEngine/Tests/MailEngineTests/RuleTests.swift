@@ -62,3 +62,33 @@ import Testing
                                                   target: "Transactions"), sentence: "x")?.actions == [.setCategory(.transactions)])
     }
 }
+
+@Suite struct SmartFolderTests {
+    let me = "magnus@example.dk"
+
+    @Test func savedFoldersAndThreadsAnywhere() throws {
+        let s = try MailStore(path: FileManager.default.temporaryDirectory.appendingPathComponent("smart-\(UUID()).sqlite").path)
+        try s.saveSmartFolders(SmartFolder.builtIns() + [SmartFolder(name: "Bank", query: "from:bank.dk")])
+        #expect(try s.smartFolders().map(\.name) == ["Bank"], "built-ins aren't stored")
+
+        let inbox = StoredMessage(accountID: "a", mailbox: "INBOX", uid: 1, messageID: "i@x", threadID: "t1", subject: "Hej",
+                                  fromAddress: "anna@x.dk", recipients: me, date: Date().addingTimeInterval(-7200))
+        let archived = StoredMessage(accountID: "a", mailbox: "Archive", uid: 2, messageID: "a@x", threadID: "t2", subject: "Faktura",
+                                     fromAddress: "bank@bank.dk", recipients: me, date: Date().addingTimeInterval(-3600))
+        let mine = StoredMessage(accountID: "a", mailbox: "Sent Messages", uid: 3, messageID: "s@x", threadID: "t1",
+                                 subject: "Re: Hej", fromAddress: me, recipients: "Anna <anna@x.dk>", date: Date())
+        try s.upsert([(inbox, "hej"), (archived, "faktura"), (mine, "svar")])
+        let threads = try s.threads(mailbox: nil, threadIDs: ["t2", "t1"], ownAddresses: [me])
+        #expect(threads.map(\.threadID) == ["t1", "t2"], "newest first, any mailbox")
+        #expect(try s.threads(mailbox: nil, threadIDs: []).isEmpty)
+        #expect(try s.waitingForReplyThreadIDs(ownAddresses: [me]) == ["t1"])
+        #expect(Set(try s.threadIDs(forMessageIDs: threads.compactMap(\.latest.id))) == ["t1", "t2"])
+        #expect(try s.threads(mailbox: "INBOX", ownAddresses: [me]).map(\.threadID) == ["t1"], "mailbox filter unchanged")
+    }
+
+    @Test func cosine() {
+        #expect(abs(VectorMath.cosine([1, 0], [1, 0]) - 1) < 0.0001)
+        #expect(abs(VectorMath.cosine([1, 0], [0, 1])) < 0.0001)
+        #expect(VectorMath.cosine([1], [1, 2]) == 0)
+    }
+}

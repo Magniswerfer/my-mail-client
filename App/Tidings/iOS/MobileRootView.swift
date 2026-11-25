@@ -72,6 +72,7 @@ struct MobileRootView: View {
             SnoozePicker().presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(isPresented: $model.isSavingSearch) { SaveSearchSheet().presentationDetents([.medium]) }
         .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
         .sheet(isPresented: $model.isRulesShown) {
             NavigationStack {

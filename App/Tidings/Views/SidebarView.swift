@@ -40,6 +40,20 @@ struct SidebarView: View {
                 }
             }
 
+            Section("Smart Folders") {
+                ForEach(model.smartFolders) { folder in
+                    Label(folder.localizedName, systemImage: folder.symbol)
+                        .badge(model.smartCounts[folder.id] ?? 0)
+                        .contextMenu {
+                            if !folder.isBuiltIn {
+                                Button("Delete Smart Folder", role: .destructive) { model.deleteSmartFolder(folder) }
+                            }
+                        }
+                        .help(folder.query == SmartFolder.waitingQuery ? String(localized: "Conversations where you wrote last") : folder.query)
+                        .tag(SidebarItem.smart(folder.id))
+                }
+            }
+
             // Drop a conversation here to move it (and teach the classifier).
             Section("Categories") {
                 ForEach(MailCategory.allCases, id: \.self) { category in

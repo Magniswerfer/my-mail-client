@@ -20,14 +20,32 @@ struct SearchResultsView: View {
                             .tag(hit.id)
                     }
                 } header: {
-                    Text(summary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text(summary)
+                        Spacer()
+                        Button("Save as Smart Folder…", systemImage: "folder.badge.plus") { model.isSavingSearch = true }
+                            .buttonStyle(.borderless)
+                            .help("Keep this search in the sidebar (⌘S)")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                if !model.relatedMessages.isEmpty {
+                    Section {
+                        ForEach(model.relatedMessages, id: \.id) { message in
+                            RelatedRow(message: message)
+                                .tag(message.id ?? 0)
+                        }
+                    } header: {
+                        Label("Related", systemImage: "sparkles")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .help("Mail that means the same, in other words (on-device)")
+                    }
                 }
             }
             .listStyle(.inset)
             .overlay {
-                if model.searchHits.isEmpty {
+                if model.searchHits.isEmpty && model.relatedMessages.isEmpty {
                     ContentUnavailableView.search(text: model.searchText)
                 }
             }
@@ -126,5 +144,52 @@ struct SearchHitRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// A semantic match: no snippet to highlight, so sender, subject and preview.
+struct RelatedRow: View {
+    let message: StoredMessage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(message.senderDisplay).font(.headline).lineLimit(1)
+                Spacer()
+                Text(MailDate.short(message.date)).font(.caption).foregroundStyle(.secondary)
+            }
+            Text(message.subject).font(.subheadline).lineLimit(1)
+            Text(message.preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// ⌘S: name the current search and keep it in the sidebar.
+struct SaveSearchSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save as Smart Folder").font(.headline)
+            Text(model.searchText).font(.callout.monospaced()).foregroundStyle(.secondary)
+            TextField("Name", text: $name).onSubmit(save)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save", action: save).keyboardShortcut(.defaultAction)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .macFrame(width: 380)
+        .onAppear { name = model.searchText.split(separator: " ").filter { !$0.contains(":") }.joined(separator: " ").capitalized }
+    }
+
+    private func save() {
+        model.saveCurrentSearch(named: name)
+        dismiss()
     }
 }

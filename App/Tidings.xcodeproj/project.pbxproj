@@ -27,10 +27,12 @@
 		5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
 		555940370E8B5E3FB27DA3B7 /* InviteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */; };
 		557C465CEAD2DD57F2D7AFC7 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07FA70D74524437B7FC3417 /* SearchResultsView.swift */; };
+		58FB8CB76DE361B36BCFF56E /* AppModel+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0652D1FD8B1B4208BB035D1C /* AppModel+Search.swift */; };
 		59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
 		5B9DD7572A39D23B982D71BB /* CalendarBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA0DB174A202248566399CE8 /* CalendarBridge.swift */; };
 		5E9CFF78EEEB4E8849552662 /* TidingsMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DB767A15EA74F768D716A48 /* TidingsMobileApp.swift */; };
 		61E99AD5221726DFA637F534 /* RulesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40D6E9799E037A8B47DD70D /* RulesViews.swift */; };
+		646A784E9699FA3C53A5B9C2 /* AppModel+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0652D1FD8B1B4208BB035D1C /* AppModel+Search.swift */; };
 		66C9AEC8FB6D3AFFAC4652AC /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */; };
 		6B457C0BEAF326BB7325AA69 /* TidingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4D12F02B8A7B485182F3009 /* TidingsApp.swift */; };
 		6C182A0ACDF392D74348546F /* ReplyLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6095CA07557A66A9A2AC3A3 /* ReplyLaterViews.swift */; };
@@ -72,6 +74,7 @@
 
 /* Begin PBXFileReference section */
 		02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPalette.swift; sourceTree = "<group>"; };
+		0652D1FD8B1B4208BB035D1C /* AppModel+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Search.swift"; sourceTree = "<group>"; };
 		06689F64AABF98230DE8B430 /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Triage.swift"; sourceTree = "<group>"; };
 		069D57868E822292B8119DF2 /* AppModel+Invites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Invites.swift"; sourceTree = "<group>"; };
@@ -157,6 +160,7 @@
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
 				778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */,
 				11CC3F3316BF8FC8367BE4BA /* AppModel+Rules.swift */,
+				0652D1FD8B1B4208BB035D1C /* AppModel+Search.swift */,
 				067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */,
 				DB6C0B607ECACC543430A53A /* BundleSchedule.swift */,
 			);
@@ -360,6 +364,7 @@
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
 				E9C0BB88193E9E59D985DE08 /* AppModel+Links.swift in Sources */,
 				761447D37C9048D2BF85BAB8 /* AppModel+Rules.swift in Sources */,
+				58FB8CB76DE361B36BCFF56E /* AppModel+Search.swift in Sources */,
 				AA16563D6B5ED6BE93A1CB74 /* AppModel+Triage.swift in Sources */,
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
 				F89FD41D7C64B5E4F269658C /* AssistViews.swift in Sources */,
@@ -395,6 +400,7 @@
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
 				EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */,
 				48FD1467A43E15F0FFF0584A /* AppModel+Rules.swift in Sources */,
+				646A784E9699FA3C53A5B9C2 /* AppModel+Search.swift in Sources */,
 				5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */,
 				FB6B4F1223C73D387E481AE4 /* AppModel.swift in Sources */,
 				22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */,

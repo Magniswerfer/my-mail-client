@@ -9,6 +9,8 @@ enum SidebarItem: Hashable {
     case outbox
     case category(MailCategory)
     case mailbox(accountID: String, path: String)
+    /// A saved search (or a built-in one) by id.
+    case smart(String)
 }
 
 /// One row in the stream: a conversation, or an Inbox-style bundle of conversations.
@@ -112,6 +114,13 @@ final class AppModel {
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
+    // Smart folders and semantic search (M5)
+    var smartFolders: [SmartFolder] = []
+    var smartCounts: [String: Int] = [:]
+    var relatedMessages: [StoredMessage] = []
+    @ObservationIgnored var relatedTask: Task<Void, Never>?
+    var isSavingSearch = false
+
     // Rules (M5)
     var rules: [MailRule] = []
     var ruleEditing: RuleEditing?
@@ -195,6 +204,7 @@ final class AppModel {
         scheduleDeliveryRefresh()
         Self.shared = self
         loadRules()
+        loadSmartFolders()
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
     }
 
@@ -301,6 +311,7 @@ final class AppModel {
             scheduleRefinement()
             scheduleRules()
             scheduleAutoDrafts()
+            refreshSmartCounts()
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message
@@ -354,6 +365,7 @@ final class AppModel {
         case .inbox: String(localized: "Inbox")
         case .snoozed: String(localized: "Snoozed")
         case .outbox: String(localized: "Outbox")
+        case .smart(let id): smartFolders.first { $0.id == id }.map(\.localizedName) ?? String(localized: "Smart Folder")
         case .category(let c): c.title
         case .mailbox(let accountID, let path):
             mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
@@ -377,6 +389,8 @@ final class AppModel {
                 threads = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses).filter { $0.latest.category == category }
             case .mailbox(let accountID, let path):
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
+            case .smart(let id):
+                threads = smartFolders.first { $0.id == id }.map(smartThreads) ?? []
             }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
@@ -507,6 +521,7 @@ final class AppModel {
         guard !query.isEmpty else {
             searchHits = []
             facets = nil
+            relatedMessages = []
             return
         }
         let engine = SearchEngine(store: store)
@@ -519,6 +534,7 @@ final class AppModel {
             searchHits = []
             facets = nil
         }
+        scheduleRelated()
     }
 
     func addSearchFilter(_ token: String) {

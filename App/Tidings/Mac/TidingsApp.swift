@@ -92,6 +92,9 @@ struct TidingsApp: App {
                     .keyboardShortcut("/", modifiers: .command)
             }
             CommandMenu("Mailbox") {
+                Button("Save Search as Smart Folder…") { model.isSavingSearch = true }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(!model.isSearching)
                 Button("Check for New Mail") { model.checkForNewMail() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                 Divider()
@@ -188,6 +191,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(isPresented: $model.isSavingSearch) { SaveSearchSheet() }
         .sheet(item: $model.ruleEditing) { editing in RuleEditor(editing: editing).environment(model) }
         .sheet(isPresented: $model.isRulesShown) {
             NavigationStack {
