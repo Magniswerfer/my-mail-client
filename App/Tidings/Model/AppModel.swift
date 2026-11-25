@@ -142,6 +142,17 @@ final class AppModel {
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
+    // Rules (SPEC §6)
+    var rules: [Rule] = []
+    /// Conversations each rule acted on in the last 7 days.
+    var ruleCounts: [String: Int] = [:]
+    var isRulesShown = false
+    /// The rule open in the editor (new or existing).
+    var editingRule: Rule?
+    @ObservationIgnored var ruleTask: Task<Void, Never>?
+    /// Decides "about …" conditions on device (M5.3); nil until then.
+    @ObservationIgnored var ruleJudge: (any RuleJudge)?
+
     // Contact sidebar
     var isContactPanelShown = false
     /// Whose profile the panel shows; nil follows the open conversation.
@@ -228,6 +239,7 @@ final class AppModel {
         }
         reload()
         reloadOutbox()
+        loadRules()
         scheduleDeliveryRefresh()
         Self.shared = self
     }
@@ -350,9 +362,14 @@ final class AppModel {
         }
     }
 
-    /// One background sorting pass after each sync, never two at once.
+    /// One background sorting pass after each sync, never two at once; then your rules, which
+    /// come after AI sorting so they can read and override the category (SPEC §6).
     func scheduleRefinement() {
-        guard refinementTask == nil, let refinement else { return }
+        guard refinementTask == nil else { return }
+        guard let refinement else {
+            scheduleRules()
+            return
+        }
         isRefining = true
         refinementTask = Task { [weak self] in
             let report = try? await refinement.run()
@@ -360,6 +377,7 @@ final class AppModel {
             self.isRefining = false
             self.refinementTask = nil
             if (report?.changed ?? 0) > 0 { self.reload() }
+            self.scheduleRules()
         }
     }
 

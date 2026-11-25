@@ -101,6 +101,11 @@ struct TidingsApp: App {
                 Button("Sweep Inbox") { model.requestSweep() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
+                Divider()
+                Button("Rules…") { model.isRulesShown = true }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                Button("New Rule from Message…") { model.newRule(from: model.targetThreads.first) }
+                    .disabled(model.targetThreads.isEmpty)
             }
         }
 
@@ -191,6 +196,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
+        .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
         .sheet(item: $model.replySession) { session in
             ReplySessionView(session: session).environment(model)
         }
@@ -281,7 +287,7 @@ struct RootView: View {
     /// back either. Either way J/K/E would stop working until you clicked the list.
     private var isOverlayOpen: Bool {
         model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
-            || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil
+            || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

@@ -241,7 +241,7 @@ struct ShortcutsView: View {
                 Entry(keys: "⌥⌘A", title: String(localized: "Share Availability")),
                 Entry(keys: "⌘⇧A", title: String(localized: "Attach Files")),
             ]),
-            (String(localized: "Other"), pick(["inviteAccept", "inviteMaybe", "inviteDecline", "contact", "addReminder", "checkMail"])),
+            (String(localized: "Other"), pick(["inviteAccept", "inviteMaybe", "inviteDecline", "contact", "addReminder", "checkMail", "rules"])),
         ]
     }
 

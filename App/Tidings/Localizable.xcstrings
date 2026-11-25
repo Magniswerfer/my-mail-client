@@ -1,6 +1,776 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Couldn't save your rules: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke gemme dine regler: %@"
+          }
+        }
+      }
+    },
+    "Mail from %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mail fra %@"
+          }
+        }
+      }
+    },
+    "“%@” matched nothing in the Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” matchede intet i indbakken"
+          }
+        }
+      }
+    },
+    "“%@” acted on %lld conversations": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” handlede på %lld samtaler"
+          }
+        }
+      }
+    },
+    "Couldn't undo: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke fortryde: %@"
+          }
+        }
+      }
+    },
+    "Sender %@ “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsender %@ “%@”"
+          }
+        }
+      }
+    },
+    "Recipient %@ “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modtager %@ “%@”"
+          }
+        }
+      }
+    },
+    "Subject %@ “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emne %@ “%@”"
+          }
+        }
+      }
+    },
+    "Text %@ “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tekst %@ “%@”"
+          }
+        }
+      }
+    },
+    "Category is %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategori er %@"
+          }
+        }
+      }
+    },
+    "Has attachments": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har vedhæftninger"
+          }
+        }
+      }
+    },
+    "Has no attachments": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Har ingen vedhæftninger"
+          }
+        }
+      }
+    },
+    "About “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handler om “%@”"
+          }
+        }
+      }
+    },
+    "contains": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "indeholder"
+          }
+        }
+      }
+    },
+    "doesn't contain": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "indeholder ikke"
+          }
+        }
+      }
+    },
+    "is": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "er"
+          }
+        }
+      }
+    },
+    "begins with": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "begynder med"
+          }
+        }
+      }
+    },
+    "ends with": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "slutter med"
+          }
+        }
+      }
+    },
+    "Mark as read": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markér som læst"
+          }
+        }
+      }
+    },
+    "Mark done": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markér som færdig"
+          }
+        }
+      }
+    },
+    "Snooze for %lld hours": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt i %lld timer"
+          }
+        }
+      }
+    },
+    "Snooze for someday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udsæt til en dag"
+          }
+        }
+      }
+    },
+    "Move to folder %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til mappen %@"
+          }
+        }
+      }
+    },
+    "Notify me": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Giv mig besked"
+          }
+        }
+      }
+    },
+    " and ": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " og "
+          }
+        }
+      }
+    },
+    " or ": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " eller "
+          }
+        }
+      }
+    },
+    "No rules yet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen regler endnu"
+          }
+        }
+      }
+    },
+    "Rules sort new mail as it arrives, after Tidings' own sorting: move it to a category or folder, pin it, mark it read or done.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler sorterer ny mail, når den kommer, efter Tidings' egen sortering: flyt den til en kategori eller mappe, fastgør den, markér den som læst eller færdig."
+          }
+        }
+      }
+    },
+    "New Rule": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny regel"
+          }
+        }
+      }
+    },
+    "Rules": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler"
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historik"
+          }
+        }
+      }
+    },
+    "What your rules did, with Undo": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hvad dine regler har gjort, med Fortryd"
+          }
+        }
+      }
+    },
+    "New Rule (⌥⌘N)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny regel (⌥⌘N)"
+          }
+        }
+      }
+    },
+    "Edit…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redigér…"
+          }
+        }
+      }
+    },
+    "Run on Inbox Now": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kør på indbakken nu"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet"
+          }
+        }
+      }
+    },
+    "Untitled rule": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regel uden navn"
+          }
+        }
+      }
+    },
+    "Stops processing more rules": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopper behandling af flere regler"
+          }
+        }
+      }
+    },
+    "%lld this week": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld denne uge"
+          }
+        }
+      }
+    },
+    "Shoe shops to Advertising": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skobutikker til Reklamer"
+          }
+        }
+      }
+    },
+    "When": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når"
+          }
+        }
+      }
+    },
+    "All conditions match": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle betingelser passer"
+          }
+        }
+      }
+    },
+    "Any condition matches": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mindst én betingelse passer"
+          }
+        }
+      }
+    },
+    "Add Condition": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj betingelse"
+          }
+        }
+      }
+    },
+    "Conditions": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betingelser"
+          }
+        }
+      }
+    },
+    "Add Action": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj handling"
+          }
+        }
+      }
+    },
+    "Stop processing more rules": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop behandling af flere regler"
+          }
+        }
+      }
+    },
+    "Actions": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handlinger"
+          }
+        }
+      }
+    },
+    "Rules run on new mail in the Inbox, after Tidings' own sorting. Only the first action that takes mail out of the Inbox (Done, Snooze, Move to Folder) runs.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler kører på ny mail i indbakken, efter Tidings' egen sortering. Kun den første handling, der fjerner mail fra indbakken (Færdig, Udsæt, Flyt til mappe), udføres."
+          }
+        }
+      }
+    },
+    "Preview": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forhåndsvisning"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gem"
+          }
+        }
+      }
+    },
+    "Add a condition to see what this rule would match.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj en betingelse for at se, hvad reglen ville ramme."
+          }
+        }
+      }
+    },
+    "Looking through the Inbox…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kigger indbakken igennem…"
+          }
+        }
+      }
+    },
+    "Matches nothing in the Inbox right now.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rammer intet i indbakken lige nu."
+          }
+        }
+      }
+    },
+    "Matches %lld messages in the Inbox right now.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rammer %lld beskeder i indbakken lige nu."
+          }
+        }
+      }
+    },
+    "Also apply it to these now": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anvend den også på disse nu"
+          }
+        }
+      }
+    },
+    "Remove": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern"
+          }
+        }
+      }
+    },
+    "Sender": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afsender"
+          }
+        }
+      }
+    },
+    "Recipient": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modtager"
+          }
+        }
+      }
+    },
+    "Subject or text": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Emne eller tekst"
+          }
+        }
+      }
+    },
+    "Category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kategori"
+          }
+        }
+      }
+    },
+    "About (in your words)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handler om (med dine ord)"
+          }
+        }
+      }
+    },
+    "has some": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "har nogle"
+          }
+        }
+      }
+    },
+    "has none": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "har ingen"
+          }
+        }
+      }
+    },
+    "shoes and sneakers": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sko og sneakers"
+          }
+        }
+      }
+    },
+    "Move to category": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til kategori"
+          }
+        }
+      }
+    },
+    "Choose…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vælg…"
+          }
+        }
+      }
+    },
+    "someday": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en dag"
+          }
+        }
+      }
+    },
+    "for %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "i %@"
+          }
+        }
+      }
+    },
+    "Nothing yet": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet endnu"
+          }
+        }
+      }
+    },
+    "When a rule acts on new mail, it shows up here.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når en regel handler på ny mail, vises det her."
+          }
+        }
+      }
+    },
+    "Rule History": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regelhistorik"
+          }
+        }
+      }
+    },
+    "Undone": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortrudt"
+          }
+        }
+      }
+    },
+    "Rules…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler…"
+          }
+        }
+      }
+    },
+    "New Rule from Message…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny regel ud fra besked…"
+          }
+        }
+      }
+    },
+    "New Rule…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny regel…"
+          }
+        }
+      }
+    },
+    "Create Rule…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opret regel…"
+          }
+        }
+      }
+    },
     "Your rule “%@”": {
       "localizations": {
         "da": {

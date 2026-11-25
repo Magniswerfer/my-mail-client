@@ -47,6 +47,12 @@ extension AppModel {
                        keys: "⌘⇧E", isEnabled: selection == .inbox) { self.requestSweep() },
             AppCommand(id: "moveFolder", title: String(localized: "Move to Folder…"), symbol: "folder", keys: "V",
                        isEnabled: hasSelection) { self.isFolderPickerShown = true },
+            AppCommand(id: "rules", title: String(localized: "Rules…"), symbol: "line.3.horizontal.decrease.circle", keys: "⌥⌘R") {
+                self.isRulesShown = true
+            },
+            AppCommand(id: "newRule", title: String(localized: "New Rule…"), symbol: "plus.circle", keys: nil) { self.newRule() },
+            AppCommand(id: "newRuleFromMessage", title: String(localized: "New Rule from Message…"), symbol: "line.3.horizontal.decrease.circle.fill",
+                       keys: nil, isEnabled: hasSelection) { self.newRule(from: self.targetThreads.first) },
             AppCommand(id: "checkMail", title: String(localized: "Check for New Mail"), symbol: "arrow.clockwise", keys: "⌘⇧N") {
                 self.checkForNewMail()
             },
