@@ -53,6 +53,7 @@ struct NotificationSettings: View {
             PushServerSection()
         }
         .formStyle(.grouped)
+        .modifier(PushServerPresentations())
     }
 
     private func addVIP() {

@@ -9,8 +9,6 @@ struct PushServerSection: View {
     @State private var secret = ""
     @State private var isWorking = false
     @State private var error: String?
-    @State private var passwordFor: AccountConfig?
-    @State private var confirmUnpair = false
 
     var body: some View {
         Section {
@@ -31,7 +29,7 @@ struct PushServerSection: View {
                 HStack {
                     Button("Refresh") { Task { await model.refreshPushServerStatus() } }
                     Spacer()
-                    Button("Unpair…", role: .destructive) { confirmUnpair = true }
+                    Button("Unpair…", role: .destructive) { model.isConfirmingPushUnpair = true }
                 }
             } else {
                 TextField("Server address", text: $address, prompt: Text(verbatim: "https://push.example.com"))
@@ -51,16 +49,6 @@ struct PushServerSection: View {
         } footer: {
             Text("Your own always-on server notifies this iPhone about new mail, wakes snoozes and sends mail you scheduled, even when no device is awake. Each account needs a separate app-specific password for the server, so you can revoke it without touching your devices.")
         }
-        .task { if model.isPushServerPaired { await model.refreshPushServerStatus() } }
-        .sheet(item: $passwordFor) { account in
-            PushServerPasswordSheet(account: account).environment(model)
-        }
-        .confirmationDialog("Unpair from the push server?", isPresented: $confirmUnpair) {
-            Button("Unpair This Device", role: .destructive) { Task { await model.unpairPushServer(everywhere: false) } }
-            Button("Unpair All Devices", role: .destructive) { Task { await model.unpairPushServer(everywhere: true) } }
-        } message: {
-            Text("Mail you scheduled goes back to this device. The server keeps your accounts until you remove them there.")
-        }
     }
 
     private func accountRow(_ account: AccountConfig, status: PushAPI.AccountStatus?) -> some View {
@@ -70,7 +58,7 @@ struct PushServerSection: View {
                 Text(statusText(status)).font(.caption).foregroundStyle(status?.state == "failed" ? .red : .secondary)
             }
             Spacer()
-            Button(status?.hasPassword == true ? "Change Password…" : "Add Password…") { passwordFor = account }
+            Button(status?.hasPassword == true ? "Change Password…" : "Add Password…") { model.pushPasswordAccount = account }
         }
     }
 
@@ -155,9 +143,32 @@ struct PushServerSheet: View {
         NavigationStack {
             Form { PushServerSection() }
                 .formStyle(.grouped)
+                .modifier(PushServerPresentations())
                 .navigationTitle("Push Server")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .frame(minWidth: 460, minHeight: 360)
+    }
+}
+
+/// The push server section's sheet, dialog and status refresh. Applied to the whole settings
+/// page, not the section: the section's rows are rebuilt as the list updates, and a sheet hung
+/// on them closes on its own (iPhone).
+struct PushServerPresentations: ViewModifier {
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        content
+            .task { if model.isPushServerPaired { await model.refreshPushServerStatus() } }
+            .sheet(item: $model.pushPasswordAccount) { account in
+                PushServerPasswordSheet(account: account).environment(model)
+            }
+            .confirmationDialog("Unpair from the push server?", isPresented: $model.isConfirmingPushUnpair) {
+                Button("Unpair This Device", role: .destructive) { Task { await model.unpairPushServer(everywhere: false) } }
+                Button("Unpair All Devices", role: .destructive) { Task { await model.unpairPushServer(everywhere: true) } }
+            } message: {
+                Text("Mail you scheduled goes back to this device. The server keeps your accounts until you remove them there.")
+            }
     }
 }

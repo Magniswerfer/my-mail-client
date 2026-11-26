@@ -203,6 +203,10 @@ final class AppModel {
     // The push server (ADR 0007)
     var pushServerStatus: PushAPI.ServerStatus?
     var pushServerError: String?
+    /// The account whose push server password is being entered, and "Unpair?" showing. Kept here,
+    /// not in the settings rows: a list rebuilds its rows and would close the sheet with them.
+    var pushPasswordAccount: AccountConfig?
+    var isConfirmingPushUnpair = false
     @ObservationIgnored var pushUploadTask: Task<Void, Never>?
     @ObservationIgnored lazy var notifier = MailNotifier(model: self)
 
