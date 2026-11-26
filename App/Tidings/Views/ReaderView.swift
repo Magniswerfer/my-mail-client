@@ -34,6 +34,7 @@ struct ReaderView: View {
                         if let risky = messages.last(where: { $0.riskLevel > .none }) {
                             RiskBanner(message: risky)
                         }
+                        JunkBanner(threadID: threadID, messages: messages)
                         if let found = model.invite(inThread: threadID) {
                             InviteCard(message: found.message, invite: found.invite)
                         }
@@ -551,52 +552,204 @@ struct CategoryLine: View {
     }
 }
 
-/// M: move the selected conversation to a category (1–6). "Always for this sender" is one tick away.
+/// Somewhere a conversation can be moved: a built-in category or one of yours.
+enum CategoryTarget: Hashable, Identifiable {
+    case builtIn(MailCategory)
+    case custom(AICategory)
+
+    var id: String {
+        switch self {
+        case .builtIn(let c): "c.\(c.rawValue)"
+        case .custom(let c): "ai.\(c.id)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .builtIn(let c): c.title
+        case .custom(let c): c.name
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .builtIn(let c): c.symbol
+        case .custom(let c): c.symbol
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .builtIn(let c): c.tint
+        case .custom: .indigo
+        }
+    }
+}
+
+extension AppModel {
+    /// The built-in categories, then yours, in tab order.
+    var categoryTargets: [CategoryTarget] {
+        MailCategory.allCases.map(CategoryTarget.builtIn) + aiCategories.map(CategoryTarget.custom)
+    }
+
+    /// Whether these conversations are all there already.
+    func isCurrent(_ target: CategoryTarget, for threads: [ThreadSummary]) -> Bool {
+        switch target {
+        case .builtIn(let c): !threads.isEmpty && threads.allSatisfy { $0.latest.category == c }
+        case .custom(let c): allIn(aiCategory: c.id, threads)
+        }
+    }
+
+    func move(_ threads: [ThreadSummary], to target: CategoryTarget) {
+        switch target {
+        case .builtIn(let c): moveConversations(threads, to: c)
+        case .custom(let c): moveConversations(threads, toAICategory: c.id)
+        }
+    }
+
+    func moveSender(of thread: ThreadSummary? = nil, to target: CategoryTarget) {
+        switch target {
+        case .builtIn(let c): moveSender(to: c, thread: thread)
+        case .custom(let c): moveSender(toAICategory: c.id, thread: thread)
+        }
+    }
+}
+
+/// M: move the selected conversation to a category. Type to filter, ↑↓ to choose, Return to
+/// move it, ⌘Return to move it and the sender's mail from now on. 1–9 pick directly.
 struct CategoryPicker: View {
     @Environment(AppModel.self) private var model
     @State private var alwaysForSender = false
+    @State private var query = ""
+    @State private var highlighted: CategoryTarget?
+    @FocusState private var focused: Bool
 
     var body: some View {
-        let thread = model.targetThreads.first
+        let threads = model.targetThreads
+        let thread = threads.first
+        let all = model.categoryTargets
+        let matches = filtered(all)
         VStack(alignment: .leading, spacing: 12) {
-            Text("Move to…").font(.headline)
-            VStack(spacing: 2) {
-                ForEach(Array(MailCategory.allCases.enumerated()), id: \.element) { index, category in
-                    Button { move(to: category) } label: {
-                        HStack {
-                            Image(systemName: category.symbol).foregroundStyle(category.tint).frame(width: 22)
-                            Text(category.title)
-                            if category == thread?.latest.category {
-                                Text("Current").font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text("\(index + 1)").font(.caption.monospaced()).foregroundStyle(.tertiary)
-                        }
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
+            #if os(macOS)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Move to…", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.title3)
+                    .focused($focused)
+                    .onSubmit { moveHighlighted(matches, always: alwaysForSender) }
+                    .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+                        guard let n = Int(press.characters), n >= 1, n <= all.count else { return .ignored }
+                        move(to: all[n - 1], always: alwaysForSender)
+                        return .handled
                     }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [])
-                    .disabled(category == thread?.latest.category && !alwaysForSender)
+            }
+            #else
+            Text("Move to…").font(.headline)
+            #endif
+            if matches.isEmpty {
+                Text("No category matches “\(query)”").foregroundStyle(.secondary).padding(.vertical, 5)
+            } else {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(matches) { target in
+                            row(target, number: all.firstIndex(of: target).map { $0 + 1 },
+                                isCurrent: model.isCurrent(target, for: threads),
+                                isHighlighted: target == current(matches))
+                        }
+                    }
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: 420)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Toggle(isOn: $alwaysForSender) {
+                HStack {
+                    Text("Always for \(thread?.latest.senderDisplay ?? "this sender")")
+                    #if os(macOS)
+                    Spacer()
+                    Text("⌘↩").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                    #endif
                 }
             }
-            Toggle("Always for \(thread?.latest.senderDisplay ?? "this sender")", isOn: $alwaysForSender)
-                #if os(macOS)
-                .toggleStyle(.checkbox)
-                #endif
+            #if os(macOS)
+            .toggleStyle(.checkbox)
+            #endif
             Text(alwaysForSender
                  ? "Their existing and future mail moves too."
                  : "Tidings learns from this. Move the same sender twice and it becomes a rule.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack { Spacer(); Button("Cancel") { model.isCategoryPickerShown = false }.keyboardShortcut(.cancelAction) }
+            HStack {
+                Spacer()
+                Button("Cancel") { model.isCategoryPickerShown = false }.keyboardShortcut(.cancelAction)
+                // ⌘Return: always for the sender, whatever the box says.
+                Button("Always") { moveHighlighted(matches, always: true) }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .hidden().frame(width: 0)
+            }
         }
         .padding(20)
-        .macFrame(width: 340)
+        .macFrame(width: 360)
+        .onAppear { focused = true }
+        .onChange(of: query) { highlighted = nil }
+        .onKeyPress(.downArrow) { step(1, in: matches); return .handled }
+        .onKeyPress(.upArrow) { step(-1, in: matches); return .handled }
     }
 
-    private func move(to category: MailCategory) {
-        if alwaysForSender { model.moveSender(to: category) } else { model.moveConversations(model.targetThreads, to: category) }
+    private func row(_ target: CategoryTarget, number: Int?, isCurrent: Bool, isHighlighted: Bool) -> some View {
+        let disabled = isCurrent && !alwaysForSender
+        return Button { move(to: target, always: alwaysForSender) } label: {
+            HStack {
+                Image(systemName: target.symbol).foregroundStyle(target.tint).frame(width: 22)
+                Text(target.title)
+                if isCurrent {
+                    Text("Current").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let number, number <= 9 {
+                    Text("\(number)").font(.caption.monospaced()).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 5).padding(.horizontal, 6)
+            .background(isHighlighted ? Color.accentColor.opacity(0.2) : .clear, in: .rect(cornerRadius: 7))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+
+    /// The other categories, or the ones whose name has every typed word.
+    private func filtered(_ all: [CategoryTarget]) -> [CategoryTarget] {
+        let words = query.split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return all }
+        return all.filter { target in words.allSatisfy { target.title.localizedStandardContains($0) } }
+    }
+
+    /// What Return moves to: the one you arrowed to, else the first that isn't where it is now.
+    private func current(_ matches: [CategoryTarget]) -> CategoryTarget? {
+        if let highlighted, matches.contains(highlighted) { return highlighted }
+        return matches.first { !model.isCurrent($0, for: model.targetThreads) } ?? matches.first
+    }
+
+    private func step(_ delta: Int, in matches: [CategoryTarget]) {
+        guard !matches.isEmpty else { return }
+        let index = current(matches).flatMap(matches.firstIndex) ?? 0
+        highlighted = matches[min(max(index + delta, 0), matches.count - 1)]
+    }
+
+    private func moveHighlighted(_ matches: [CategoryTarget], always: Bool) {
+        guard let target = current(matches) else { return }
+        move(to: target, always: always)
+    }
+
+    private func move(to target: CategoryTarget, always: Bool) {
+        if always {
+            model.moveSender(to: target)
+        } else {
+            guard !model.isCurrent(target, for: model.targetThreads) else { return }
+            model.move(model.targetThreads, to: target)
+        }
     }
 }
 

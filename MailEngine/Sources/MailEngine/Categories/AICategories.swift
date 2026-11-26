@@ -12,6 +12,8 @@ public struct AICategory: Codable, Sendable, Hashable, Identifiable {
     public var about: AboutCondition
     public var symbol: String
     public var createdAt: Date
+    /// "Always for this sender": their mail goes in without asking the model (lowercased).
+    public var senders: [String] = []
 
     public init(id: String = UUID().uuidString, name: String, description: String, symbol: String = "sparkles",
                 createdAt: Date = Date()) {
@@ -21,6 +23,18 @@ public struct AICategory: Codable, Sendable, Hashable, Identifiable {
         self.symbol = symbol
         self.createdAt = createdAt
     }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        about = try c.decode(AboutCondition.self, forKey: .about)
+        symbol = try c.decode(String.self, forKey: .symbol)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        senders = try c.decodeIfPresent([String].self, forKey: .senders) ?? []
+    }
+
+    public func includesSender(_ address: String) -> Bool { senders.contains(address.lowercased()) }
 
     /// As a rule, so the rule engine's judge (embedding pre-filter + on-device model) decides.
     public var asRule: Rule {
@@ -112,13 +126,47 @@ extension MailStore {
         }
     }
 
-    /// The model's decision. Never overrides yours.
-    public func assign(threadID: String, to id: String) throws {
+    /// The model's decision (or a sender you said "always" for: `byYou`). Never overrides a
+    /// choice you made for that conversation.
+    public func assign(threadID: String, to id: String, byYou: Bool = false) throws {
         try db.write { db in
             try db.execute(sql: """
-                INSERT INTO aiCategoryMember (categoryID, threadID, source, at) VALUES (?, ?, 0, ?)
-                ON CONFLICT(categoryID, threadID) DO NOTHING
-                """, arguments: [id, threadID, Date()])
+                INSERT INTO aiCategoryMember (categoryID, threadID, source, at) VALUES (?, ?, ?, ?)
+                ON CONFLICT(categoryID, threadID) DO \(byYou ? "UPDATE SET source = 1 WHERE source = 0" : "NOTHING")
+                """, arguments: [id, threadID, byYou ? 1 : 0, Date()])
+        }
+    }
+
+    /// How a conversation is in a category: 1 you, 0 the model, -1 you took it out, nil never.
+    public func membershipSource(threadID: String, categoryID: String) throws -> Int? {
+        try db.read {
+            try Int.fetchOne($0, sql: "SELECT source FROM aiCategoryMember WHERE categoryID = ? AND threadID = ?",
+                             arguments: [categoryID, threadID])
+        }
+    }
+
+    /// Puts a membership back as `membershipSource` found it (undo).
+    public func restoreMembership(threadID: String, categoryID: String, source: Int?) throws {
+        try db.write { db in
+            if let source {
+                try db.execute(sql: """
+                    INSERT INTO aiCategoryMember (categoryID, threadID, source, at) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(categoryID, threadID) DO UPDATE SET source = excluded.source
+                    """, arguments: [categoryID, threadID, source, Date()])
+            } else {
+                try db.execute(sql: "DELETE FROM aiCategoryMember WHERE categoryID = ? AND threadID = ?",
+                               arguments: [categoryID, threadID])
+            }
+        }
+    }
+
+    /// Conversations with mail from `address` (any folder but Trash/Junk), for "always for".
+    public func threadIDs(fromSender address: String) throws -> [String] {
+        try db.read {
+            try String.fetchAll($0, sql: """
+                SELECT DISTINCT threadID FROM message WHERE lower(fromAddress) = ? AND threadID IS NOT NULL
+                  AND mailbox NOT IN (SELECT path FROM mailboxState WHERE role IN ('trash', 'junk'))
+                """, arguments: [address.lowercased()])
         }
     }
 

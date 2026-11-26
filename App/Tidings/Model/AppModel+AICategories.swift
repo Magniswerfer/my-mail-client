@@ -120,10 +120,12 @@ extension AppModel {
     // MARK: Sorting (on device)
 
     /// After each sync: new Inbox mail through every AI category. A new category first sorts
-    /// your recent Inbox. Runs only with the on-device model (the judge).
+    /// your recent Inbox. Senders you chose "always" for go in directly; the rest need the
+    /// on-device model (the judge).
     func scheduleAICategories() {
-        guard aiCategoryTask == nil, !aiCategories.isEmpty, ruleJudge != nil else { return }
-        let categories = aiCategories
+        let hasJudge = ruleJudge != nil
+        let categories = aiCategories.filter { hasJudge || !$0.senders.isEmpty }
+        guard aiCategoryTask == nil, !categories.isEmpty else { return }
         let engine = ruleEngine
         aiCategoryTask = Task { [weak self] in
             guard let self else { return }
@@ -135,7 +137,10 @@ extension AppModel {
                     guard let last = batch.last?.id else { break }
                     for message in batch {
                         guard let thread = message.threadID else { continue }
-                        if await engine.matches(rule, message) {
+                        if category.includesSender(message.fromAddress) {
+                            try? self.store.assign(threadID: thread, to: category.id, byYou: true)
+                            changed = true
+                        } else if hasJudge, await engine.matches(rule, message) {
                             try? self.store.assign(threadID: thread, to: category.id)
                             changed = true
                         }
@@ -150,6 +155,80 @@ extension AppModel {
                 self.reload()
             }
         }
+    }
+
+    // MARK: Moving into your categories
+
+    /// Whether every one of these conversations is already in the category.
+    func allIn(aiCategory id: String, _ threads: [ThreadSummary]) -> Bool {
+        !threads.isEmpty && threads.allSatisfy { aiMembership[$0.threadID]?.contains(id) == true }
+    }
+
+    /// "Move to Investors" for these conversations: they show under its tab (their built-in
+    /// category stays) and become examples for the model. Undoable.
+    func moveConversations(_ threads: [ThreadSummary], toAICategory id: String) {
+        isCategoryPickerShown = false
+        guard var category = aiCategory(id: id), !threads.isEmpty else { return }
+        let previous = threads.map { ($0.threadID, try? store.membershipSource(threadID: $0.threadID, categoryID: id)) }
+        for thread in threads {
+            try? store.setMembership(threadID: thread.threadID, categoryID: id, isMember: true)
+        }
+        let examples = threads.prefix(4).map {
+            AboutCondition.Example(text: "\($0.latest.senderDisplay): \($0.latest.subject)", matches: true)
+        }
+        category.about.examples = Array((category.about.examples + examples).suffix(12))
+        replace(aiCategory: category)
+        multiSelection = []
+        let undoToken = offerUndo(named: String(localized: "Move")) { [weak self] in
+            guard let self else { return }
+            for (thread, source) in previous {
+                try? self.store.restoreMembership(threadID: thread, categoryID: id, source: source)
+            }
+            self.aiMembership = (try? self.store.aiCategoryMembership()) ?? [:]
+            self.toast = nil
+            self.reload()
+        }
+        aiMembership = (try? store.aiCategoryMembership()) ?? [:]
+        reload()
+        show(Toast(message: threads.count == 1 ? String(localized: "Moved to \(category.name)")
+                                               : String(localized: "\(threads.count) moved to \(category.name)"),
+                   symbol: category.symbol, undo: undoToken))
+    }
+
+    /// "Always for GitLab" with one of your categories: their mail goes in now and from now on.
+    func moveSender(toAICategory id: String, thread: ThreadSummary? = nil) {
+        isCategoryPickerShown = false
+        guard var category = aiCategory(id: id), let thread = thread ?? targetThreads.first else { return }
+        let address = thread.latest.fromAddress.lowercased()
+        let name = thread.latest.senderDisplay
+        let hadSender = category.includesSender(address)
+        if !hadSender { category.senders.append(address) }
+        replace(aiCategory: category)
+        let threads = (try? store.threadIDs(fromSender: address)) ?? []
+        let previous = threads.map { ($0, try? store.membershipSource(threadID: $0, categoryID: id)) }
+        for t in threads { try? store.setMembership(threadID: t, categoryID: id, isMember: true) }
+        let undoToken = offerUndo(named: String(localized: "Move")) { [weak self] in
+            guard let self else { return }
+            if !hadSender, var c = self.aiCategory(id: id) {
+                c.senders.removeAll { $0 == address }
+                self.replace(aiCategory: c)
+            }
+            for (t, source) in previous {
+                try? self.store.restoreMembership(threadID: t, categoryID: id, source: source)
+            }
+            self.aiMembership = (try? self.store.aiCategoryMembership()) ?? [:]
+            self.toast = nil
+            self.reload()
+        }
+        aiMembership = (try? store.aiCategoryMembership()) ?? [:]
+        reload()
+        show(Toast(message: String(localized: "Got it: mail from \(name) goes to \(category.name) from now on"),
+                   symbol: category.symbol, undo: undoToken))
+    }
+
+    private func replace(aiCategory category: AICategory) {
+        if let i = aiCategories.firstIndex(where: { $0.id == category.id }) { aiCategories[i] = category }
+        try? store.saveAICategories(aiCategories)
     }
 
     // MARK: Corrections

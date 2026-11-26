@@ -90,6 +90,7 @@ struct AICategoryEditor: View {
     @State private var name = ""
     @State private var description = ""
     @State private var symbol = "sparkles"
+    @State private var senders: [String] = []
     @State private var preview: [StoredMessage]?
     @State private var previewing = false
 
@@ -109,6 +110,23 @@ struct AICategoryEditor: View {
                          ? "Without Apple Intelligence on this device, Tidings can't sort into it by itself. You can still add conversations from their right-click menu."
                          : "Sorted on this device, as mail arrives. Your recent Inbox is sorted when you save. Fix mistakes from a conversation's right-click menu and it learns.")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                if !senders.isEmpty {
+                    Section {
+                        ForEach(senders, id: \.self) { address in
+                            HStack {
+                                Text(address)
+                                Spacer()
+                                Button("Remove", systemImage: "minus.circle") { senders.removeAll { $0 == address } }
+                                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+                            }
+                        }
+                    } header: {
+                        Text("Always includes mail from")
+                    } footer: {
+                        Text("Set with “Always for” when you move a conversation here.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Section("Symbol") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
@@ -152,6 +170,7 @@ struct AICategoryEditor: View {
             name = editing.category.name
             description = editing.category.about.description == editing.category.name ? "" : editing.category.about.description
             symbol = editing.category.symbol
+            senders = editing.category.senders
         }
     }
 
@@ -161,6 +180,7 @@ struct AICategoryEditor: View {
         let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
         c.about.description = text.isEmpty ? c.name : "\(c.name): \(text)"
         c.symbol = symbol
+        c.senders = senders
         return c
     }
 

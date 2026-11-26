@@ -4601,6 +4601,36 @@
         }
       }
     },
+    "No category matches “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen kategori passer til “%@”"
+          }
+        }
+      }
+    },
+    "Always includes mail from": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tager altid mail fra"
+          }
+        }
+      }
+    },
+    "Set with “Always for” when you move a conversation here.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sæt med “Altid for”, når du flytter en samtale hertil."
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

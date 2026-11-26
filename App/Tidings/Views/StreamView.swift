@@ -404,7 +404,11 @@ struct ThreadActions: View {
         Menu("Move to", systemImage: "tray.and.arrow.down") { MoveMenuContent(thread: thread) }
         Menu("Move to Folder", systemImage: "folder") { FolderMenuContent(thread: thread) }
         Divider()
-        Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk, on: [thread]) }
+        if model.isInJunk(thread.latest) {
+            Button("Not Junk", systemImage: "tray.and.arrow.down") { model.notJunk([thread]) }
+        } else {
+            Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk, on: [thread]) }
+        }
         Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash, on: [thread]) }
     }
 }
@@ -419,11 +423,11 @@ struct MoveMenuContent: View {
     var body: some View {
         let all = threads ?? [thread]
         Section(all.count > 1 ? String(localized: "\(all.count) conversations") : String(localized: "This conversation")) {
-            ForEach(MailCategory.allCases, id: \.self) { category in
-                Button(category.title, systemImage: category.symbol) {
-                    model.moveConversations(all, to: category)
+            ForEach(model.categoryTargets) { target in
+                Button(target.title, systemImage: target.symbol) {
+                    model.move(all, to: target)
                 }
-                .disabled(all.allSatisfy { $0.latest.category == category })
+                .disabled(model.isCurrent(target, for: all))
             }
         }
         if all.count == 1 {
@@ -433,9 +437,9 @@ struct MoveMenuContent: View {
 
     @ViewBuilder private var senderSection: some View {
         Section("Always for \(thread.latest.senderDisplay)") {
-            ForEach(MailCategory.allCases, id: \.self) { category in
-                Button(category.title, systemImage: category.symbol) {
-                    model.moveSender(to: category, thread: thread)
+            ForEach(model.categoryTargets) { target in
+                Button(target.title, systemImage: target.symbol) {
+                    model.moveSender(of: thread, to: target)
                 }
             }
         }
