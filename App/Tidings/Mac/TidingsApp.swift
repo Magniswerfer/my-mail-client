@@ -97,6 +97,9 @@ struct TidingsApp: App {
                 Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
                     .keyboardShortcut("n", modifiers: [.command, .control])
                     .disabled(model.answerableInvite == nil)
+                Button("Add Date to Calendar…") { model.addSelectedDateToCalendar() }
+                    .keyboardShortcut("e", modifiers: [.command, .control])
+                    .disabled(model.selectedDateSuggestion == nil)
             }
             CommandGroup(after: .toolbar) {
                 Toggle("Reader Mode", isOn: Binding(get: { model.readerMode }, set: { model.readerMode = $0 }))

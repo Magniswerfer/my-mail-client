@@ -1,6 +1,216 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Booking reference: %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bookingnummer: %@"
+          }
+        }
+      }
+    },
+    "Dismiss Suggestion" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afvis forslag"
+          }
+        }
+      }
+    },
+    "Suggestion dismissed" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forslaget er afvist"
+          }
+        }
+      }
+    },
+    "Add Date to Calendar…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Føj dato til kalender…"
+          }
+        }
+      }
+    },
+    "Dismiss Date Suggestion" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afvis datoforslag"
+          }
+        }
+      }
+    },
+    "Hotel stay" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hotelophold"
+          }
+        }
+      }
+    },
+    "Table reservation" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bordreservation"
+          }
+        }
+      }
+    },
+    "Calendar suggestions" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kalenderforslag"
+          }
+        }
+      }
+    },
+    "“%@”" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "»%@«"
+          }
+        }
+      }
+    },
+    "Add…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj…"
+          }
+        }
+      }
+    },
+    "Add to Calendar (⌃⌘E)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Føj til kalender (⌃⌘E)"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afvis"
+          }
+        }
+      }
+    },
+    "In Calendar: " : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I kalenderen: "
+          }
+        }
+      }
+    },
+    "Add to Calendar: " : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Føj til kalender: "
+          }
+        }
+      }
+    },
+    "Title" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titel"
+          }
+        }
+      }
+    },
+    "All Day" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hele dagen"
+          }
+        }
+      }
+    },
+    "Starts" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starter"
+          }
+        }
+      }
+    },
+    "Ends" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slutter"
+          }
+        }
+      }
+    },
+    "Notes" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noter"
+          }
+        }
+      }
+    },
+    "New Event" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny begivenhed"
+          }
+        }
+      }
+    },
+    "Shown in your time zone. Written as %@ in %@." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vist i din tidszone. Skrevet som %1$@ i %2$@."
+          }
+        }
+      }
+    },
     "Finished Reading": {
       "localizations": {
         "da": {
