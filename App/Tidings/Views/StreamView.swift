@@ -52,8 +52,10 @@ struct StreamView: View {
     }
 
     @ViewBuilder private var rows: some View {
+        let firstID = model.streamItems.first?.id
         ForEach(model.streamItems) { item in
-            switch item {
+            Group {
+                switch item {
             case .thread(let thread):
                 row(thread)
             case .replyLater(let pile):
@@ -74,6 +76,9 @@ struct StreamView: View {
                     ForEach(members) { thread in row(thread, inBundle: true) }
                 }
             }
+            }
+            // No line above the first row, only between rows.
+            .listRowSeparator(item.id == firstID ? .hidden : .automatic, edges: .top)
         }
     }
 
