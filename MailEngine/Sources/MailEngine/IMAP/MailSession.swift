@@ -255,6 +255,17 @@ public final class MailSession: Sendable {
         nil, reference: MailboxName(ByteBuffer(string: "")), .mailbox(ByteBuffer(string: "*"))
     )
 
+    /// The personal namespace's prefix (RFC 2342): `INBOX.` on Dovecot set up that way, empty on
+    /// most servers. Nil when the server doesn't announce one.
+    public func personalNamespacePrefix() async throws -> String? {
+        guard supports("NAMESPACE") else { return nil }
+        for response in try await run(.namespace, name: "NAMESPACE") {
+            guard case .untagged(.mailboxData(.namespace(let namespaces))) = response else { continue }
+            return namespaces.userNamespace.first.map { String(buffer: $0.string) } ?? ""
+        }
+        return nil
+    }
+
     public func listMailboxes() async throws -> [MailboxListing] {
         let responses = try await run(Self.listAllCommand, name: "LIST")
         return responses.compactMap { response in

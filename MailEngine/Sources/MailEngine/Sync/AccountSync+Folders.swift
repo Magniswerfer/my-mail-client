@@ -146,7 +146,7 @@ extension AccountSync {
     public func createFolder(named name: String, in parent: String? = nil) async throws -> String {
         try await withFolderSession { session, listing in
             let separator = Self.hierarchySeparator(in: listing)
-            let prefix = Self.personalPrefix(in: listing)
+            let prefix = try await personalPrefix(session, listing: listing)
             let clean = try FolderPath.validated(name, separator: separator)
             if let parent {
                 guard separator != nil else { throw FolderError.noSubfolders }
@@ -172,7 +172,7 @@ extension AccountSync {
     public func renameFolder(_ path: String, to name: String, allowSpecial: Bool = false) async throws -> String {
         try await withFolderSession { session, listing in
             let separator = Self.hierarchySeparator(in: listing)
-            let prefix = Self.personalPrefix(in: listing)
+            let prefix = try await personalPrefix(session, listing: listing)
             try self.checkChangeable(path, listing: listing, allowSpecial: allowSpecial)
             let clean = try FolderPath.validated(name, separator: separator)
             let parent = FolderPath.parent(of: path, separator: separator, prefix: prefix)
@@ -193,7 +193,7 @@ extension AccountSync {
     public func moveFolder(_ path: String, into parent: String?, allowSpecial: Bool = false) async throws -> String {
         try await withFolderSession { session, listing in
             let separator = Self.hierarchySeparator(in: listing)
-            let prefix = Self.personalPrefix(in: listing)
+            let prefix = try await personalPrefix(session, listing: listing)
             try self.checkChangeable(path, listing: listing, allowSpecial: allowSpecial)
             if let parent {
                 guard separator != nil else { throw FolderError.noSubfolders }

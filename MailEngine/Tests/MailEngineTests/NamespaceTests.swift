@@ -141,4 +141,36 @@ import Testing
         }
         #expect(try store.pendingActions(accountID: account.id).isEmpty)
     }
+
+    /// The prefix comes from the server's NAMESPACE, not a guess from the folder list (which
+    /// fails as soon as one listed folder sits outside INBOX.), and a new top-level folder
+    /// goes under it.
+    @Test func theServerNamesThePrefix() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TIDINGS_NAMESPACE_PORT"].flatMap(UInt16.init) else { return }
+        let user = "nsp-\(UUID().uuidString.prefix(8))"
+        let endpoint = IMAPEndpoint(host: "127.0.0.1", port: port, useTLS: false, username: user)
+        let password = "tidings-test"
+        let announced = try await MailSession.open(endpoint: endpoint, password: password) { session in
+            try await session.personalNamespacePrefix()
+        }
+        #expect(announced == "INBOX.")
+        // The plain test Dovecot (no prefix), when it's running.
+        let plain = IMAPEndpoint(host: "127.0.0.1", port: 31143, useTLS: false, username: "plain-\(UUID().uuidString.prefix(8))")
+        if let none = try? await MailSession.open(endpoint: plain, password: password, { session in
+            try await session.personalNamespacePrefix()
+        }) {
+            #expect(none == "")
+        }
+
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tidings-nsp-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
+        let account = AccountConfig(displayName: "NS", endpoint: endpoint, addresses: ["\(user)@x.dk"])
+        let sync = AccountSync(account: account, password: password, store: store,
+                               cache: MessageCache(directory: dir.appendingPathComponent("Cache")))
+        try await sync.syncOnce()
+        #expect(try store.setting(AccountSync.personalPrefixKey, accountID: account.id) == "INBOX.")
+        let path = try await sync.createFolder(named: "Kvitteringer")
+        #expect(path == "INBOX.Kvitteringer")
+    }
 }

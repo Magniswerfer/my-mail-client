@@ -63,6 +63,15 @@ extension AccountSync {
         return prefix + Self.snoozedMailbox
     }
 
+    /// The account's personal prefix, as the server announces it (NAMESPACE), else guessed from
+    /// the listing; remembered for moves and new folders.
+    func personalPrefix(_ session: MailSession, listing: [MailboxListing]) async throws -> String {
+        let announced = (try? await session.personalNamespacePrefix()) ?? nil
+        let prefix = announced ?? Self.personalPrefix(in: listing)
+        try store.setSetting(Self.personalPrefixKey, prefix, accountID: account.id)
+        return prefix
+    }
+
     /// `INBOX.` (or `INBOX/`) when every folder but the Inbox lives under it, as on Dovecot with
     /// an `INBOX.` namespace; there a new top-level folder is refused ("nonexistent namespace").
     static func personalPrefix(in listing: [MailboxListing]) -> String {

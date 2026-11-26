@@ -240,7 +240,7 @@ public actor AccountSync {
         try await drain(session)
         let generation = folderGeneration
         let listing = try await session.listMailboxes()
-        try store.setSetting(Self.personalPrefixKey, Self.personalPrefix(in: listing), accountID: account.id)
+        _ = try await personalPrefix(session, listing: listing)
         if let separator = Self.hierarchySeparator(in: listing) {
             try store.setSetting(Self.separatorKey, String(separator), accountID: account.id)
         }
