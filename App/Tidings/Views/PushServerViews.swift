@@ -114,7 +114,7 @@ struct PushServerPasswordSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(password.isEmpty || isSaving)
+                    Button("Save") { save() }.disabled(password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
                 }
             }
         }
@@ -125,7 +125,7 @@ struct PushServerPasswordSheet: View {
         isSaving = true
         Task {
             do {
-                try await model.setPushServerPassword(password.trimmingCharacters(in: .whitespaces), for: account)
+                try await model.setPushServerPassword(password.trimmingCharacters(in: .whitespacesAndNewlines), for: account)
                 dismiss()
             } catch {
                 self.error = AppModel.describe(error)
