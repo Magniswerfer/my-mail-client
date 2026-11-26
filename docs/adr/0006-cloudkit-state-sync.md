@@ -44,9 +44,9 @@ Only state syncs, never mail content: Message-IDs, addresses, rule text and sett
 - CloudKit quotas are generous for this size: kilobytes per record, thousands of records.
 
 ## Turning it on (done 2026-11-26)
-The app only uses CloudKit when its signature carries the iCloud entitlement for the container named in Info.plist (checked on macOS at runtime). Steps 1–4 below are done: both containers exist and both Mac builds are provisioned. Step 5 is still to do before the first release build.
+The app only uses CloudKit when its signature carries the iCloud entitlement for the container named in Info.plist (checked on macOS at runtime). All five steps below are done: both containers exist, both Mac builds are provisioned, and the schema is in Production.
 1. In `App/project.yml`, add to both apps' `info.properties`: `TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)`.
 2. Add to the Mac entitlements: `com.apple.developer.icloud-container-identifiers: [$(TIDINGS_CLOUD_CONTAINER)]`, `com.apple.developer.icloud-services: [CloudKit]`, `com.apple.developer.aps-environment: development`.
 3. Give the iPhone app an entitlements file (`Tidings/iOS/TidingsMobile.entitlements`, excluded from the Mac sources) with the same container and services, and `aps-environment: development`.
 4. Run `xcodegen generate`, then build the dev copy with `-allowProvisioningUpdates`. That registers `iCloud.hk.gnus.tidings.dev`. The first real build registers `iCloud.hk.gnus.tidings`.
-5. Deploy the schema (the `State` record type) to production in the CloudKit console before a release build.
+5. Deploy the schema (the `State` record type) to Production in the CloudKit console. Done 2026-11-26. A new record type or field needs the same deploy before the release that uses it; new state types that reuse `State` (like `account`) don't.
