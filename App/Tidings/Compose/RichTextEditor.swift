@@ -364,13 +364,13 @@ struct RichTextEditor: UIViewRepresentable {
         }
 
         /// Above the keyboard: Bold, Italic, Underline, the two lists, and hiding the keyboard,
-        /// with clear space above the pills so the last line of text doesn't touch them.
+        /// with clear space between the pills and the keyboard.
         func formattingBar() -> UIView {
             let gap: CGFloat = 10
             let container = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + gap))
             container.backgroundColor = .clear
-            let bar = UIToolbar(frame: CGRect(x: 0, y: gap, width: 320, height: 44))
-            bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+            bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
             container.addSubview(bar)
             func item(_ format: TextFormat) -> UIBarButtonItem {
                 let item = UIBarButtonItem(image: UIImage(systemName: format.symbol),
