@@ -1,8 +1,8 @@
 # 0007 · An always-on push server (iOS-3)
 
-**Status:** proposed · 2026-11-26 · implements iOS-3; builds on [ADR 0003](0003-headless-engine.md) and [ADR 0006](0006-cloudkit-state-sync.md)
+**Status:** accepted · 2026-11-26 · implements iOS-3; builds on [ADR 0003](0003-headless-engine.md) and [ADR 0006](0006-cloudkit-state-sync.md)
 
-> The decisions marked **Open** wait for Magnus. Everything else is the proposed design.
+> Magnus decided the open questions on 2026-11-26: a separate app-specific password, pairing-secret registration and an uploaded server profile, as recommended. The host is a Coolify server still to be chosen, so the deploy notes stay generic.
 
 ## Context
 The iPhone only learns about new mail while Tidings is open, plus whatever BGAppRefresh gives it. iOS can't hold an IMAP connection in the background, so there is no real push. Snooze wake-ups and send-later times on the iPhone are local notifications that ask you to open the app (`WakeReminders`). On the Mac, the login-item helper does this work, but only while the Mac is awake.
@@ -49,7 +49,7 @@ A new CI job builds and tests the engine on `ubuntu-latest` in the official `swi
 - **Encryption at rest:** swift-crypto.
 
 ### Notifications
-- Each alert has the sender as its title and the subject as its body. The preview goes in `subtitle` or is left out (an **Open** choice).
+- Each alert has the sender as its title and the subject as its body. The preview line is left out, which keeps less mail content in Apple's push path.
 - `thread-id` is the conversation, so iOS groups alerts by thread.
 - The category is the existing `MailNotifier` one, so Done and Mark as Read work from the lock screen.
 - `apns-collapse-id` is a hash of the account and Message-ID.
@@ -62,21 +62,21 @@ A new CI job builds and tests the engine on `ubuntu-latest` in the official `swi
 - IMAP and SMTP passwords are encrypted with AES-GCM under a master key from the environment. They are written once, never returned by the API, and never logged.
 - Logs carry account ids and counts. They never carry addresses, subjects or bodies.
 
-### Open decisions
+### Decisions (taken 2026-11-26)
 
-1. **Credentials.** *Recommended:* a separate iCloud app-specific password for the server, named "Tidings Push". You enter it once in the app's Push settings. It goes over TLS to the server and nowhere else: not the Keychain, not CloudKit. The server stores it AES-GCM-encrypted in its SQLite database on the Coolify volume, under `TIDINGS_MASTER_KEY`, a Coolify secret. A leaked volume or backup reveals nothing without that key. Revoking "Tidings Push" at account.apple.com cuts the server off without touching your devices.
-   *Alternatives:* reuse the account's existing password from iCloud Keychain and upload it automatically (no setup, but it can't be revoked separately); or put the credentials only in Coolify environment variables (no upload API, but clumsy with several accounts).
-2. **Hosting.** Coolify, as ADR 0003 suggests: one container, a persistent volume for `/data`, and a public HTTPS domain. Which server and which domain are **Open**.
+1. **Credentials — decided: a separate app password.** a separate iCloud app-specific password for the server, named "Tidings Push". You enter it once in the app's Push settings. It goes over TLS to the server and nowhere else: not the Keychain, not CloudKit. The server stores it AES-GCM-encrypted in its SQLite database on the Coolify volume, under `TIDINGS_MASTER_KEY`, a Coolify secret. A leaked volume or backup reveals nothing without that key. Revoking "Tidings Push" at account.apple.com cuts the server off without touching your devices.
+   *Not chosen:* reuse the account's existing password from iCloud Keychain and upload it automatically (no setup, but it can't be revoked separately); or put the credentials only in Coolify environment variables (no upload API, but clumsy with several accounts).
+2. **Hosting.** Coolify, as ADR 0003 suggests: one container, a persistent volume for `/data`, and a public HTTPS domain. Magnus picks the server and domain at deploy time; the deploy notes are host-agnostic.
 3. **Apple push key.** Magnus creates an APNs auth key in the Creative Oak team (493257NQK3), under Certificates, Identifiers & Profiles › Keys › Apple Push Notifications service. The `.p8` file goes in Coolify as `APNS_KEY_P8`, with `APNS_KEY_ID` and `APNS_TEAM_ID=493257NQK3`. The topic is `hk.gnus.tidings`. The server picks the sandbox or production endpoint per device from what the device reports. Debug builds use sandbox, TestFlight and release use production.
-4. **Device registration.** *Recommended:* pairing.
+4. **Device registration — decided: a pairing secret.**
    - The server starts with `TIDINGS_PAIRING_SECRET`, a Coolify secret.
    - In Settings › Push you enter the server URL and the secret once.
    - The secret is stored as a synchronizable Keychain item, so your other iPhone or iPad pairs itself.
    - Pairing (`POST /v1/devices`) returns a per-device token. The device then `PUT`s its APNs token and environment whenever iOS gives it a new one.
-   - *Alternatives:* Sign in with Apple, with the server allow-listing your Apple user id (no secret to copy, but more moving parts); or one static token shared by all devices.
+   - *Not chosen:* Sign in with Apple, with the server allow-listing your Apple user id (no secret to copy, but more moving parts); or one static token shared by all devices.
 5. **Which mail notifies, and how the server learns your policy.** The server can't read CloudKit's private database without a short-lived web token for your Apple ID, which makes it a poor fit for an unattended server.
-   - *Recommended:* the app uploads a **server profile** (`PUT /v1/profile`) whenever its synced state changes. The profile holds your notification policy, VIPs, mutes, structured rules marked Notify, sender rules and own addresses. Pinned needs no upload, because it is `\Flagged` on IMAP. Snooze wake times (`PUT /v1/snoozes`) and send-later items (`PUT`/`DELETE /v1/outbox/:id`) go up the same way. Any of your devices can upload, and last writer wins, as in ADR 0006. The rules are SPEC §10's: Primary from people, VIPs, pinned, replies to conversations where you wrote last, and rules marked Notify.
-   - *Alternatives:* the server notifies on every new INBOX message that layer 1 calls a person, with no policy (simple, noisier); or a silent push lets the iPhone decide (iOS throttles silent pushes and may not wake the app, so not recommended).
+   - *Decided:* the app uploads a **server profile** (`PUT /v1/profile`) whenever its synced state changes. The profile holds your notification policy, VIPs, mutes, structured rules marked Notify, sender rules and own addresses. Pinned needs no upload, because it is `\Flagged` on IMAP. Snooze wake times (`PUT /v1/snoozes`) and send-later items (`PUT`/`DELETE /v1/outbox/:id`) go up the same way. Any of your devices can upload, and last writer wins, as in ADR 0006. The rules are SPEC §10's: Primary from people, VIPs, pinned, replies to conversations where you wrote last, and rules marked Notify.
+   - *Not chosen:* the server notifies on every new INBOX message that layer 1 calls a person, with no policy (simple, noisier); or a silent push lets the iPhone decide (iOS throttles silent pushes and may not wake the app, so not recommended).
 
 ### Send-later hand-off
 - When the server is paired and reachable, an outbox item whose send time is past the undo window is uploaded as raw MIME with its account and time. The device marks it `handedOff`.
