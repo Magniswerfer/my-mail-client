@@ -473,11 +473,31 @@ final class PassthroughScrollWebView: WKWebView {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
-                let result = try? await webView.callAsyncJavaScript(
-                    "return document.documentElement.scrollHeight", contentWorld: .defaultClient)
+                let result = try? await webView.callAsyncJavaScript(Self.fitToWidth, contentWorld: .defaultClient)
                 if let h = result as? Double { height.wrappedValue = max(60, CGFloat(h)) }
             }
         }
+
+        /// Mail built for a fixed width (often 600px tables) is scaled down to fit the reader, as
+        /// Mail does on iPhone, instead of being cut off at the right. Returns the height to show.
+        /// Runs in our own world: the message's scripts stay off.
+        static let fitToWidth = """
+            const root = document.documentElement, body = document.body;
+            body.style.transform = ''; body.style.width = '';
+            const style = getComputedStyle(root);
+            const inset = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+            const available = root.clientWidth - inset, needed = root.scrollWidth - inset;
+            if (needed > available + 2) {
+                // The body as wide as what's in it, so its background covers all of it, then shrunk.
+                body.style.boxSizing = 'border-box';
+                body.style.width = needed + 'px';
+                body.style.transformOrigin = '0 0';
+                body.style.transform = 'scale(' + (available / needed) + ')';
+                root.style.overflowX = 'hidden';
+            }
+            const below = parseFloat(getComputedStyle(root).paddingBottom) || 0;
+            return Math.ceil(body.getBoundingClientRect().bottom + below);
+            """
     }
 }
 
