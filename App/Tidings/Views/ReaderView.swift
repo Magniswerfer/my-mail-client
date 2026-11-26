@@ -281,6 +281,41 @@ struct PrivacyBar: View {
     var body: some View {
         let hidden = imagesShown ? 0 : prepared.remoteImages
         if prepared.trackersRemoved > 0 || hidden > 0 || prepared.linksCleaned > 0 {
+            if Platform.isPhone { phone(hidden: hidden) } else { regular(hidden: hidden) }
+        }
+    }
+
+    /// iPhone: one quiet line of what was done, and one menu for loading images.
+    private func phone(hidden: Int) -> some View {
+        var parts: [String] = []
+        if prepared.trackersRemoved > 0 { parts.append(String(localized: "\(prepared.trackersRemoved) trackers removed")) }
+        if prepared.linksCleaned > 0 { parts.append(String(localized: "\(prepared.linksCleaned) links cleaned")) }
+        if hidden > 0 { parts.append(String(localized: "\(hidden) images hidden")) }
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "hand.raised.fill").foregroundStyle(.teal)
+            Text(parts.joined(separator: " · "))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if hidden > 0 {
+                Menu {
+                    Button("Load images", systemImage: "photo", action: loadImages)
+                    Button("Always from \(sender)") { alwaysLoad(sender) }
+                    if let domain = sender.split(separator: "@").last {
+                        Button("Always from @\(domain)") { alwaysLoad("@\(domain)") }
+                    }
+                } label: {
+                    Text("Load images").fontWeight(.medium).lineLimit(1)
+                }
+                .fixedSize()
+            }
+        }
+        .font(.footnote)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.background.secondary, in: .rect(cornerRadius: 14))
+    }
+
+    private func regular(hidden: Int) -> some View {
             HStack(spacing: 10) {
                 Image(systemName: "hand.raised.fill").foregroundStyle(.teal)
                 if prepared.trackersRemoved > 0 {
@@ -310,7 +345,6 @@ struct PrivacyBar: View {
             .padding(.horizontal, 12).padding(.vertical, 6)
             .glassEffect(.regular, in: .capsule)
             .help("Tracking pixels are always removed. Images from people you haven't written to stay hidden until you allow them.")
-        }
     }
 }
 
@@ -557,31 +591,62 @@ struct RiskBanner: View {
             Label(danger ? "This looks like a phishing attempt" : "Be careful with this message",
                   systemImage: danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(danger ? .red : .orange)
             ForEach(RiskAssessment.decode(message.riskReasons), id: \.self) { reason in
                 Label(reason.localized, systemImage: "circle.fill")
                     .labelStyle(BulletLabelStyle())
-                    .font(.callout)
+                    .font(Platform.isPhone ? .subheadline : .callout)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                Button("Move to Junk", systemImage: "xmark.bin") {
-                    if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
-                        model.perform(.junk, on: [thread])
-                    }
+            if Platform.isPhone {
+                // iPhone: the advice on its own line, then the buttons, each kept to one line.
+                advice
+                HStack(spacing: 10) {
+                    junkButton(danger: danger)
+                    safeButton
                 }
-                .buttonStyle(.glassProminent)
-                .tint(danger ? .red : .orange)
-                Button("It's safe") { model.markSafe(message) }
-                    .buttonStyle(.glass)
-                Spacer()
-                Text("Don't click links or open attachments unless you're sure.")
-                    .font(.caption).foregroundStyle(.secondary)
+                .controlSize(.regular)
+                .padding(.top, 4)
+            } else {
+                HStack {
+                    junkButton(danger: danger)
+                    safeButton
+                    Spacer()
+                    advice
+                }
             }
         }
-        .padding(14)
+        .padding(Platform.isPhone ? 16 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background((danger ? Color.red : Color.orange).opacity(0.08), in: .rect(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder((danger ? Color.red : Color.orange).opacity(0.4)))
+        .background((danger ? Color.red : Color.orange).opacity(0.08), in: .rect(cornerRadius: Platform.isPhone ? 20 : 14))
+        .overlay(RoundedRectangle(cornerRadius: Platform.isPhone ? 20 : 14)
+            .strokeBorder((danger ? Color.red : Color.orange).opacity(Platform.isPhone ? 0.25 : 0.4)))
+    }
+
+    private var advice: some View {
+        Text("Don't click links or open attachments unless you're sure.")
+            .font(Platform.isPhone ? .footnote : .caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func junkButton(danger: Bool) -> some View {
+        Button("Move to Junk", systemImage: "xmark.bin") {
+            if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
+                model.perform(.junk, on: [thread])
+            }
+        }
+        .buttonStyle(.glassProminent)
+        .tint(danger ? .red : .orange)
+        .lineLimit(1)
+        .fixedSize()
+    }
+
+    private var safeButton: some View {
+        Button("It's safe") { model.markSafe(message) }
+            .buttonStyle(.glass)
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
