@@ -162,6 +162,7 @@ struct TidingsApp: App {
                 Button("Sweep Inbox") { model.requestSweep() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
+                Toggle("Show Only Unread", isOn: Binding(get: { model.unreadOnly }, set: { model.unreadOnly = $0 }))
                 Divider()
                 Button(model.searchEverywhere ? "Search Only Here" : "Search Everywhere") { model.toggleSearchEverywhere() }
                     .keyboardShortcut("f", modifiers: [.command, .option])
@@ -370,6 +371,7 @@ struct RootView: View {
     /// Over the list: filter and more, at the column's trailing edge.
     @ToolbarContentBuilder private var listToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
+            UnreadFilterButton()
             Menu {
                 // In here rather than as a second pin button next to the reader's Pin (G P).
                 if model.isInInbox {
@@ -516,6 +518,7 @@ struct RootView: View {
             case "a": model.goToArchive()
             case "o": model.selection = .outbox
             case "p": model.pinnedOnly.toggle()
+            case "u": model.unreadOnly.toggle()
             default: return .ignored
             }
             return .handled

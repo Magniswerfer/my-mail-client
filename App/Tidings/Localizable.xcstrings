@@ -1,6 +1,56 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Show Only Unread" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis kun ulæste"
+          }
+        }
+      }
+    },
+    "Showing Only Unread" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viser kun ulæste"
+          }
+        }
+      }
+    },
+    "Everything here has been read." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alt her er læst."
+          }
+        }
+      }
+    },
+    "Show All Conversations (G U)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis alle samtaler (G U)"
+          }
+        }
+      }
+    },
+    "Show Only Unread (G U)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis kun ulæste (G U)"
+          }
+        }
+      }
+    },
     "Push Server" : {
       "localizations" : {
         "da" : {

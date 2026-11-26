@@ -144,10 +144,41 @@ struct ThreadDrag: Codable, Transferable {
 
 // Sweep is only in the list's … menu (and ⌘⇧E, ⌘K), not a button at the end of the list.
 
+/// The list toolbar's filter: only conversations with unread mail (G U, ⌘K). Filled while on,
+/// as in Mail.
+struct UnreadFilterButton: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button {
+            withAnimation(.snappy) { model.unreadOnly.toggle() }
+        } label: {
+            Label(model.unreadOnly ? "Showing Only Unread" : "Show Only Unread",
+                  systemImage: model.unreadOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        }
+        .help(model.unreadOnly ? Text("Show All Conversations (G U)") : Text("Show Only Unread (G U)"))
+        .accessibilityAddTraits(model.unreadOnly ? .isSelected : [])
+    }
+}
+
 struct EmptyStream: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        if model.unreadOnly {
+            ContentUnavailableView {
+                Label("No unread mail", systemImage: "envelope.open")
+            } description: {
+                Text("Everything here has been read.")
+            } actions: {
+                Button("Show All Conversations") { model.unreadOnly = false }
+            }
+        } else {
+            places
+        }
+    }
+
+    @ViewBuilder private var places: some View {
         switch model.selection {
         case .inbox where !model.syncStatus.isEmpty:
             ContentUnavailableView {

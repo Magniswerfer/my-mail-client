@@ -156,6 +156,9 @@ struct MobileRootView: View {
                 .fontWeight(model.isSelecting ? .semibold : .regular)
             }
         }
+        if !model.isSelecting {
+            ToolbarItem(placement: .topBarTrailing) { UnreadFilterButton() }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 if model.isSelecting {

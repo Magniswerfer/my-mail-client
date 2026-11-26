@@ -134,6 +134,9 @@ final class AppModel {
     @ObservationIgnored private var pinnedOpenBundles: Set<MailCategory> = []
     /// Show only pinned conversations (Google Inbox's pin toggle).
     var pinnedOnly = false { didSet { reload() } }
+    /// Show only conversations with unread mail, in any list. The one you're reading stays
+    /// while it's open, so it doesn't vanish as it's marked read.
+    var unreadOnly = false { didSet { reload() } }
 
     // Triage UI
     var toast: Toast?
@@ -768,6 +771,10 @@ final class AppModel {
             }
             // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
             if pinnedOnly, isInInbox { threads = threads.filter(\.isPinned) }
+            if unreadOnly {
+                let open = selectedThreadID
+                threads = threads.filter { $0.unreadCount > 0 || $0.threadID == open }
+            }
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }

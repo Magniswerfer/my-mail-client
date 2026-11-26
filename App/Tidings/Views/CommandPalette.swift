@@ -93,6 +93,8 @@ extension AppModel {
                        isEnabled: undoManager?.canUndo == true) { self.undoManager?.undo() },
             AppCommand(id: "pinnedOnly", title: pinnedOnly ? String(localized: "Show All Conversations") : String(localized: "Show Only Pinned"),
                        symbol: "pin.circle", keys: "G P") { self.pinnedOnly.toggle() },
+            AppCommand(id: "unreadOnly", title: unreadOnly ? String(localized: "Show All Conversations") : String(localized: "Show Only Unread"),
+                       symbol: "line.3.horizontal.decrease.circle", keys: "G U") { self.unreadOnly.toggle() },
             AppCommand(id: "next", title: String(localized: "Next Conversation"), symbol: "chevron.down", keys: "J") { self.moveSelection(1) },
             AppCommand(id: "previous", title: String(localized: "Previous Conversation"), symbol: "chevron.up", keys: "K") { self.moveSelection(-1) },
             AppCommand(id: "selectBelow", title: String(localized: "Select This and Everything Below"), symbol: "list.bullet.below.rectangle",
