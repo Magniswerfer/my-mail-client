@@ -56,12 +56,21 @@ struct ReaderModeText: View {
     let text: String
 
     var body: some View {
-        Text(text)
-            .font(.system(.title3, design: .serif))
-            .lineSpacing(6)
-            .textSelection(.enabled)
-            .frame(maxWidth: 640, alignment: .leading)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
+        // The message's own words: quoted history and signature cut, wrapped lines joined.
+        VStack(alignment: .leading, spacing: 14) {
+            Text("\(ReadingText.minutes(text)) min read")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(Array(ReadingText.paragraphs(text).enumerated()), id: \.offset) { _, paragraph in
+                Text(paragraph)
+                    .font(.system(.title3, design: .serif))
+                    .lineSpacing(6)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: 640, alignment: .leading)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 }

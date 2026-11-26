@@ -130,7 +130,7 @@ struct MessageCard: View {
             InviteCard(message: message, invite: invite)
         }
         if let loaded = body_ {
-            if loaded.html != nil, readerMode {
+            if loaded.html != nil, readerMode || model.readerMode {
                 Button("Original Layout", systemImage: "doc.richtext") { readerMode = false }
                     .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
                 ReaderModeText(text: loaded.text)

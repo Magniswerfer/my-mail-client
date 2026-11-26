@@ -132,6 +132,11 @@ extension AppModel {
     func perform(_ kind: TriageKind, on threads: [ThreadSummary]? = nil, toast showToast: Bool = true) -> ChangeBox? {
         let targets = threads ?? targetThreads
         guard !targets.isEmpty else { return nil }
+        // In Read Later, Done means "finished reading": the mail itself is already filed.
+        if kind == .done, isInReadLater, showToast {
+            finishReading(targets)
+            return nil
+        }
         let nextSelection = neighbour(after: targets.map(\.threadID))
         let box = ChangeBox()
         if showToast {
@@ -219,19 +224,42 @@ extension AppModel {
         }
     }
 
-    /// Read Later (⇧R): the keyword, then Done when it's in the Inbox, as one undoable step.
+    /// Whether you're looking at the Read Later pile.
+    var isInReadLater: Bool { selection == .smartFolder(SmartFolder.readLater.id) }
+
+    func isReadLater(_ thread: ThreadSummary) -> Bool {
+        messages(inThread: thread.threadID).contains { $0.flags.contains(readLaterKeyword) }
+    }
+
+    /// Read Later (⇧R): the keyword, then Done when it's in the Inbox, as one undoable step,
+    /// for the selection (a ⌘A block too). Again on conversations already on the pile (or in
+    /// it) takes them off: finished reading.
     func readLater(_ thread: ThreadSummary? = nil) {
-        guard let thread = thread ?? targetThreads.first else { return }
-        let account = thread.latest.accountID
-        let flag = performQuietly(.readLater, threadID: thread.threadID, accountID: account)
-        let done = sourceMailbox == "INBOX" ? performQuietly(.done, threadID: thread.threadID, accountID: account) : nil
+        let targets = thread.map { [$0] } ?? targetThreads
+        guard !targets.isEmpty else { return }
+        if isInReadLater || targets.allSatisfy(isReadLater) {
+            finishReading(targets)
+            return
+        }
+        let accounts = targets.map { ($0.threadID, $0.latest.accountID) }
+        let flags = accounts.map { performQuietly(.readLater, threadID: $0.0, accountID: $0.1) }
+        let done = sourceMailbox == "INBOX" ? perform(.done, on: targets, toast: false) : nil
         let undo: @MainActor () -> Void = { [weak self] in
-            self?.undo(box: flag)
+            flags.forEach { self?.undo(box: $0) }
             if let done { self?.undo(box: done) }
         }
         undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(TriageKind.readLater.toastText(count: 1))
-        show(Toast(message: TriageKind.readLater.toastText(count: 1), symbol: "book", undoAction: undo))
+        undoManager?.setActionName(TriageKind.readLater.toastText(count: targets.count))
+        show(Toast(message: TriageKind.readLater.toastText(count: targets.count), symbol: "book", undoAction: undo))
+    }
+
+    /// Off the pile; the mail itself stays where it's filed.
+    func finishReading(_ targets: [ThreadSummary]) {
+        let boxes = targets.map { performQuietly(.clearReadLater, threadID: $0.threadID, accountID: $0.latest.accountID) }
+        let undo: @MainActor () -> Void = { [weak self] in boxes.forEach { self?.undo(box: $0) } }
+        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
+        undoManager?.setActionName(String(localized: "Finished Reading"))
+        show(Toast(message: String(localized: "Finished reading"), symbol: "book.closed", undoAction: undo))
     }
 
     func toggleReplyLater() {

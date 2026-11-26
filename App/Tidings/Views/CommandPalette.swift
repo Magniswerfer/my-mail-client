@@ -69,6 +69,8 @@ extension AppModel {
             },
             AppCommand(id: "readLater", title: String(localized: "Read Later"), symbol: "book", keys: "⇧R",
                        isEnabled: hasSelection) { self.readLater() },
+            AppCommand(id: "readerMode", title: readerMode ? String(localized: "Turn Off Reader Mode") : String(localized: "Reader Mode"),
+                       symbol: "text.page", keys: nil) { self.readerMode.toggle() },
             AppCommand(id: "copyCode", title: String(localized: "Copy Latest Login Code"), symbol: "key.fill", keys: "⌃⌥C") {
                 self.copyLatestCode()
             },

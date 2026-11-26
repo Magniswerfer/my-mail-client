@@ -261,3 +261,30 @@ import Testing
         #expect(crypto.conditions == [.about(AboutCondition("Crypto"))])
     }
 }
+
+@Suite struct ReadingTextTests {
+    @Test func dropsQuotesAndSignatureAndJoinsLines() {
+        let text = "Hej Magnus,\n\nDette er en lang\ntekst om noget.\n\n\n\nAndet afsnit.\n\n-- \nAnna\n\nOn Mon, Bo wrote:\n> gammelt"
+        let paragraphs = ReadingText.paragraphs(text)
+        #expect(paragraphs.prefix(3) == ["Hej Magnus,", "Dette er en lang tekst om noget.", "Andet afsnit."])
+        #expect(!paragraphs.joined().contains("gammelt"))
+        #expect(ReadingText.minutes(String(repeating: "ord ", count: 690)) == 3)
+        #expect(ReadingText.minutes("kort") == 1)
+    }
+}
+
+@Suite(.serialized) struct SameFolderMoveTests {
+    /// Done on mail that's already in the Archive (from a smart folder) must not move it onto
+    /// itself: on iCloud that's a copy.
+    @Test func doneOnArchivedMailDoesNothing() async throws {
+        guard let f = try await TriageIntegrationTests().fixture() else { return }
+        let thread = try f.thread("website")
+        try await f.sync.perform(.done, threadIDs: [thread.threadID])
+        try await f.sync.processPendingActions()
+        let archive = try await f.server("Archive").count
+        let again = try await f.sync.perform(.done, threadIDs: [thread.threadID], from: "Archive")
+        #expect(again == nil)
+        try await f.sync.processPendingActions()
+        #expect(try await f.server("Archive").count == archive)
+    }
+}

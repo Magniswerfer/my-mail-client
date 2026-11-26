@@ -95,6 +95,9 @@ extension AccountSync {
             default:
                 fatalError("unreachable")
             }
+            // Already there (Done on archived mail, e.g. from a smart folder): nothing to move,
+            // and moving a mailbox onto itself would only make a copy on iCloud.
+            guard target.caseInsensitiveCompare(source) != .orderedSame else { return nil }
             let items = snapshots.map { QueuedAction.MoveItem(localID: $0.localID, fromMailbox: $0.mailbox, fromUID: $0.uid) }
             try store.db.write { db in
                 try store.applyLocalMove(localIDs: localIDs, to: target, flagsAdd: add, flagsRemove: remove,

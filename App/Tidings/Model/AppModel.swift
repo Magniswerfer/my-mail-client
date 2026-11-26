@@ -164,6 +164,8 @@ final class AppModel {
 
     // Attachments (SPEC §11)
     var isAttachmentsShown = false
+    /// Reader mode for every message (View menu, ⌘K); Read Later opens in it anyway.
+    var readerMode = false
     /// What Quick Look shows (nil closes it).
     var quickLookURL: URL?
 

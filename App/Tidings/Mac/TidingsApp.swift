@@ -99,6 +99,7 @@ struct TidingsApp: App {
                     .disabled(model.answerableInvite == nil)
             }
             CommandGroup(after: .toolbar) {
+                Toggle("Reader Mode", isOn: Binding(get: { model.readerMode }, set: { model.readerMode = $0 }))
                 Button(model.isContactPanelShown ? String(localized: "Hide Contact Info") : String(localized: "Show Contact Info")) {
                     model.toggleContactPanel()
                 }

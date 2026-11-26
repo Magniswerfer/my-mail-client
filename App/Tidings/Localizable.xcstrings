@@ -1,6 +1,46 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Finished Reading": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Færdig med at læse"
+          }
+        }
+      }
+    },
+    "Finished reading": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Færdig med at læse"
+          }
+        }
+      }
+    },
+    "Turn Off Reader Mode": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå læsetilstand fra"
+          }
+        }
+      }
+    },
+    "%lld min read": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min. læsning"
+          }
+        }
+      }
+    },
     "Couldn't save %@: %@": {
       "localizations": {
         "da": {
