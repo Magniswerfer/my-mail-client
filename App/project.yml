@@ -50,6 +50,9 @@ targets:
       path: Tidings/Info.plist
       properties:
         CFBundleDisplayName: $(PRODUCT_DISPLAY_NAME)
+        # From MARKETING_VERSION / CURRENT_PROJECT_VERSION (Sparkle compares the build number).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, da]
         LSApplicationCategoryType: public.app-category.productivity
@@ -117,6 +120,9 @@ targets:
       path: Tidings/iOS/Info.plist
       properties:
         CFBundleDisplayName: $(PRODUCT_DISPLAY_NAME)
+        # From MARKETING_VERSION / CURRENT_PROJECT_VERSION (Sparkle compares the build number).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, da]
         LSRequiresIPhoneOS: true
