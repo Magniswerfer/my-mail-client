@@ -456,9 +456,17 @@ struct RootView: View {
         }
     }
 
+    /// Text has the keyboard: the inline reply, To, Cc, Subject, or any other field. Keys are
+    /// letters then, never shortcuts (typing "e" in a reply must not mark the mail done).
+    static var isTypingInText: Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        return responder is NSText || (responder as? NSView)?.isEditableTextResponder == true
+    }
+
     /// Gmail/Superhuman-style single keys (SPEC §12). Ignored while typing.
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        guard !searchFocused, !model.isPaletteShown, !model.isFolderPickerShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown
+        guard !searchFocused, !model.isPaletteShown, !model.isFolderPickerShown, !model.isSnoozePickerShown, !model.isCategoryPickerShown,
+              !Self.isTypingInText
         else { return .ignored }
         // ⌘⌫: Move to Trash, like Apple Mail (only here, so text fields keep ⌘⌫ for themselves).
         if press.key == .delete, press.modifiers == .command, press.phase == .down {
@@ -514,6 +522,17 @@ struct RootView: View {
         default: return .ignored
         }
         return .handled
+    }
+}
+extension NSView {
+    /// An editable text view, or a view inside one (some fields hand focus to a subview).
+    var isEditableTextResponder: Bool {
+        var view: NSView? = self
+        while let current = view {
+            if let text = current as? NSTextView, text.isEditable { return true }
+            view = current.superview
+        }
+        return false
     }
 }
 #endif
