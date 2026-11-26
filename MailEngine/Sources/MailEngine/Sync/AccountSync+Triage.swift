@@ -400,8 +400,14 @@ extension AccountSync {
     }
 
     func abandon(_ action: QueuedAction) throws {
-        if case .move(let items, _, _, _, _) = action {
+        // The server never saw this change, and its MODSEQ won't tell an incremental sync to put
+        // things back: the next sync of the mailboxes involved reads them in full.
+        switch action {
+        case .move(let items, let target, _, _, _):
+            try store.forgetModSeq(accountID: account.id, mailboxes: Set(items.map(\.fromMailbox)).union([target]))
             try store.delete(ids: items.map(\.localID))
+        case .flags(let localIDs, _, _):
+            try store.forgetModSeq(accountID: account.id, mailboxes: Set(try store.locations(localIDs: localIDs).map(\.mailbox)))
         }
     }
 

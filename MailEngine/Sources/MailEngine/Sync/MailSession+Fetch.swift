@@ -12,18 +12,145 @@ public struct MessageSummary: Sendable, Hashable {
     public var modSeq: UInt64?
 }
 
+/// A set of UIDs as the server sends it (`1:500,512`), without expanding the ranges:
+/// `VANISHED (EARLIER)` may name UIDs we never had.
+public struct UIDRanges: Sendable, Hashable {
+    /// Sorted, non-overlapping.
+    public private(set) var ranges: [ClosedRange<UInt32>]
+
+    public init(_ ranges: [ClosedRange<UInt32>] = []) {
+        var merged: [ClosedRange<UInt32>] = []
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = merged.last, last.upperBound == .max || range.lowerBound <= last.upperBound + 1 {
+                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, range.upperBound)
+            } else {
+                merged.append(range)
+            }
+        }
+        self.ranges = merged
+    }
+
+    init(_ set: UIDSet) {
+        self.init(set.ranges.map { $0.range.lowerBound.rawValue...$0.range.upperBound.rawValue })
+    }
+
+    public var isEmpty: Bool { ranges.isEmpty }
+    public var count: Int { ranges.reduce(0) { $0 + $1.count } }
+
+    public func contains(_ uid: UInt32) -> Bool {
+        var low = 0, high = ranges.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            if ranges[mid].upperBound < uid { low = mid + 1 }
+            else if ranges[mid].lowerBound > uid { high = mid - 1 }
+            else { return true }
+        }
+        return false
+    }
+
+    public mutating func formUnion(_ other: UIDRanges) { self = UIDRanges(ranges + other.ranges) }
+}
+
+/// What changed in the selected mailbox since a MODSEQ (`UID FETCH 1:* … (CHANGEDSINCE n [VANISHED])`).
+public struct MailboxChanges: Sendable {
+    /// New messages and messages whose flags changed.
+    public var summaries: [MessageSummary]
+    /// Expunged since then (QRESYNC only; may name UIDs never seen). Nil when not asked for.
+    public var vanished: UIDRanges?
+    /// The message count after the command (EXISTS updates that arrived with it).
+    public var exists: Int?
+}
+
 extension MailSession {
     /// `UID FETCH <uids|1:*> (UID FLAGS RFC822.SIZE INTERNALDATE [MODSEQ]) [(CHANGEDSINCE n)]`.
     public func fetchSummaries(uids: [UInt32]? = nil, changedSince: UInt64? = nil) async throws -> [MessageSummary] {
         guard let set = try allOrSome(uids) else { return [] }
-        var attributes: [FetchAttribute] = [.uid, .flags, .rfc822Size, .internalDate]
-        if supports("CONDSTORE") { attributes.append(.modificationSequence) }
         var modifiers: [FetchModifier] = []
         if let changedSince, supports("CONDSTORE") {
             modifiers.append(.changedSince(ChangedSinceModifier(modificationSequence: ModificationSequenceValue(changedSince))))
         }
-        let responses = try await run(.uidFetch(set, attributes, modifiers), name: "UID FETCH summaries")
+        let responses = try await run(.uidFetch(set, summaryAttributes, modifiers), name: "UID FETCH summaries")
+        noteExists(in: responses)
+        return Self.summaries(in: responses)
+    }
 
+    /// Everything that changed since `modSeq`, in one round trip: new messages, flag changes and,
+    /// with `vanished` (QRESYNC enabled), expunges. RFC 7162 §3.1.4.1 and §3.2.6.
+    public func fetchChanges(since modSeq: UInt64, vanished: Bool) async throws -> MailboxChanges {
+        var changes = MailboxChanges(summaries: [], vanished: vanished ? UIDRanges() : nil)
+        guard let set = try allOrSome(nil) else {
+            changes.exists = 0
+            return changes
+        }
+        var modifiers: [FetchModifier] = [
+            .changedSince(ChangedSinceModifier(modificationSequence: ModificationSequenceValue(modSeq)))
+        ]
+        if vanished { modifiers.append(.other(KeyValue(key: "VANISHED", value: nil))) }
+        let responses = try await run(.uidFetch(set, summaryAttributes, modifiers),
+                                      name: vanished ? "UID FETCH CHANGEDSINCE VANISHED" : "UID FETCH CHANGEDSINCE")
+        changes.summaries = Self.summaries(in: responses)
+        for response in responses {
+            switch response {
+            case .untagged(.messageData(.vanishedEarlier(let set))), .untagged(.messageData(.vanished(let set))):
+                changes.vanished?.formUnion(UIDRanges(set))
+            default: break
+            }
+        }
+        changes.exists = noteExists(in: responses)
+        return changes
+    }
+
+    /// Every UID in the selected mailbox: `UID SEARCH RETURN (ALL) ALL` where ESEARCH gives a
+    /// compact `1:500,512` answer, else plain `UID SEARCH ALL`.
+    public func allUIDs() async throws -> UIDRanges {
+        if selected?.exists == 0 { return UIDRanges() }
+        if supports("ESEARCH") {
+            let responses = try await run(.uidSearch(key: .all, returnOptions: [.all]), name: "UID SEARCH RETURN (ALL)")
+            var result = UIDRanges()
+            for response in responses {
+                if case .untagged(.mailboxData(.extendedSearch(let found))) = response, let uids = found.matchedUIDs {
+                    result.formUnion(UIDRanges(uids))
+                }
+            }
+            return result
+        }
+        let responses = try await run(.uidSearch(key: .all), name: "UID SEARCH ALL")
+        var uids: [UInt32] = []
+        for response in responses {
+            if case .untagged(.mailboxData(.search(let ids, _))) = response {
+                uids.append(contentsOf: ids.map { UID($0).rawValue })
+            }
+        }
+        return UIDRanges(uids.map { $0...$0 })
+    }
+
+    private var summaryAttributes: [FetchAttribute] {
+        var attributes: [FetchAttribute] = [.uid, .flags, .rfc822Size, .internalDate]
+        if supports("CONDSTORE") { attributes.append(.modificationSequence) }
+        return attributes
+    }
+
+    /// Keeps `selected.exists` current from the EXISTS, EXPUNGE and VANISHED updates that
+    /// arrive with a command's answer.
+    @discardableResult
+    func noteExists(in responses: [Response]) -> Int? {
+        guard var exists = selected?.exists else { return nil }
+        var changed = false
+        for response in responses {
+            switch response {
+            case .untagged(.mailboxData(.exists(let n))): exists = n
+            case .untagged(.messageData(.expunge)): exists -= 1
+            case .untagged(.messageData(.vanished(let set))): exists -= set.count
+            default: continue
+            }
+            changed = true
+        }
+        let current = max(0, exists)
+        if changed { _selected.withLock { $0?.exists = current } }
+        return current
+    }
+
+    static func summaries(in responses: [Response]) -> [MessageSummary] {
         var result: [MessageSummary] = []
         var current = MessageSummary(uid: 0, flags: [], size: 0)
         for response in responses {

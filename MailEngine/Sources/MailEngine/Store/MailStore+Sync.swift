@@ -52,6 +52,12 @@ extension MailStore {
             try db.create(index: "message_mailbox_thread", on: "message", columns: ["accountID", "mailbox", "threadID", "sortKey"])
             try db.create(index: "message_messageID", on: "message", columns: ["messageID"])
         }
+        // Sync became incremental (CHANGEDSINCE from the saved HIGHESTMODSEQ). Earlier full passes
+        // saved a MODSEQ even when they had to leave a queued message alone: read every mailbox
+        // in full once more, so incremental sync starts from a state it can trust.
+        m.registerMigration("v23-incremental-sync") { db in
+            try db.execute(sql: "UPDATE mailboxState SET highestModSeq = NULL")
+        }
     }
 
     // MARK: Mailbox state
@@ -72,6 +78,55 @@ extension MailStore {
                                            arguments: [accountID, mailbox])
             while let row = try rows.next() { result[row["uid"]] = row["flags"] }
             return result
+        }
+    }
+
+    /// UID → flags for the given UIDs only (those an incremental sync was told about).
+    func knownFlags(accountID: String, mailbox: String, uids: [UInt32]) throws -> [UInt32: String] {
+        guard !uids.isEmpty else { return [:] }
+        return try db.read { db in
+            var result: [UInt32: String] = [:]
+            for chunk in stride(from: 0, to: uids.count, by: 500).map({ uids[$0..<min($0 + 500, uids.count)] }) {
+                let args: [(any DatabaseValueConvertible)?] = [accountID, mailbox] + chunk.map { $0 }
+                let rows = try Row.fetchCursor(db, sql: """
+                    SELECT uid, flags FROM message WHERE accountID = ? AND mailbox = ?
+                    AND uid IN (\(chunk.map { _ in "?" }.joined(separator: ",")))
+                    """, arguments: StatementArguments(args))
+                while let row = try rows.next() { result[row["uid"]] = row["flags"] }
+            }
+            return result
+        }
+    }
+
+    /// The stored UIDs that fall in `ranges` (e.g. a `VANISHED (EARLIER)` answer), real ones only.
+    func knownUIDs(accountID: String, mailbox: String, in ranges: UIDRanges) throws -> [UInt32] {
+        guard !ranges.isEmpty else { return [] }
+        return try db.read { db in
+            try ranges.ranges.flatMap { range in
+                try UInt32.fetchAll(db, sql: """
+                    SELECT uid FROM message WHERE accountID = ? AND mailbox = ? AND uid BETWEEN ? AND ? AND uid < ?
+                    """, arguments: [accountID, mailbox, range.lowerBound, range.upperBound, provisionalUIDBase])
+            }
+        }
+    }
+
+    /// How many messages of a mailbox are stored under a server UID (not a provisional one).
+    func serverMessageCount(accountID: String, mailbox: String) throws -> Int {
+        try db.read {
+            try Int.fetchOne($0, sql: "SELECT count(*) FROM message WHERE accountID = ? AND mailbox = ? AND uid < ?",
+                             arguments: [accountID, mailbox, provisionalUIDBase]) ?? 0
+        }
+    }
+
+    /// Makes the next sync of these mailboxes a full pass: the local copy may no longer match
+    /// the server in ways an incremental sync can't see (an abandoned queued change).
+    func forgetModSeq(accountID: String, mailboxes: Set<String>) throws {
+        guard !mailboxes.isEmpty else { return }
+        try db.write { db in
+            for mailbox in mailboxes {
+                try db.execute(sql: "UPDATE mailboxState SET highestModSeq = NULL WHERE accountID = ? AND path = ?",
+                               arguments: [accountID, mailbox])
+            }
         }
     }
 

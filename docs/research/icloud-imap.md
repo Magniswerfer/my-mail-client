@@ -16,6 +16,7 @@ Legend: **V** = verified by probe from this machine · **S** = sourced · **U** 
 Differences from the older sourced list below: **no** ACL, METADATA, THREAD, CATENATE, BINARY, URLAUTH, MULTISEARCH, XMSEARCH, LANGUAGE, ANNOTATE; new: `XAPPLELITERAL`, `X-APPLE-REMOTE-LINKS`. Confirmed absent: MOVE, SPECIAL-USE, COMPRESS, NOTIFY, LIST-EXTENDED.
 - `ENABLE CONDSTORE QRESYNC` → OK (bare-OK handling works).
 - INBOX: `UIDVALIDITY 1`, `HIGHESTMODSEQ` reported.
+- Incremental sync uses `UID FETCH 1:* (…) (CHANGEDSINCE n VANISHED)` and `UID SEARCH RETURN (ALL) ALL` (ESEARCH). Whether iCloud answers the VANISHED modifier: **U** — `tidings-probe capabilities` (read-only) now runs both on INBOX and prints the result. If it fails, the engine falls back to CONDSTORE + UID SEARCH by itself. Avoids `SELECT … (QRESYNC …)` on purpose (historic bogus `FETCH -1` lines, below).
 - **PERMANENTFLAGS verified:** `\Answered \Flagged \Draft \Deleted \Seen \Recent $MailFlagBit0 $MailFlagBit1 $MailFlagBit2 $Forwarded Redirected $NotJunk NotJunk $iCloudCleanup \*`
 - **`LIST "" ("*")` (LIST-EXTENDED pattern-list syntax) returns OK with zero mailboxes.** Use `LIST "" "*"`.
 - **LIST returns `\\Sent` and `\\Trash` attributes** (and `\\Noinferiors` on INBOX) even though SPECIAL-USE is not advertised. Archive/Junk/Drafts come without attributes → name matching still needed.
