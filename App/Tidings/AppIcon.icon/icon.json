@@ -1,0 +1,93 @@
+{
+  "features" : [
+    "specular-location"
+  ],
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.36009,0.57756,0.94137,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "5-wave.svg",
+          "name" : "5-wave",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -2.25
+            ]
+          }
+        },
+        {
+          "image-name" : "4-wave-pale.svg",
+          "name" : "4-wave-pale",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -2.25
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "3-front.svg",
+          "name" : "3-front",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -2.25
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "image-name" : "2-card.svg",
+          "name" : "2-card",
+          "position" : {
+            "scale" : 0.94,
+            "translation-in-points" : [
+              0,
+              -2.25
+            ]
+          }
+        },
+        {
+          "image-name" : "1-back.svg",
+          "name" : "1-back",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              -2.25
+            ]
+          }
+        }
+      ],
+      "position" : {
+        "scale" : 1.25,
+        "translation-in-points" : [
+          0,
+          0
+        ]
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

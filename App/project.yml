@@ -31,6 +31,12 @@ targets:
       - path: Tidings
         excludes:
           - "iOS/**"
+          - "AppIcon.icon"
+          - "AppIcon.icon/**"
+      # The Icon Composer file (Liquid Glass layers), compiled into the app icon.
+      - path: Tidings/AppIcon.icon
+        type: file
+        buildPhase: resources
     dependencies:
       - package: MailEngine
         product: MailEngine
@@ -64,7 +70,7 @@ targets:
         PRODUCT_NAME: Tidings
         CODE_SIGN_IDENTITY: "Apple Development"
         ENABLE_HARDENED_RUNTIME: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       commandLineArguments:
         "-TidingsDevServer": false
@@ -82,6 +88,11 @@ targets:
           - "Info.plist"
           - "Tidings.entitlements"
           - "iOS/TidingsMobile.entitlements"
+          - "AppIcon.icon"
+          - "AppIcon.icon/**"
+      - path: Tidings/AppIcon.icon
+        type: file
+        buildPhase: resources
     dependencies:
       - package: MailEngine
         product: MailEngine
@@ -132,7 +143,7 @@ targets:
         PRODUCT_NAME: Tidings
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_IDENTITY: "Apple Development"
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme:
       commandLineArguments:
         "-TidingsDevServer": false
