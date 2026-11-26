@@ -74,8 +74,21 @@ extension AccountSync {
     }
     static let maxAttempts = 3
 
+    /// The setting that remembers a special folder Tidings doesn't sync (Trash).
+    static func roleKey(_ role: MailboxRole) -> String { "rolePath.\(role.rawValue)" }
+
+    /// The account's folder for a role: a synced one, else the one the last listing named.
     func path(for role: MailboxRole) throws -> String? {
-        try store.mailboxStates(accountID: account.id).first { $0.role == role }?.path
+        if let synced = try store.mailboxStates(accountID: account.id).first(where: { $0.role == role })?.path {
+            return synced
+        }
+        return try store.setting(Self.roleKey(role), accountID: account.id).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// A folder to create when the server has none for the role, named the way it wants
+    /// (`INBOX.Archive` where every folder sits under `INBOX.`).
+    func fallbackPath(_ name: String) throws -> String {
+        (try store.setting(Self.personalPrefixKey, accountID: account.id) ?? "") + name
     }
 
     // MARK: Performing
@@ -102,11 +115,11 @@ extension AccountSync {
             var snooze: (Bool, Date?)? = nil
             switch kind {
             case .done:
-                if let archive = try path(for: .archive) { target = archive } else { target = "Archive"; createTarget = true }
+                if let archive = try path(for: .archive) { target = archive } else { target = try fallbackPath("Archive"); createTarget = true }
             case .trash:
-                target = try path(for: .trash) ?? "Deleted Messages"
+                if let trash = try path(for: .trash) { target = trash } else { target = try fallbackPath("Deleted Messages"); createTarget = true }
             case .junk:
-                target = try path(for: .junk) ?? "Junk"
+                if let junk = try path(for: .junk) { target = junk } else { target = try fallbackPath("Junk"); createTarget = true }
             case .move(let path):
                 guard path != mailbox else { return nil }
                 target = path

@@ -217,6 +217,10 @@ public actor AccountSync {
         var roles = MailboxRoleResolver.resolve(listing)
         try await preferFullest(&roles, listing: listing, session: session)
         try applyRoleChoices(&roles, listing: listing)
+        // Trash isn't synced: remember where it is, so Move to Trash goes there.
+        for role in [MailboxRole.trash, .junk, .archive] {
+            try store.setSetting(Self.roleKey(role), roles[role] ?? "", accountID: account.id)
+        }
         // Junk too: the junk filter learns from it, and you can rescue mail from it.
         let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts, .junk]
         var paths: [(String, MailboxRole?)] = order.compactMap { role in roles[role].map { ($0, role) } }

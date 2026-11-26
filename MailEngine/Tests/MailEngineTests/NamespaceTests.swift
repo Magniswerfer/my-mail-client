@@ -17,6 +17,9 @@ import Testing
         #expect(AccountSync.isSnoozedMailbox("Snoozed"))
         #expect(AccountSync.isSnoozedMailbox("INBOX.Snoozed"))
         #expect(!AccountSync.isSnoozedMailbox("Clients.Snoozed"))
+        #expect(MailboxRoleResolver.role(path: "INBOX.Trash", separator: ".", attributes: []) == .trash)
+        #expect(MailboxRoleResolver.role(path: "INBOX.Clients.Trash", separator: ".", attributes: []) == nil)
+        #expect(MailboxRoleResolver.role(path: "Clients/Archive", separator: "/", attributes: []) == nil)
     }
 
     /// Against a Dovecot set up like that (see the commit for the config). Skipped unless
@@ -70,6 +73,18 @@ import Testing
             let snoozed = try await session.select("INBOX.Snoozed", readOnly: true).exists
             #expect(inbox == 1)
             #expect(snoozed == 0)
+        }
+
+        // Trash isn't synced, but Move to Trash still finds INBOX.Trash (not a top-level folder).
+        try await sync.perform(.trash, threadIDs: [thread])
+        try await sync.catchUp()
+        try await MailSession.open(endpoint: endpoint, password: password) { session in
+            let trash = try await session.select("INBOX.Trash", readOnly: true).exists
+            let inbox = try await session.select("INBOX", readOnly: true).exists
+            #expect(trash == 1)
+            #expect(inbox == 0)
+            let boxes = try await session.listMailboxes().map(\.path)
+            #expect(!boxes.contains("Deleted Messages"))
         }
     }
 }

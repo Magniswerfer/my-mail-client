@@ -33,8 +33,10 @@ public enum MailboxRoleResolver {
             if let role = specialUse[attribute.lowercased()] { return role }
         }
         // Only top-level folders are treated as special: "Clients/Archive" is just a folder.
-        if let separator, path.contains(separator) { return nil }
-        let name = path.lowercased()
+        // Right under INBOX counts as top level (Dovecot's `INBOX.` namespace: "INBOX.Trash").
+        var name = path.lowercased()
+        if let separator, name.hasPrefix("inbox\(separator)") { name.removeFirst(6) }
+        if let separator, name.contains(separator) { return nil }
         return namesByRole.first { $0.value.contains(name) }?.key
     }
 
