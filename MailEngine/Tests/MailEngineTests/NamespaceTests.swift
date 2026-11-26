@@ -22,6 +22,17 @@ import Testing
         #expect(MailboxRoleResolver.role(path: "Clients/Archive", separator: "/", attributes: []) == nil)
     }
 
+    @Test func bareFolderNamesGoUnderThePrefix() {
+        #expect(AccountSync.underPrefix("Receipts", "INBOX.") == "INBOX.Receipts")
+        #expect(AccountSync.underPrefix("INBOX.Receipts", "INBOX.") == "INBOX.Receipts")
+        #expect(AccountSync.underPrefix("inbox.Receipts", "INBOX.") == "inbox.Receipts")
+        #expect(AccountSync.underPrefix("INBOX", "INBOX.") == "INBOX")
+        #expect(AccountSync.underPrefix("Receipts", "") == "Receipts")
+        let refusal = "UID MOVE failed: no(Client tried to access nonexistent namespace. (Mailbox name should probably be prefixed with: INBOX.) (0.001 + 0.000 secs).)"
+        #expect(AccountSync.namespaceHint(in: refusal) == "INBOX.")
+        #expect(AccountSync.namespaceHint(in: "UID MOVE failed: no(Mailbox doesn't exist)") == nil)
+    }
+
     /// Against a Dovecot set up like that (see the commit for the config). Skipped unless
     /// TIDINGS_NAMESPACE_PORT points at one.
     @Test func snoozeAndSentFollowTheServer() async throws {
@@ -86,5 +97,48 @@ import Testing
             let boxes = try await session.listMailboxes().map(\.path)
             #expect(!boxes.contains("Deleted Messages"))
         }
+    }
+
+    /// A move queued to a bare folder name ("Receipts", from a rule written for another account,
+    /// or queued before the prefix was known) lands in INBOX.Receipts. When the prefix isn't
+    /// known yet, the server's refusal teaches it and the next attempt goes through.
+    @Test func bareMoveTargetsFollowTheServer() async throws {
+        guard let port = ProcessInfo.processInfo.environment["TIDINGS_NAMESPACE_PORT"].flatMap(UInt16.init) else { return }
+        let user = "nsm-\(UUID().uuidString.prefix(8))"
+        let endpoint = IMAPEndpoint(host: "127.0.0.1", port: port, useTLS: false, username: user)
+        let password = "tidings-test"
+        try await MailSession.open(endpoint: endpoint, password: password) { session in
+            try await session.ensureMailbox("INBOX.Receipts")
+            for n in 1...2 {
+                _ = try await session.append(to: "INBOX", message: Data("From: a@b.dk\r\nTo: \(user)@x.dk\r\nSubject: R\(n)\r\nMessage-ID: <nsm\(n)-\(user)@x>\r\nDate: Thu, 26 Nov 2026 10:00:00 +0100\r\n\r\nHi\r\n".utf8))
+            }
+        }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tidings-nsm-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let store = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
+        let account = AccountConfig(displayName: "NS", endpoint: endpoint, addresses: ["\(user)@x.dk"])
+        let sync = AccountSync(account: account, password: password, store: store,
+                               cache: MessageCache(directory: dir.appendingPathComponent("Cache")))
+        try await sync.syncOnce()
+        let threads = try store.threads(mailbox: "INBOX").compactMap(\.threadID)
+        #expect(threads.count == 2)
+
+        // Prefix known: straight there.
+        try await sync.perform(.move(toMailbox: "Receipts"), threadIDs: [threads[0]])
+        try await sync.catchUp()
+
+        // Prefix not known yet: the first attempt is refused, the second lands.
+        try store.setSetting(AccountSync.personalPrefixKey, "", accountID: account.id)
+        try await sync.perform(.move(toMailbox: "Receipts"), threadIDs: [threads[1]])
+        try? await sync.catchUp()
+        try await sync.catchUp()
+
+        try await MailSession.open(endpoint: endpoint, password: password) { session in
+            let receipts = try await session.select("INBOX.Receipts", readOnly: true).exists
+            let inbox = try await session.select("INBOX", readOnly: true).exists
+            #expect(receipts == 2)
+            #expect(inbox == 0)
+        }
+        #expect(try store.pendingActions(accountID: account.id).isEmpty)
     }
 }

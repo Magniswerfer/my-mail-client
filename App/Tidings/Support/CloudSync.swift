@@ -13,6 +13,8 @@ import UIKit
 /// records, with CKSyncEngine doing batching, change tokens, pushes and retries.
 final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     static let zoneID = CKRecordZone.ID(zoneName: "TidingsState", ownerName: CKCurrentUserDefaultName)
+    static let environmentKey = "environment"
+    static let environment = Data("Production".utf8)
     static let recordType = "State"
 
     let store: MailStore
@@ -64,6 +66,14 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         } catch {
             onStatus(.unavailable(String(describing: error)))
             return
+        }
+        // Every build uses CloudKit's Production database (project.yml). What a device remembers
+        // from the Development one (an earlier build installed from Xcode) says records are in the
+        // cloud that aren't there: forget it once, so this device offers its state again (the
+        // cloud's version wins where it has one) and fetches everything.
+        if (try? store.cloudMeta(Self.environmentKey)) != Self.environment {
+            try? store.resetCloudState()
+            try? store.setCloudMeta(Self.environmentKey, Self.environment)
         }
         let saved = (try? store.cloudMeta("engineState")).flatMap { try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
         let configuration = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: saved, delegate: self)

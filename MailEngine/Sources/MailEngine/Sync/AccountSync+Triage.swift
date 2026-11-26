@@ -350,27 +350,65 @@ extension AccountSync {
         }
     }
 
+    /// Moves each source mailbox's share of `items` to `target`, flag edits first.
+    private func moveGroups(_ items: [QueuedAction.MoveItem], to target: String, add: [String], remove: [String],
+                            _ session: MailSession) async throws {
+        for (mailbox, group) in Dictionary(grouping: items, by: \.fromMailbox) {
+            _ = try await session.select(mailbox)
+            let uids = group.map(\.fromUID).filter { $0 < provisionalUIDBase }
+            if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
+            if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
+            let mapping = try await session.move(uids: uids, to: target)
+            try store.applyMoveResult(accountID: account.id, target: target, items: group, mapping: mapping)
+        }
+    }
+
+    /// `path` under the account's personal prefix (`INBOX.`): unchanged when it's already there,
+    /// is the Inbox itself, or the server has no prefix.
+    static func underPrefix(_ path: String, _ prefix: String) -> String {
+        guard !prefix.isEmpty, path.uppercased() != "INBOX",
+              !path.uppercased().hasPrefix(prefix.uppercased()) else { return path }
+        return prefix + path
+    }
+
+    /// The prefix a server's refusal asks for: Dovecot's "Mailbox name should probably be
+    /// prefixed with: INBOX." gives `INBOX.`.
+    static func namespaceHint(in message: String) -> String? {
+        guard let range = message.range(of: "prefixed with: ") else { return nil }
+        let rest = message[range.upperBound...]
+        let prefix = rest.prefix { !$0.isWhitespace && $0 != ")" }
+        return prefix.isEmpty ? nil : String(prefix)
+    }
+
     func execute(_ action: QueuedAction, _ session: MailSession) async throws {
         switch action {
         case .move(let items, let queuedTarget, let add, let remove, let createTarget):
             // Snoozes queued before the folder followed the server's namespace said "Snoozed";
             // send them where this server wants it ("INBOX.Snoozed").
-            var target = queuedTarget
-            if Self.isSnoozedMailbox(queuedTarget), let path = try? snoozedPath(), path != queuedTarget {
+            let target: String
+            if Self.isSnoozedMailbox(queuedTarget), let path = try? snoozedPath() {
                 target = path
+            } else {
+                // Any other folder named without the server's `INBOX.` (queued before the account's
+                // prefix was known, or a rule's folder from another account): where the server wants it.
+                target = Self.underPrefix(queuedTarget, try store.setting(Self.personalPrefixKey, accountID: account.id) ?? "")
+            }
+            if target != queuedTarget {
                 try await store.db.write { db in
                     try db.execute(sql: "UPDATE message SET mailbox = ? WHERE accountID = ? AND mailbox = ?",
-                                   arguments: [path, account.id, queuedTarget])
+                                   arguments: [target, account.id, queuedTarget])
                 }
             }
-            if createTarget { try await session.ensureMailbox(target) }
-            for (mailbox, group) in Dictionary(grouping: items, by: \.fromMailbox) {
-                _ = try await session.select(mailbox)
-                let uids = group.map(\.fromUID).filter { $0 < provisionalUIDBase }
-                if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
-                if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
-                let mapping = try await session.move(uids: uids, to: target)
-                try store.applyMoveResult(accountID: account.id, target: target, items: group, mapping: mapping)
+            do {
+                if createTarget { try await session.ensureMailbox(target) }
+                try await moveGroups(items, to: target, add: add, remove: remove, session)
+            } catch let error as MailSessionError {
+                // Dovecot names the prefix it wants ("should probably be prefixed with: INBOX."):
+                // remember it, so the next attempt goes there.
+                if let prefix = Self.namespaceHint(in: error.description), !prefix.isEmpty {
+                    try store.setSetting(Self.personalPrefixKey, prefix, accountID: account.id)
+                }
+                throw MailSessionError.commandFailed(command: "Move to \(target)", detail: error.description)
             }
         case .flags(let localIDs, let add, let remove):
             let byMailbox = Dictionary(grouping: try store.locations(localIDs: localIDs), by: \.mailbox)
