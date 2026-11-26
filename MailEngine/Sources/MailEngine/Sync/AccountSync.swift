@@ -387,6 +387,12 @@ public struct MessageCache: Sendable {
         try data.write(to: url, options: .atomic)
     }
 
+    /// Deletes every cached message of one account (it was removed).
+    public func removeAccount(_ account: String) {
+        guard !account.isEmpty, !account.contains("/"), account != "..", account != "." else { return }
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent(account, isDirectory: true))
+    }
+
     /// Evicts least-recently-used files until the cache fits `limitBytes`.
     public func trim() throws {
         let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]

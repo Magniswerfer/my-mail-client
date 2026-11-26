@@ -254,10 +254,12 @@ struct SeedTestServer: AsyncParsableCommand {
     @Option var port: UInt16 = 31143
     @Flag(help: "Also add mail that mentions plans (dinner, a webinar, a table booking) for calendar suggestions.")
     var datePlans = false
+    @Flag(help: "Seed the second test account's mail (magnus@work.test) instead, for trying two accounts.")
+    var work = false
 
     func run() async throws {
         let endpoint = IMAPEndpoint(host: "127.0.0.1", port: port, useTLS: false, username: user)
-        let count = try await TestServerSeeder.seed(endpoint: endpoint, password: "tidings-test", datePlans: datePlans)
+        let count = try await TestServerSeeder.seed(endpoint: endpoint, password: "tidings-test", datePlans: datePlans, work: work)
         print("Seeded \(count) messages for user '\(user)' on 127.0.0.1:\(port).")
     }
 }

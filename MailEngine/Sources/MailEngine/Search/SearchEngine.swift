@@ -223,6 +223,10 @@ public struct SearchEngine: Sendable {
         if let d = q.before { p.rowidClauses.append("$K < ?"); p.rowidArguments.append(SortKey.lowerBound(d)) }
 
         if let box = q.mailbox { p.messageClauses.append("m.mailbox = ? COLLATE NOCASE"); p.messageArguments.append(box) }
+        if !q.accounts.isEmpty {
+            p.messageClauses.append("m.accountID IN (\(q.accounts.map { _ in "?" }.joined(separator: ",")))")
+            p.messageArguments += q.accounts
+        }
         if let u = q.unread {
             p.messageClauses.append(u ? "instr(m.flags, '\\Seen') = 0" : "instr(m.flags, '\\Seen') > 0")
         }

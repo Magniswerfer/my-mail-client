@@ -89,6 +89,39 @@ public enum TestMailFactory {
         return seeds
     }
 
+    /// The second test account's address (`workMailbox`).
+    public static let work = MailAddress(name: "Magnus Kaspersen", address: "magnus@work.test")
+
+    /// A second account's mail, for trying more than one account on the local server: its own
+    /// conversations (distinct Message-IDs), plus Anna's latest dinner reply, which she sent to
+    /// both addresses, so one conversation lives in both accounts' Inboxes.
+    public static func workMailbox(now: Date = Date()) -> [Seed] {
+        var seeds: [Seed] = []
+        var n = 0
+        func id() -> String { n += 1; return "work-\(n)@work.test" }
+        func ago(_ hours: Double) -> Date { now.addingTimeInterval(-hours * 3600) }
+        let lene = MailAddress(name: "Lene Vestergaard", address: "lene@work.test")
+        let w1 = id(), w2 = id()
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: lene, to: [work], subject: "Kvartalsplan til mandag", date: ago(30), id: w1,
+            body: "Hej Magnus,\n\nKan du sende dine punkter til kvartalsplanen inden mandag?\n\nLene"), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "Sent", raw: text(from: work, to: [lene], subject: "Re: Kvartalsplan til mandag", date: ago(28), id: w2,
+            body: "Hej Lene,\n\nJa, de kommer i morgen.\n\nMagnus", replyTo: [w1]), flags: ["\\Seen"]))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: lene, to: [work], subject: "Re: Kvartalsplan til mandag", date: ago(1), id: id(),
+            body: "Super, tak!\n\nLene", replyTo: [w1, w2]), flags: []))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "Jonas Berg", address: "jonas@client.example"), to: [work],
+            subject: "Tilbud på nyt website", date: ago(5), id: id(),
+            body: "Hej Magnus,\n\nVi vil gerne have et tilbud på det nye website. Har du tid til et møde i næste uge?\n\nJonas"), flags: []))
+        seeds.append(Seed(mailbox: "INBOX", raw: text(from: MailAddress(name: "Jira", address: "jira@work.test"), to: [work],
+            subject: "[TID-42] Status changed to In Review", date: ago(7), id: id(), body: "Lene moved TID-42 to In Review."), flags: []))
+        seeds.append(Seed(mailbox: "Archive", raw: text(from: MailAddress(name: "Lønservice", address: "loen@work.test"), to: [work],
+            subject: "Lønseddel for oktober", date: ago(24 * 26), id: id(), body: "Din lønseddel for oktober er klar."), flags: ["\\Seen"]))
+        // Sent to both addresses: the same message (Message-ID) in both accounts.
+        if let shared = mailbox(now: now).first(where: { String(decoding: $0.raw, as: UTF8.self).contains("<seed-3@tidings.test>") }) {
+            seeds.append(shared)
+        }
+        return seeds
+    }
+
     /// Mail that mentions plans, for trying calendar suggestions: a sentence, a webinar written
     /// in another zone, a booking in schema.org JSON-LD. Not part of `mailbox()` (its tests count those).
     public static func datePlans(now: Date = Date()) -> [Seed] {
@@ -227,11 +260,13 @@ public enum TestMailFactory {
 
 /// Seeds the local test server. Hard-refuses anything but localhost.
 public enum TestServerSeeder {
-    public static func seed(endpoint: IMAPEndpoint, password: String, now: Date = Date(), datePlans: Bool = false) async throws -> Int {
+    public static func seed(endpoint: IMAPEndpoint, password: String, now: Date = Date(), datePlans: Bool = false,
+                            work: Bool = false) async throws -> Int {
         guard endpoint.host == "127.0.0.1" || endpoint.host == "localhost" else {
             throw MailSessionError.commandFailed(command: "seed", detail: "seeding is only allowed against localhost")
         }
-        let seeds = TestMailFactory.mailbox(now: now) + (datePlans ? TestMailFactory.datePlans(now: now) : [])
+        let seeds = (work ? TestMailFactory.workMailbox(now: now) : TestMailFactory.mailbox(now: now))
+            + (datePlans ? TestMailFactory.datePlans(now: now) : [])
         return try await MailSession.open(endpoint: endpoint, password: password) { session in
             for box in Set(seeds.map(\.mailbox)) where box != "INBOX" {
                 try await session.ensureMailbox(box)

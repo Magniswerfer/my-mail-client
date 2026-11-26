@@ -5,7 +5,8 @@ import Foundation
 /// Supported: `from:` `to:` `subject:` `category:` `in:` `has:attachment` `is:unread` `is:read`
 /// `is:pinned` `is:waiting` (you wrote last), `before:`/`after:` with `YYYY-MM-DD`, `today`,
 /// `thisweek`, `thismonth`, `thisyear` or a relative `30d`/`6w`/`3m`/`1y`, `larger:5M` `smaller:100K`,
-/// quoted phrases, and `-term` exclusion.
+/// quoted phrases, `-term` exclusion, and `account:` (an account's name, address or domain; the app
+/// resolves it to account ids with `resolvingAccounts`).
 public struct SearchQuery: Sendable, Hashable {
     public var terms: [String] = []
     public var phrases: [String] = []
@@ -15,6 +16,8 @@ public struct SearchQuery: Sendable, Hashable {
     public var subject: [String] = []
     public var categories: [MailCategory] = []
     public var mailbox: String?
+    /// `account:`: as typed until `resolvingAccounts`, then account ids.
+    public var accounts: [String] = []
     public var hasAttachment: Bool?
     public var unread: Bool?
     public var pinned: Bool?
@@ -60,6 +63,7 @@ public struct SearchQuery: Sendable, Hashable {
             case "to": to.append(value)
             case "subject": subject.append(value)
             case "in": mailbox = value
+            case "account": accounts.append(value)
             case "category":
                 if let c = MailCategory(rawValue: value.lowercased()) ?? Self.categoryAliases[value.lowercased()] {
                     categories.append(c)
@@ -82,9 +86,23 @@ public struct SearchQuery: Sendable, Hashable {
             case "to": to.append(value)
             case "subject": subject.append(value)
             case "in": mailbox = value
+            case "account": accounts.append(value)
             default: phrases.append(value)
             }
         }
+    }
+
+    /// `account:` values turned into account ids: an id, the account's name, any of its
+    /// addresses, or a domain ("icloud.com", "work"), case-insensitive. A value that names no
+    /// account matches nothing (rather than everything).
+    public func resolvingAccounts(_ all: [AccountConfig]) -> SearchQuery {
+        guard !accounts.isEmpty else { return self }
+        var copy = self
+        copy.accounts = accounts.flatMap { value -> [String] in
+            let found = all.filter { $0.matches(searchValue: value) }.map(\.id)
+            return found.isEmpty ? ["\u{0}none:\(value)"] : found
+        }
+        return copy
     }
 
     static let categoryAliases: [String: MailCategory] = [
