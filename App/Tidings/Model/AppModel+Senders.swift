@@ -52,6 +52,14 @@ extension AppModel {
         }
     }
 
+    /// From the reader, which already knows how (no second fetch).
+    func requestUnsubscribe(message: StoredMessage, method: UnsubscribeMethod) {
+        let inbox = ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? [])
+            .filter { $0.latest.fromAddress.lowercased() == message.fromAddress.lowercased() }
+        unsubscribeCandidate = UnsubscribeRequest(address: message.fromAddress, name: message.senderDisplay, accountID: message.accountID,
+                                                  method: method, inboxCount: inbox.count)
+    }
+
     func confirmUnsubscribe(_ request: UnsubscribeRequest, archiveInbox: Bool) {
         unsubscribeCandidate = nil
         Task {
@@ -121,6 +129,8 @@ extension AppModel {
 extension StoredMessage {
     /// Bulk mail from a list or with an unsubscribe link (as classified).
     var isList: Bool {
+        // Newsletters and ads often only have an "Unsubscribe" link in the body.
+        if category == .newsletters || category == .advertising { return true }
         guard let reason = classificationReason.flatMap(ClassificationReason.init(encoded:)) else { return false }
         switch reason {
         case .mailingListUnsubscribe, .mailingList: return true

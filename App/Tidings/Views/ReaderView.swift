@@ -86,6 +86,8 @@ struct MessageCard: View {
         var inline: [String: (data: Data, mimeType: String)]
         /// Parsed from the raw message, for mail synced before invites were stored.
         var invite: CalendarInvite?
+        /// How to leave their list: the List-Unsubscribe header, else the body's "Unsubscribe" link.
+        var unsubscribe: UnsubscribeMethod?
     }
 
     var body: some View {
@@ -110,6 +112,23 @@ struct MessageCard: View {
 
     @ViewBuilder private var header: some View {
         if Platform.isPhone { phoneHeader } else { macHeader }
+    }
+
+    /// "Unsubscribe" beside the sender when their mail says how (Gmail-style); "Unsubscribed"
+    /// once you have. It still asks first.
+    @ViewBuilder private var unsubscribeButton: some View {
+        if let method = body_?.unsubscribe {
+            if let when = try? model.store.unsubscribedAt(address: message.fromAddress) {
+                Text("Unsubscribed")
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .help(Text("You unsubscribed on \(MailDate.long(when))"))
+            } else {
+                Button("Unsubscribe") { model.requestUnsubscribe(message: message, method: method) }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .help("Stop getting mail from \(message.senderDisplay). Asks first.")
+            }
+        }
     }
 
     private func avatar(size: CGFloat) -> some View {
@@ -143,6 +162,7 @@ struct MessageCard: View {
                     if let to = body_?.to, !to.isEmpty {
                         Text("To: \(to)").lineLimit(1)
                     }
+                    unsubscribeButton
                 } else {
                     Text(message.preview).font(.subheadline).lineLimit(1)
                 }
@@ -160,6 +180,7 @@ struct MessageCard: View {
                     Text(message.senderDisplay).font(.headline)
                     if expanded {
                         Text(message.fromAddress).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        unsubscribeButton
                     }
                     Spacer()
                     Text(MailDate.long(message.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -263,7 +284,8 @@ struct MessageCard: View {
                 html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
                 to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
                 inline: MIMEParser.inlineParts(in: raw),
-                invite: parsed.invite
+                invite: parsed.invite,
+                unsubscribe: Unsubscribe.methods(in: parsed).first
             )
         } catch {
             loadError = String(localized: "Couldn't load the full message. Showing the stored text.")

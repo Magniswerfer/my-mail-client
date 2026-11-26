@@ -4771,6 +4771,26 @@
         }
       }
     },
+    "You unsubscribed on %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du afmeldte dig %@"
+          }
+        }
+      }
+    },
+    "Stop getting mail from %@. Asks first.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Få ikke mere mail fra %@. Spørger først."
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

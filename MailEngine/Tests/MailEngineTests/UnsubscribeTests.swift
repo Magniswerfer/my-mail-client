@@ -52,6 +52,24 @@ final class CapturingURLProtocol: URLProtocol, @unchecked Sendable {
         #expect(methods.first == .oneClick(URL(string: "https://shop.dk/unsub?u=1")!))
     }
 
+    /// No List-Unsubscribe header, only an "AFMELD" link at the bottom (NEYE does this).
+    @Test func theBodysLinkWhenThereIsNoHeader() {
+        let html = """
+            <a href="https://neye.dk/tilbud">TILBUD</a>
+            <p>Vil du ikke modtage flere mails? <a class="x" href="https://click.neye.dk/u?id=1&amp;e=2"><span>AFMELD</span></a></p>
+            <a href='https://neye.dk/unsubscribe/abc'>her</a>
+            <a href="mailto:x@neye.dk">Afmeld via mail</a>
+            """
+        #expect(Unsubscribe.bodyLinks(html: html).map(\.absoluteString) ==
+                ["https://click.neye.dk/u?id=1&e=2", "https://neye.dk/unsubscribe/abc"])
+        let raw = "From: NEYE <klubneye@neye.dk>\r\nSubject: Tilbud\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\(html)\r\n"
+        #expect(Unsubscribe.methods(in: MIMEParser.parse(Data(raw.utf8))) == [.web(URL(string: "https://click.neye.dk/u?id=1&e=2")!)])
+        // A header still wins.
+        let withHeader = "From: a@b.dk\r\nList-Unsubscribe: <mailto:u@b.dk>\r\nContent-Type: text/html\r\n\r\n\(html)\r\n"
+        #expect(Unsubscribe.methods(in: MIMEParser.parse(Data(withHeader.utf8))) == [.mail(to: "u@b.dk", subject: "unsubscribe", body: "")])
+        #expect(Unsubscribe.bodyLinks(html: "<a href=\"https://shop.dk/sko\">Se sko</a>").isEmpty)
+    }
+
     @Test func oneClickPostsTheFormAndChecksTheStatus() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [CapturingURLProtocol.self]

@@ -45,8 +45,44 @@ public enum Unsubscribe {
         return clicks + mails + web
     }
 
+    /// The headers' methods; when there are none, the "Unsubscribe" / "Afmeld" link in the body
+    /// (plenty of shops only have that).
     public static func methods(in parsed: ParsedMessage) -> [UnsubscribeMethod] {
-        methods(listUnsubscribe: parsed.header("List-Unsubscribe"), listUnsubscribePost: parsed.header("List-Unsubscribe-Post"))
+        let fromHeaders = methods(listUnsubscribe: parsed.header("List-Unsubscribe"), listUnsubscribePost: parsed.header("List-Unsubscribe-Post"))
+        guard fromHeaders.isEmpty, let html = parsed.html else { return fromHeaders }
+        return bodyLinks(html: html).prefix(1).map(UnsubscribeMethod.web)
+    }
+
+    /// Words an unsubscribe link says, in the languages mail here comes in.
+    static let unsubscribeWords = [
+        "unsubscribe", "unsub", "opt-out", "opt out", "afmeld", "frameld", "afmelding", "framelding",
+        "abmelden", "abbestellen", "désabonner", "desabonner", "désinscri", "desinscri", "uitschrijven",
+        "afmelden", "avregistrer", "avsluta prenumeration", "meld deg av", "darse de baja", "cancelar suscripción",
+    ]
+
+    /// Links in the body whose text or address says unsubscribe, http(s) only, in order.
+    public static func bodyLinks(html: String) -> [URL] {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>(.*?)</a\s*>"#,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
+        let ns = html as NSString
+        var found: [URL] = []
+        for match in regex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let hrefRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
+            let href = ns.substring(with: hrefRange).replacingOccurrences(of: "&amp;", with: "&")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: href), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { continue }
+            let text = ns.substring(with: match.range(at: 3))
+                .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+                .replacingOccurrences(of: "&nbsp;", with: " ")
+                .lowercased()
+            let lowerHref = href.lowercased()
+            if unsubscribeWords.contains(where: { text.contains($0) || lowerHref.contains($0.replacingOccurrences(of: " ", with: "")) }),
+               !found.contains(url) {
+                found.append(url)
+            }
+        }
+        return found
     }
 
     public enum Failure: Error, Sendable { case status(Int) }
