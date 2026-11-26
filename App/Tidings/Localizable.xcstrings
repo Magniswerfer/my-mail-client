@@ -8850,6 +8850,536 @@
           }
         }
       }
+    },
+    "%lld messages are deleted from the server too.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld message is deleted from the server too."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld messages are deleted from the server too."
+                }
+              }
+            }
+          }
+        },
+        "da": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld besked slettes også fra serveren."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beskeder slettes også fra serveren."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "A folder can't go inside itself.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En mappe kan ikke ligge i sig selv."
+          }
+        }
+      }
+    },
+    "Any mail in it is deleted from the server too.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al mail i den slettes også fra serveren."
+          }
+        }
+      }
+    },
+    "Couldn't delete “%@”: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke slette “%1$@”: %2$@"
+          }
+        }
+      }
+    },
+    "Couldn't reach the server: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke nå serveren: %@"
+          }
+        }
+      }
+    },
+    "Created “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oprettede “%@”"
+          }
+        }
+      }
+    },
+    "Delete Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet mappe"
+          }
+        }
+      }
+    },
+    "Delete Folder “%@”…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet mappen “%@”…"
+          }
+        }
+      }
+    },
+    "Delete Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet mappe…"
+          }
+        }
+      }
+    },
+    "Delete “%@”?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet “%@”?"
+          }
+        }
+      }
+    },
+    "Deleted “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slettede “%@”"
+          }
+        }
+      }
+    },
+    "Delete…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slet…"
+          }
+        }
+      }
+    },
+    "Folder names can't contain “%@” on this server.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappenavne kan ikke indeholde “%@” på denne server."
+          }
+        }
+      }
+    },
+    "Go to %@ (%@)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "In %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I %@"
+          }
+        }
+      }
+    },
+    "It holds %lld subfolders, which are deleted too.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "It holds a subfolder, which is deleted too."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "It holds %lld subfolders, which are deleted too."
+                }
+              }
+            }
+          }
+        },
+        "da": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Den indeholder en undermappe, som også slettes."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Den indeholder %lld undermapper, som også slettes."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Move Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt mappe"
+          }
+        }
+      }
+    },
+    "Move Folder “%@”…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt mappen “%@”…"
+          }
+        }
+      }
+    },
+    "Move Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt mappe…"
+          }
+        }
+      }
+    },
+    "Move To…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyt til…"
+          }
+        }
+      }
+    },
+    "Moved “%@” into “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttede “%1$@” ind i “%2$@”"
+          }
+        }
+      }
+    },
+    "Moved “%@” to the top level": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flyttede “%@” til øverste niveau"
+          }
+        }
+      }
+    },
+    "New Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny mappe"
+          }
+        }
+      }
+    },
+    "New Folder Inside “%@”…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny mappe i “%@”…"
+          }
+        }
+      }
+    },
+    "New Folder in %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny mappe i %@…"
+          }
+        }
+      }
+    },
+    "New Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny mappe…"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøb"
+          }
+        }
+      }
+    },
+    "Rename Folder": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøb mappe"
+          }
+        }
+      }
+    },
+    "Rename Folder “%@”…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøb mappen “%@”…"
+          }
+        }
+      }
+    },
+    "Rename Folder…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøb mappe…"
+          }
+        }
+      }
+    },
+    "Renamed to “%@”": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøbt til “%@”"
+          }
+        }
+      }
+    },
+    "Rename…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omdøb…"
+          }
+        }
+      }
+    },
+    "That folder can't hold other folders.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den mappe kan ikke indeholde andre mapper."
+          }
+        }
+      }
+    },
+    "That folder is no longer on the server.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den mappe findes ikke længere på serveren."
+          }
+        }
+      }
+    },
+    "That name can't be used for a folder.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det navn kan ikke bruges til en mappe."
+          }
+        }
+      }
+    },
+    "That's a special folder.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det er en særlig mappe."
+          }
+        }
+      }
+    },
+    "The Inbox can't be changed.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indbakken kan ikke ændres."
+          }
+        }
+      }
+    },
+    "The server said no: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serveren sagde nej: %@"
+          }
+        }
+      }
+    },
+    "There's already a folder with that name.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der findes allerede en mappe med det navn."
+          }
+        }
+      }
+    },
+    "This account isn't connected.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontoen er ikke forbundet."
+          }
+        }
+      }
+    },
+    "This can't be undone.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det kan ikke fortrydes."
+          }
+        }
+      }
+    },
+    "Top Level": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Øverste niveau"
+          }
+        }
+      }
+    },
+    "Use As": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug som"
+          }
+        }
+      }
+    },
+    "Use “%@” as %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug “%1$@” som %2$@"
+          }
+        }
+      }
+    },
+    "“%@” is a special folder. Tidings and other mail apps may stop finding it after this.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” er en særlig mappe. Tidings og andre mailprogrammer kan holde op med at finde den efter dette."
+          }
+        }
+      }
+    },
+    "“%@” is a special folder; Tidings and other mail apps use it.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” er en særlig mappe, som Tidings og andre mailprogrammer bruger."
+          }
+        }
+      }
+    },
+    "“%@” is now used as %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” bruges nu som %2$@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

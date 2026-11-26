@@ -132,6 +132,7 @@ struct MobileRootView: View {
                 .interactiveDismissDisabled(model.needsAccountSetup)
         }
         .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
+        .modifier(FolderManagement())
         .sheet(item: $model.accountToSignIn) { account in
             AccountPasswordSheet(account: account).environment(model)
         }

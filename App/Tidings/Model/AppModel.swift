@@ -256,6 +256,10 @@ final class AppModel {
     var isAddingAccount = false
     /// The account Settings or ⌘K asked to remove, waiting for confirmation.
     var accountToRemove: AccountConfig?
+    /// The New Folder / Rename / Move To sheet.
+    var folderEditing: FolderEditing?
+    /// A folder waiting for "Delete Folder" to be confirmed.
+    var folderToDelete: FolderDeletion?
     /// Accounts another device added through iCloud whose password hasn't reached this device's
     /// Keychain (iCloud Keychain is slow or off). They join as soon as it has one.
     var accountsAwaitingPassword: [AccountConfig] = []
@@ -342,6 +346,9 @@ final class AppModel {
         Keychain.service = isDevServer ? "Tidings-Dev" : "Tidings"
         var dev = Self.devAccount
         dev.endpoint.username = devUser
+        // `-TidingsDevPort 31145`: the local Dovecot with every folder under `INBOX.` (like NordicWay).
+        let devPort = UserDefaults.standard.integer(forKey: "TidingsDevPort")
+        if (1...65535).contains(devPort) { dev.endpoint.port = UInt16(devPort) }
         if isDevServer {
             if devUser != "magnus" { AccountStorage.devKey = "accounts.dev.v1.\(devUser)" }
             // The local Dovecot account is always there; accounts added in the dev copy follow it.
@@ -686,7 +693,7 @@ final class AppModel {
         case .outbox: String(localized: "Outbox")
         case .category(let c): c.title
         case .mailbox(let accountID, let path):
-            mailboxes.first { $0.accountID == accountID && $0.path == path }?.role?.title ?? path
+            mailboxes.first { $0.accountID == accountID && $0.path == path }.map(folderName) ?? path
         case .smartFolder(let id): smartFolder(id: id).map(displayName) ?? String(localized: "Smart Folder")
         case .aiCategory(let id): aiCategory(id: id)?.name ?? String(localized: "Category")
         }

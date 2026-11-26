@@ -24,6 +24,7 @@
 		28584EFDF79A31E8B8F38806 /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A0203070BD655088A92656 /* CloudSync.swift */; };
 		2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8DE1053B517D234A2D453E /* CategorySwipeBar.swift */; };
 		2C2D7B77A2C8A1B594CB2A08 /* SendersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C863A5E8187EAFEB176353 /* SendersView.swift */; };
+		2CFC392AEFEFEE6C9B25C236 /* AppModel+Folders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
 		35383B4FCF5D678A9D5CBC90 /* AppModel+SmartFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */; };
 		3551F661B8D4C6977D27C0D4 /* TextFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */; };
@@ -36,6 +37,7 @@
 		481B300BB3E42C31457162E1 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */; };
 		48FD1467A43E15F0FFF0584A /* AppModel+Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC3F3316BF8FC8367BE4BA /* AppModel+Rules.swift */; };
 		4942686CA734A7DAC5D52DFE /* AppModel+Assist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */; };
+		49A96FEED43BA6A85F098923 /* FolderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CDB71A7D6549CAAD1F85CF /* FolderViews.swift */; };
 		4C11E35FE59B713DEFD400E0 /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
 		4D2D0AF13558B84A382B4F35 /* HighlightViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */; };
 		4D89A4106575722EC1469CD3 /* AppModel+Assist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */; };
@@ -51,6 +53,7 @@
 		60788449241397BD78F992CC /* UnsubscribeConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161F332A1DA0EF3F78430E54 /* UnsubscribeConfirmation.swift */; };
 		61E99AD5221726DFA637F534 /* RulesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40D6E9799E037A8B47DD70D /* RulesViews.swift */; };
 		640B72B052853B4227F6F779 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F3251184D524F3BBA0BD1D /* Notifications.swift */; };
+		6636FE80A9E03F27877CB56E /* FolderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8CDB71A7D6549CAAD1F85CF /* FolderViews.swift */; };
 		66C9AEC8FB6D3AFFAC4652AC /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */; };
 		68707389AD56CF88B5276561 /* AttachmentBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0840B3CA4E7A33EA1F7DF65D /* AttachmentBrowser.swift */; };
 		6B457C0BEAF326BB7325AA69 /* TidingsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4D12F02B8A7B485182F3009 /* TidingsApp.swift */; };
@@ -82,6 +85,7 @@
 		9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */; };
 		A36F9F22C2C2CD83228E923E /* AppModel+Junk.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7FB41D461FAB4CD2187791D /* AppModel+Junk.swift */; };
 		A40E2F377C4DDE4B3614A283 /* AppModel+AICategories.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB20E24D7CB79953FF737DD1 /* AppModel+AICategories.swift */; };
+		A46921BD092F5D39239A36C9 /* AppModel+Folders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */; };
 		A6AEC3CD061B15B401752417 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
 		A71AE0BD667439D05DDDA26E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06689F64AABF98230DE8B430 /* ReaderView.swift */; };
 		A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB6C0B607ECACC543430A53A /* BundleSchedule.swift */; };
@@ -136,6 +140,7 @@
 		14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Compose.swift"; sourceTree = "<group>"; };
 		161F332A1DA0EF3F78430E54 /* UnsubscribeConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsubscribeConfirmation.swift; sourceTree = "<group>"; };
 		1EEBA246801CACDF96D1538A /* MailEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MailEngine; path = ../MailEngine; sourceTree = SOURCE_ROOT; };
+		2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Folders.swift"; sourceTree = "<group>"; };
 		21A0203070BD655088A92656 /* CloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSync.swift; sourceTree = "<group>"; };
 		224ABE94EA64F0EB4460D8C8 /* SmartFolderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderViews.swift; sourceTree = "<group>"; };
 		2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCard.swift; sourceTree = "<group>"; };
@@ -174,6 +179,7 @@
 		DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSetupView.swift; sourceTree = "<group>"; };
 		E23B15724889F87A249F69F2 /* AppModel+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Attachments.swift"; sourceTree = "<group>"; };
+		E8CDB71A7D6549CAAD1F85CF /* FolderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderViews.swift; sourceTree = "<group>"; };
 		E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Classify.swift"; sourceTree = "<group>"; };
 		EA7F045393AAD8ADDCFB0CF1 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		EB20E24D7CB79953FF737DD1 /* AppModel+AICategories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+AICategories.swift"; sourceTree = "<group>"; };
@@ -219,6 +225,7 @@
 				0840B3CA4E7A33EA1F7DF65D /* AttachmentBrowser.swift */,
 				02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */,
 				B48F3A3B6FCDC4ADBB91162A /* DateSuggestionCard.swift */,
+				E8CDB71A7D6549CAAD1F85CF /* FolderViews.swift */,
 				EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */,
 				2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */,
 				49CA46E43F4FD8B3B4E4B712 /* JunkBanner.swift */,
@@ -249,6 +256,7 @@
 				C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */,
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				74CCC1DD4A6C152C3D365C18 /* AppModel+DateSuggestions.swift */,
+				2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */,
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
 				D7FB41D461FAB4CD2187791D /* AppModel+Junk.swift */,
 				778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */,
@@ -475,6 +483,7 @@
 				D87D2E6B5CB3F6B2509BCB74 /* AppModel+Cloud.swift in Sources */,
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				951FB4B78B56C2FBBE51F143 /* AppModel+DateSuggestions.swift in Sources */,
+				A46921BD092F5D39239A36C9 /* AppModel+Folders.swift in Sources */,
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
 				1C6AC12E069AA07B1A4E9799 /* AppModel+Junk.swift in Sources */,
 				E9C0BB88193E9E59D985DE08 /* AppModel+Links.swift in Sources */,
@@ -493,6 +502,7 @@
 				8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */,
 				7031F631BFE73A9822227883 /* ComposeView.swift in Sources */,
 				EACFD6E6D7042BC8047F0A5D /* DateSuggestionCard.swift in Sources */,
+				49A96FEED43BA6A85F098923 /* FolderViews.swift in Sources */,
 				022EFE4FE3A9309A4A5BEF2E /* GlobalHotKey.swift in Sources */,
 				EB30016FB8194D8B34AC3F38 /* HighlightViews.swift in Sources */,
 				FD2B1FF93F57CFCE965EC8DB /* Intents.swift in Sources */,
@@ -535,6 +545,7 @@
 				F186A0EAB2D03F2294D60C8A /* AppModel+Cloud.swift in Sources */,
 				45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */,
 				C94105F197AA4E939C1E4FE7 /* AppModel+DateSuggestions.swift in Sources */,
+				2CFC392AEFEFEE6C9B25C236 /* AppModel+Folders.swift in Sources */,
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
 				A36F9F22C2C2CD83228E923E /* AppModel+Junk.swift in Sources */,
 				EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */,
@@ -554,6 +565,7 @@
 				3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */,
 				66C9AEC8FB6D3AFFAC4652AC /* ComposeView.swift in Sources */,
 				97CF81CD91187EF7CEF44292 /* DateSuggestionCard.swift in Sources */,
+				6636FE80A9E03F27877CB56E /* FolderViews.swift in Sources */,
 				4D2D0AF13558B84A382B4F35 /* HighlightViews.swift in Sources */,
 				FCF098BEC741D04F7C80838A /* Intents.swift in Sources */,
 				98741CDC0CC2211F1BDAF909 /* InviteCard.swift in Sources */,

@@ -302,6 +302,13 @@ extension AccountSync {
     /// Applies queued actions in order. Stops at the first connection-level failure so later
     /// actions never overtake earlier ones; command failures are retried, then dropped.
     func drain(_ session: MailSession) async throws {
+        await acquireServer()
+        defer { releaseServer() }
+        try await drainLocked(session)
+    }
+
+    /// `drain` for a caller that already holds the server turn (a folder change).
+    func drainLocked(_ session: MailSession) async throws {
         hasPendingWork = false
         for var pending in try store.pendingActions(accountID: account.id) {
             guard let id = pending.id else { continue }
