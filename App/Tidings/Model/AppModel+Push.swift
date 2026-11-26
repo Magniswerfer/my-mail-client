@@ -101,11 +101,7 @@ extension AppModel {
     func pushTokenReceived(_ token: Data) {
         guard let server = pushServer else { return }
         let hex = token.map { String(format: "%02x", $0) }.joined()
-        #if DEBUG
-        let environment = PushAPI.PushEnvironment.sandbox
-        #else
-        let environment = PushAPI.PushEnvironment.production
-        #endif
+        let environment = Self.pushEnvironment
         Task {
             do { try await server.updateDevice(PushAPI.DeviceUpdate(apnsToken: hex, environment: environment)) }
             catch { pushServerError = Self.describe(error) }
@@ -266,4 +262,27 @@ extension AppModel {
         default: error.localizedDescription
         }
     }
+}
+
+extension AppModel {
+    /// Which APNs endpoint this build's push tokens belong to: what its provisioning profile
+    /// says (`aps-environment`), not Debug vs Release. A Release build installed from Xcode is
+    /// still development-signed and gets sandbox tokens; App Store and TestFlight builds carry no
+    /// development profile and get production ones.
+    static let pushEnvironment: PushAPI.PushEnvironment = {
+        #if os(macOS)
+        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/embedded.provisionprofile")
+        #else
+        let url = Bundle.main.bundleURL.appendingPathComponent("embedded.mobileprovision")
+        #endif
+        guard let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .isoLatin1) else { return .production }
+        // The profile is a signed plist; its entitlements sit in it as plain XML.
+        for key in ["<key>aps-environment</key>", "<key>com.apple.developer.aps-environment</key>"] {
+            guard let found = text.range(of: key),
+                  let open = text.range(of: "<string>", range: found.upperBound..<text.endIndex),
+                  let close = text.range(of: "</string>", range: open.upperBound..<text.endIndex) else { continue }
+            return text[open.upperBound..<close.lowerBound] == "development" ? .sandbox : .production
+        }
+        return .production
+    }()
 }
