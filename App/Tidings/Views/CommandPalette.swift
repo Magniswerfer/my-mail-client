@@ -136,6 +136,20 @@ extension AppModel {
                                    symbol: "person.crop.circle.badge.minus", keys: nil) { self.accountToRemove = account })
         }
         list += folderCommands
+        #if os(macOS)
+        // Settings › General › In the Background, from the keyboard.
+        let opensAtLogin = BackgroundMode.opensAtLogin
+        list.append(AppCommand(id: "openAtLogin", title: opensAtLogin ? String(localized: "Don't Open at Login") : String(localized: "Open at Login"),
+                               symbol: "power", keys: nil) {
+            try? BackgroundMode.setOpensAtLogin(!opensAtLogin)
+            if BackgroundMode.needsApproval { BackgroundMode.openLoginItemsSettings() }
+        })
+        let inMenuBar = UserDefaults.standard.bool(forKey: BackgroundMode.menuBarKey)
+        list.append(AppCommand(id: "menuBar", title: inMenuBar ? String(localized: "Hide from Menu Bar") : String(localized: "Show in Menu Bar"),
+                               symbol: "menubar.rectangle", keys: nil) {
+            UserDefaults.standard.set(!inMenuBar, forKey: BackgroundMode.menuBarKey)
+        })
+        #endif
         for account in accountsAwaitingPassword {
             list.append(AppCommand(id: "signIn-\(account.login)", title: String(localized: "Sign In to \(account.displayName)…"),
                                    symbol: "key", keys: nil) { self.accountToSignIn = account })

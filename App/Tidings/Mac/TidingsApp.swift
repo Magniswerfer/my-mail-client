@@ -5,7 +5,9 @@ import SwiftUI
 
 @main
 struct TidingsApp: App {
+    @NSApplicationDelegateAdaptor(TidingsAppDelegate.self) private var appDelegate
     @State private var model: AppModel
+    @AppStorage(BackgroundMode.menuBarKey) private var showInMenuBar = false
 
     init() {
         // Sync runs with the app, not with a window: it keeps going if the window is closed.
@@ -13,6 +15,8 @@ struct TidingsApp: App {
         model.start()
         _model = State(initialValue: model)
         GlobalHotKey.shared.registerCopyCode { [weak model] in model?.copyLatestCode() }
+        // Waking from sleep checks mail at once, window or not.
+        TidingsAppDelegate.checkForNewMail = { [weak model] in model?.checkForNewMail() }
         // Starts Sparkle's scheduled checks; ⌘K and the app menu reach it through the model.
         if Updater.shared.isAvailable {
             model.checkForUpdates = { Updater.shared.checkForUpdates() }
@@ -20,7 +24,7 @@ struct TidingsApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: 900, minHeight: 560)
@@ -209,6 +213,12 @@ struct TidingsApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+        }
+
+        MenuBarExtra(isInserted: $showInMenuBar) {
+            TidingsMenuBarContent().environment(model)
+        } label: {
+            Image(systemName: model.inboxUnreadCount > 0 ? "envelope.badge" : "envelope")
         }
     }
 }

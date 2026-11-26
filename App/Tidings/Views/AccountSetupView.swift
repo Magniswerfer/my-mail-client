@@ -309,6 +309,9 @@ struct GeneralSettings: View {
                     }
                 }
             }
+            #if os(macOS)
+            BackgroundSettingsSection()
+            #endif
             Section("Storage") {
                 LabeledContent("Location") {
                     Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
@@ -631,3 +634,48 @@ extension ICloudAccountForm {
         dismiss()
     }
 }
+
+#if os(macOS)
+/// Settings › General › In the Background: open at login (without a window) and the menu bar item.
+struct BackgroundSettingsSection: View {
+    @AppStorage(BackgroundMode.menuBarKey) private var showInMenuBar = false
+    @State private var opensAtLogin = BackgroundMode.opensAtLogin
+    @State private var needsApproval = BackgroundMode.needsApproval
+    @State private var failure: String?
+
+    var body: some View {
+        Section {
+            Toggle("Open at Login", isOn: Binding(get: { opensAtLogin }, set: { set($0) }))
+            if needsApproval {
+                LabeledContent("Allow Tidings under Login Items in System Settings.") {
+                    Button("Open System Settings") { BackgroundMode.openLoginItemsSettings() }
+                }
+            }
+            Toggle("Show in Menu Bar", isOn: $showInMenuBar)
+            if let failure {
+                Text(failure).foregroundStyle(.red).font(.caption)
+            }
+        } header: {
+            Text("In the Background")
+        } footer: {
+            Text("With its window closed, Tidings keeps checking mail, running rules, bringing back snoozed mail and sending scheduled mail. Opening at login starts it without a window. Quit it (⌘Q) to stop.")
+        }
+        .onAppear { refresh() }
+    }
+
+    private func set(_ on: Bool) {
+        do {
+            try BackgroundMode.setOpensAtLogin(on)
+            failure = nil
+        } catch {
+            failure = String(localized: "Couldn't change it: \(error.localizedDescription)")
+        }
+        refresh()
+    }
+
+    private func refresh() {
+        opensAtLogin = BackgroundMode.opensAtLogin
+        needsApproval = BackgroundMode.needsApproval
+    }
+}
+#endif

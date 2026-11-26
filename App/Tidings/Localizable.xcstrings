@@ -4791,6 +4791,136 @@
         }
       }
     },
+    "Open at Login": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn ved login"
+          }
+        }
+      }
+    },
+    "Don't Open at Login": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn ikke ved login"
+          }
+        }
+      }
+    },
+    "Show in Menu Bar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis i menulinjen"
+          }
+        }
+      }
+    },
+    "Hide from Menu Bar": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skjul fra menulinjen"
+          }
+        }
+      }
+    },
+    "In the Background": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I baggrunden"
+          }
+        }
+      }
+    },
+    "Allow Tidings under Login Items in System Settings.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tillad Tidings under Loginemner i Systemindstillinger."
+          }
+        }
+      }
+    },
+    "Open System Settings": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn Systemindstillinger"
+          }
+        }
+      }
+    },
+    "Couldn't change it: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke ændre det: %@"
+          }
+        }
+      }
+    },
+    "With its window closed, Tidings keeps checking mail, running rules, bringing back snoozed mail and sending scheduled mail. Opening at login starts it without a window. Quit it (⌘Q) to stop.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Med vinduet lukket bliver Tidings ved med at hente mail, køre regler, hente udsat mail frem og sende planlagt mail. Åbner den ved login, starter den uden vindue. Afslut den (⌘Q) for at stoppe."
+          }
+        }
+      }
+    },
+    "No unread mail": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen ulæst mail"
+          }
+        }
+      }
+    },
+    "%lld unread in the Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ulæste i indbakken"
+          }
+        }
+      }
+    },
+    "Open Tidings": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åbn Tidings"
+          }
+        }
+      }
+    },
+    "Quit Tidings": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afslut Tidings"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

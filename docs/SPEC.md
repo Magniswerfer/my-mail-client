@@ -57,7 +57,7 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 - Custom IMAP keywords (e.g. `$Pinned`) mirror simple state for other clients. **Verified usable on iCloud in M0.** CloudKit remains the source of truth.
 
 ### Always-on work — [ADR 0003](adr/0003-headless-engine.md)
-- v1: a login-item background helper runs sync, rules, snooze wake-ups, send-later and classification while the window is closed; catches up after sleep.
+- Background (Mac): sync, rules, snooze wake-ups, send-later and classification run with the app, not its window, so closing the window keeps them going (the app itself is the helper; no second process sharing the store). Settings › General › In the Background: **Open at Login** (`SMAppService.mainApp`; a login launch stays windowless) and **Show in Menu Bar** (unread count, Open, Check for New Mail, New Message, Quit), both in ⌘K. Waking from sleep checks mail at once; an activity keeps App Nap from delaying timers; the Dock icon shows unread Primary mail. ⌘Q quits; the iPhone and 24/7 work wait for the server (iOS-3).
 - `MailEngine` is a headless Swift package (no AppKit/UIKit) so it can later run on a Linux server (e.g. Coolify) for 24/7 rules + iOS push.
 
 ## 5. On-device AI — [ADR 0004](adr/0004-three-layer-classification.md)

@@ -755,6 +755,9 @@ final class AppModel {
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
             let primary = try unified().filter { $0.latest.category == .primary }
             inboxUnreadCount = primary.reduce(0) { $0 + $1.unreadCount }
+            #if os(macOS)
+            BackgroundMode.setDockBadge(inboxUnreadCount)
+            #endif
             accountUnreadCounts = accounts.count > 1
                 ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
                 : [:]

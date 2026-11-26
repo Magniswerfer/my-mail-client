@@ -13,6 +13,7 @@
 		022EFE4FE3A9309A4A5BEF2E /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0155D1ACEF841230C43B9BE1 /* GlobalHotKey.swift */; };
 		03548C05D01EDDC13F5E234B /* OtherAccountForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC071C4AD23AAA3E808F1AED /* OtherAccountForm.swift */; };
 		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
+		0636CE087F15BD3F64615D09 /* BackgroundMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C7DAC13A15EF025CA7D0A6 /* BackgroundMode.swift */; };
 		122B385B2D97126B2A4A8937 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 39484A8621C56475E2632191 /* Sparkle */; };
 		142D55FF416EF333EA5DEF75 /* AppModel+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23B15724889F87A249F69F2 /* AppModel+Attachments.swift */; };
 		186630237B178EECA7307A27 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
@@ -162,6 +163,7 @@
 		A97A5FA03921FB76ED7DAE54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AE87A3779EB9C67A90C913E7 /* Intents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Intents.swift; sourceTree = "<group>"; };
 		B07FA70D74524437B7FC3417 /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
+		B1C7DAC13A15EF025CA7D0A6 /* BackgroundMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundMode.swift; sourceTree = "<group>"; };
 		B1DB91C9DDBBE39459D38C1B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		B48F3A3B6FCDC4ADBB91162A /* DateSuggestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSuggestionCard.swift; sourceTree = "<group>"; };
@@ -297,6 +299,7 @@
 		4E6FD9E8AC8B92C6166C7F07 /* Mac */ = {
 			isa = PBXGroup;
 			children = (
+				B1C7DAC13A15EF025CA7D0A6 /* BackgroundMode.swift */,
 				0155D1ACEF841230C43B9BE1 /* GlobalHotKey.swift */,
 				D4D12F02B8A7B485182F3009 /* TidingsApp.swift */,
 				5CA96B6B942E251F010276D5 /* Updater.swift */,
@@ -495,6 +498,7 @@
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
 				F89FD41D7C64B5E4F269658C /* AssistViews.swift in Sources */,
 				50ACDB3D6952507F7873FBF7 /* AttachmentBrowser.swift in Sources */,
+				0636CE087F15BD3F64615D09 /* BackgroundMode.swift in Sources */,
 				A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */,
 				1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */,
 				0087065155169B6AAB1FBF96 /* CloudSync.swift in Sources */,
