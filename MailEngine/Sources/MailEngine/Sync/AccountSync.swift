@@ -76,6 +76,27 @@ public actor AccountSync {
 
     private func setWake(_ continuation: AsyncStream<Void>.Continuation?) { wakeContinuation = continuation }
 
+    /// Draining the queue and folder changes take turns, so a queued move into a folder reaches
+    /// the server before that folder is renamed or deleted (and never runs twice).
+    private var serverBusy = false
+    private var serverWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquireServer() async {
+        while serverBusy {
+            await withCheckedContinuation { serverWaiters.append($0) }
+        }
+        serverBusy = true
+    }
+
+    func releaseServer() {
+        serverBusy = false
+        if !serverWaiters.isEmpty { serverWaiters.removeFirst().resume() }
+    }
+
+    /// Bumped by every folder change: a sync pass that listed folders before it stops and
+    /// starts over rather than syncing a folder that was just renamed or deleted.
+    var folderGeneration = 0
+
     /// "Check for new mail": ends an IDLE in progress and re-syncs every mailbox now, not just
     /// INBOX (the others otherwise wait for the next `pollInterval`).
     var fullSyncRequested = false
@@ -187,10 +208,15 @@ public actor AccountSync {
     func syncAll(_ session: MailSession) async throws {
         emit(.started)
         try await drain(session)
+        let generation = folderGeneration
         let listing = try await session.listMailboxes()
         try store.setSetting(Self.personalPrefixKey, Self.personalPrefix(in: listing), accountID: account.id)
+        if let separator = Self.hierarchySeparator(in: listing) {
+            try store.setSetting(Self.separatorKey, String(separator), accountID: account.id)
+        }
         var roles = MailboxRoleResolver.resolve(listing)
         try await preferFullest(&roles, listing: listing, session: session)
+        try applyRoleChoices(&roles, listing: listing)
         let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts]
         var paths: [(String, MailboxRole?)] = order.compactMap { role in roles[role].map { ($0, role) } }
         // User folders too (they're part of the mail you search), but not Trash or Junk.
@@ -200,13 +226,23 @@ public actor AccountSync {
             && !TestFence.isInsideFence(box.path) {
             paths.append((box.path, nil))
         }
+        // A folder changed while we listed: this listing is stale, start over.
+        guard generation == folderGeneration else { fullSyncRequested = true; return }
         // Forget mailboxes that disappeared on the server.
         let known = try store.mailboxStates(accountID: account.id)
         for state in known where !listing.contains(where: { $0.path == state.path }) {
             try store.deleteMailbox(accountID: account.id, mailbox: state.path)
         }
         for (path, role) in paths {
-            try await syncMailbox(session, path: path, role: role)
+            guard generation == folderGeneration else { fullSyncRequested = true; return }
+            do {
+                try await syncMailbox(session, path: path, role: role)
+            } catch let error as MailSessionError where generation != folderGeneration {
+                // Renamed or deleted under us (the SELECT failed): the next pass sorts it out.
+                SyncLog.info("sync of \(path) stopped by a folder change: \(error.description)")
+                fullSyncRequested = true
+                return
+            }
         }
     }
 

@@ -72,9 +72,21 @@ struct SidebarView: View {
             SmartFolderSection()
 
             ForEach(model.accounts, id: \.foldersSectionID) { account in
-                Section(model.accounts.count > 1 ? account.displayName : String(localized: "Folders")) {
-                    ForEach(folders(for: account.id), id: \.path) { box in
-                        folderRow(box, accountID: account.id)
+                Section {
+                    ForEach(model.folderRows(accountID: account.id)) { row in
+                        folderRow(row, accountID: account.id)
+                    }
+                } header: {
+                    HStack {
+                        Text(model.accounts.count > 1 ? account.displayName : String(localized: "Folders"))
+                        Spacer()
+                        Button("New Folder…", systemImage: "plus") { model.newFolder(accountID: account.id) }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(.borderless)
+                            .help("New Folder…")
+                    }
+                    .contextMenu {
+                        Button("New Folder…", systemImage: "folder.badge.plus") { model.newFolder(accountID: account.id) }
                     }
                 }
             }
@@ -105,8 +117,11 @@ struct SidebarView: View {
     }
 
     @ViewBuilder
-    private func folderRow(_ box: MailboxState, accountID: String) -> some View {
-        let label = Label(box.role?.title ?? box.path, systemImage: box.role?.symbol ?? "folder")
+    private func folderRow(_ row: FolderRow, accountID: String) -> some View {
+        let box = row.box
+        let label = Label(row.name, systemImage: box.role?.symbol ?? "folder")
+            .padding(.leading, CGFloat(row.depth) * 14)
+            .contextMenu { FolderContextMenu(box: box) }
         if box.role == .archive {
             // Dropping on Archive is "Done".
             label
@@ -120,17 +135,6 @@ struct SidebarView: View {
         } else {
             label.tag(SidebarItem.mailbox(accountID: accountID, path: box.path))
         }
-    }
-
-    private func folders(for accountID: String) -> [MailboxState] {
-        let order: [MailboxRole?] = [.archive, .sent, .drafts]
-        return model.mailboxes
-            .filter { $0.accountID == accountID && $0.role != .inbox && !AccountSync.isSnoozedMailbox($0.path) }
-            .sorted { a, b in
-                let ia = order.firstIndex(of: a.role) ?? order.count
-                let ib = order.firstIndex(of: b.role) ?? order.count
-                return ia == ib ? a.path.localizedStandardCompare(b.path) == .orderedAscending : ia < ib
-            }
     }
 }
 

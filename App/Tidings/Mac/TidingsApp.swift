@@ -146,6 +146,15 @@ struct TidingsApp: App {
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Add Account…") { model.isAddingAccount = true }
                 Divider()
+                Button("New Folder…") { model.newFolder() }
+                    .disabled(model.accounts.isEmpty)
+                Button("Rename Folder…") { if let box = model.selectedFolder { model.renameFolder(box) } }
+                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
+                Button("Move Folder…") { if let box = model.selectedFolder { model.moveFolder(box) } }
+                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
+                Button("Delete Folder…") { if let box = model.selectedFolder { model.requestDeleteFolder(box) } }
+                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
+                Divider()
                 Button("Sweep Inbox") { model.requestSweep() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
@@ -322,6 +331,7 @@ struct RootView: View {
                 .interactiveDismissDisabled(model.needsAccountSetup)
         }
         .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
+        .modifier(FolderManagement())
         .sheet(item: $model.accountToSignIn) { account in
             AccountPasswordSheet(account: account).environment(model)
         }
@@ -427,6 +437,7 @@ struct RootView: View {
             || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
             || model.editingSmartFolder != nil || model.isSendersShown || model.unsubscribeCandidate != nil
             || model.isAttachmentsShown || model.isAccountSetupShown || model.accountToRemove != nil
+            || model.folderEditing != nil || model.folderToDelete != nil
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

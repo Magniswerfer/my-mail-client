@@ -248,7 +248,7 @@ public final class MailSession: Sendable {
     }
 
     public func select(_ path: String, readOnly: Bool = false) async throws -> SelectedMailbox {
-        let name = MailboxName(ByteBuffer(string: path))
+        let name = Self.mailboxName(path)
         var parameters: [SelectParameter] = []
         if qresyncEnabled == false, supports("CONDSTORE") { parameters.append(.condStore) }
         let responses = try await run(
@@ -284,8 +284,34 @@ public final class MailSession: Sendable {
         return state
     }
 
+    /// The wire name for a path as `listMailboxes` reports it (decoded for display). ASCII paths
+    /// go out unchanged; others (Danish "Kvitteringer æøå") as modified UTF-7, as RFC 3501
+    /// wants. Sending UTF-8 there gets "Mailbox name is not valid mUTF-7" from Dovecot.
+    static func mailboxName(_ path: String) -> MailboxName {
+        if path.allSatisfy({ $0.isASCII && $0 != "&" }) { return MailboxName(ByteBuffer(string: path)) }
+        return (try? MailboxPath.makeRootMailbox(displayName: path).name) ?? MailboxName(ByteBuffer(string: path))
+    }
+
     public func create(_ path: String) async throws {
-        try await run(.create(MailboxName(ByteBuffer(string: path)), []), name: "CREATE")
+        try await run(.create(Self.mailboxName(path), []), name: "CREATE")
+    }
+
+    /// `RENAME`. Subfolders go along (RFC 3501 §6.3.5), so callers rename the parent only.
+    public func rename(_ path: String, to newPath: String) async throws {
+        try await run(.rename(from: Self.mailboxName(path), to: Self.mailboxName(newPath), parameters: [:]), name: "RENAME")
+    }
+
+    /// `DELETE`: the mailbox and every message in it. Most servers refuse while it has
+    /// subfolders, so delete those first.
+    public func delete(_ path: String) async throws {
+        try await run(.delete(Self.mailboxName(path)), name: "DELETE")
+    }
+
+    /// `SUBSCRIBE` / `UNSUBSCRIBE`, so clients that only show subscribed folders (Thunderbird)
+    /// see ours too. Best effort: failures don't matter to Tidings, which uses LIST.
+    public func subscribe(_ path: String, _ on: Bool = true) async {
+        let name = Self.mailboxName(path)
+        _ = try? await run(on ? .subscribe(name) : .unsubscribe(name), name: on ? "SUBSCRIBE" : "UNSUBSCRIBE")
     }
 
     /// Creates the mailbox unless it already exists.
@@ -297,7 +323,7 @@ public final class MailSession: Sendable {
 
     /// APPENDs a raw RFC 5322 message and returns its UID when the server reports one (UIDPLUS).
     public func append(to path: String, message: Data, flags: [String] = []) async throws -> UInt32? {
-        let name = MailboxName(ByteBuffer(string: path))
+        let name = Self.mailboxName(path)
         let flagList = flags.compactMap(Flag.init)
         let bytes = ByteBuffer(bytes: message)
         let appendMessage = AppendMessage(
@@ -452,7 +478,7 @@ public final class MailSession: Sendable {
     @discardableResult
     public func move(uids: [UInt32], to destination: String) async throws -> [UInt32: UInt32] {
         guard !uids.isEmpty else { return [:] }
-        let target = MailboxName(ByteBuffer(string: destination))
+        let target = Self.mailboxName(destination)
         if supports("MOVE"), let set = Self.uidSet(uids) {
             let (responses, text) = try await runWithStatus(.uidMove(set, target), name: "UID MOVE")
             var mapping = Self.copyUIDMapping(text.code)
