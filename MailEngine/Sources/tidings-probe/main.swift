@@ -171,6 +171,28 @@ struct Capabilities: AsyncParsableCommand {
             let inbox = try await session.select("INBOX", readOnly: true)
             print("\nINBOX (EXAMINE, read-only): exists=\(inbox.exists) uidValidity=\(inbox.uidValidity.map(String.init) ?? "-") highestModSeq=\(inbox.highestModSeq.map(String.init) ?? "-")")
             print("PERMANENTFLAGS: \(inbox.permanentFlags.joined(separator: " "))")
+
+            // Read-only: what incremental sync will ask this server (no bodies, nothing changed).
+            print("\nIncremental sync: \(session.resyncMode)")
+            if let modSeq = inbox.highestModSeq, session.resyncMode != .none {
+                let since = modSeq > 200 ? modSeq - 200 : 1
+                let vanished = session.resyncMode == .qresync
+                do {
+                    let start = ContinuousClock.now
+                    let changes = try await session.fetchChanges(since: since, vanished: vanished)
+                    let gone = changes.vanished.map { " vanished \($0.count) UIDs in \($0.ranges.count) ranges" } ?? ""
+                    print("  UID FETCH 1:* (CHANGEDSINCE \(since)\(vanished ? " VANISHED" : "")): \(changes.summaries.count) changed,\(gone) in \(ContinuousClock.now - start)")
+                } catch {
+                    print("  UID FETCH CHANGEDSINCE\(vanished ? " VANISHED" : ""): FAILED \(error)")
+                }
+                do {
+                    let start = ContinuousClock.now
+                    let uids = try await session.allUIDs()
+                    print("  UID SEARCH\(session.supports("ESEARCH") ? " RETURN (ALL)" : "") ALL: \(uids.count) UIDs in \(uids.ranges.count) ranges (EXISTS \(inbox.exists)) in \(ContinuousClock.now - start)")
+                } catch {
+                    print("  UID SEARCH ALL: FAILED \(error)")
+                }
+            }
         }
     }
 }

@@ -36,7 +36,12 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 
 - User-selectable storage location (incl. external drive, via security-scoped bookmark). Drive missing → read-only notice.
 - Never on iCloud Drive.
-- Server is source of truth for mail; sync via CONDSTORE/QRESYNC + IDLE.
+- Server is source of truth for mail; sync via CONDSTORE/QRESYNC + IDLE. **Incremental sync** (per mailbox, from `mailboxState`'s saved UIDVALIDITY, UIDNEXT, MESSAGES and HIGHESTMODSEQ):
+  - unchanged on the server (same UIDNEXT, MESSAGES, HIGHESTMODSEQ in the EXAMINE answer) and the local count agrees → nothing fetched;
+  - QRESYNC enabled → `UID FETCH 1:* (UID FLAGS RFC822.SIZE INTERNALDATE MODSEQ) (CHANGEDSINCE n VANISHED)`: new mail, flag changes and expunges in one round trip (a server that refuses VANISHED drops to CONDSTORE for the session);
+  - CONDSTORE only → the same without VANISHED; when the server's MESSAGES differs from what the local copy predicts, `UID SEARCH RETURN (ALL) ALL` (ESEARCH) or `UID SEARCH ALL` finds what was expunged — and anything missing locally, so drift repairs itself;
+  - neither, the first sync, or a UIDVALIDITY change → the full message list (as before).
+  - The saved state is the EXAMINE's, so changes during a pass are read again next time. A message skipped because a queued triage action is about to change it keeps the old MODSEQ; an abandoned action clears it (next pass is full). Migration `v23-incremental-sync` makes every mailbox's first pass after the update a full one.
 
 ## 4. Inbox model
 
@@ -186,6 +191,7 @@ Swift 6 (strict concurrency) · SwiftUI shell · AppKit `NSTableView` for the st
 | Scrolling | 120 fps ProMotion |
 | Memory | < 300 MB |
 | Idle CPU | ~0 |
+| No-change sync of a mailbox | nothing fetched beyond EXAMINE (10k-message INBOX on local Dovecot, debug build, whole account pass: 2.67 s with full passes → 52 ms incremental; `TIDINGS_BENCH=10000 swift test --filter SyncBenchmarkTests`) |
 
 ## 16. Onboarding
 

@@ -97,6 +97,19 @@ public actor AccountSync {
     /// starts over rather than syncing a folder that was just renamed or deleted.
     var folderGeneration = 0
 
+    /// How a mailbox's sync read the server (see `syncMailbox`).
+    public enum MailboxPass: Sendable, Hashable {
+        /// Nothing changed on the server: nothing fetched.
+        case skipped
+        /// Changes since the saved MODSEQ; `vanished` when the server listed expunges (QRESYNC),
+        /// `uidCheck` when the UID sets had to be compared.
+        case changes(vanished: Bool, uidCheck: Bool)
+        /// The whole message list.
+        case full
+    }
+    /// The most recent pass per mailbox path.
+    public private(set) var lastPass: [String: MailboxPass] = [:]
+
     /// "Check for new mail": ends an IDLE in progress and re-syncs every mailbox now, not just
     /// INBOX (the others otherwise wait for the next `pollInterval`).
     var fullSyncRequested = false
@@ -269,25 +282,115 @@ public actor AccountSync {
         }
     }
 
+    /// Syncs one mailbox, reading as little as the server allows (RFC 7162):
+    /// - **unchanged** (same UIDNEXT, MESSAGES and HIGHESTMODSEQ as last time, and the local copy
+    ///   agrees on the count): nothing is fetched;
+    /// - **QRESYNC**: `UID FETCH 1:* (…) (CHANGEDSINCE n VANISHED)` brings new mail, flag changes and
+    ///   expunges in one round trip;
+    /// - **CONDSTORE**: the same without VANISHED; when the counts say something was expunged,
+    ///   a `UID SEARCH` finds what;
+    /// - otherwise, or the first time, or after a UIDVALIDITY change: the full message list.
     func syncMailbox(_ session: MailSession, path: String, role: MailboxRole?) async throws {
         let selected = try await session.select(path, readOnly: true)
-        let saved = try store.mailboxStates(accountID: account.id).first { $0.path == path }
+        try readAllAfterKeywordPolicyChange()
+        var saved = try store.mailboxStates(accountID: account.id).first { $0.path == path }
+        // A mailbox's first sync (a new account or device, or the server reset its UIDs) brings in
+        // mail that was already there, not mail that just arrived: rules don't run on it.
+        let firstSync = saved?.uidValidity == nil || saved?.uidValidity != selected.uidValidity.map(Int64.init)
         if let savedValidity = saved?.uidValidity, let validity = selected.uidValidity, savedValidity != Int64(validity) {
             // UIDs are meaningless after a UIDVALIDITY change: start over for this mailbox.
             try store.deleteMailbox(accountID: account.id, mailbox: path)
+            saved = nil
         }
 
-        // TODO(M2): use CHANGEDSINCE + VANISHED (QRESYNC) instead of a full summary pass.
-        let summaries = try await session.fetchSummaries()
-        let known = try store.knownFlags(accountID: account.id, mailbox: path)
-        let serverUIDs = Set(summaries.map(\.uid))
         // Leave alone whatever a queued triage action is about to change: its source message is
         // still on the server here, and its local row already shows the result.
         let inFlight = try store.inFlight(accountID: account.id, mailbox: path)
         let inFlightUIDs = try store.uids(localIDs: inFlight.localIDs, mailbox: path)
 
-        let vanished = known.keys.filter { !serverUIDs.contains($0) && $0 < provisionalUIDBase && !inFlightUIDs.contains($0) }
+        // MODSEQ to fetch changes since; nil means a full pass.
+        let since: UInt64? = {
+            guard session.resyncMode != .none, !firstSync, let saved, let old = saved.highestModSeq,
+                  let now = selected.highestModSeq, selected.uidValidity != nil else { return nil }
+            let oldModSeq = UInt64(bitPattern: old)
+            return oldModSeq <= now ? oldModSeq : nil
+        }()
+
+        if let since, let saved, since == selected.highestModSeq,
+           saved.uidNext == selected.uidNext.map(Int64.init), saved.messageCount == selected.exists,
+           try expectedServerCount(path: path, inFlight: inFlight) == selected.exists {
+            var touched = saved
+            touched.lastSync = Date()
+            try store.save(touched)
+            SyncLog.info("sync \(path): unchanged (modseq \(since)), skipped")
+            lastPass[path] = .skipped
+            emit(.mailboxSynced(mailbox: path, newMessages: 0))
+            return
+        }
+
+        let summaries: [MessageSummary]
+        let known: [UInt32: String]
+        var vanished: [UInt32]
+        var heldBack = false   // an in-flight message changed on the server: look at it again next time
+        if let since {
+            var changes: MailboxChanges
+            if session.resyncMode == .qresync {
+                do {
+                    changes = try await session.fetchChanges(since: since, vanished: true)
+                } catch let error as MailSessionError {
+                    // A server that advertises QRESYNC but refuses VANISHED: use CONDSTORE from now on.
+                    SyncLog.info("sync \(path): VANISHED refused (\(error.description)), using CONDSTORE")
+                    session.resyncMode = .condStore
+                    changes = try await session.fetchChanges(since: since, vanished: false)
+                }
+            } else {
+                changes = try await session.fetchChanges(since: since, vanished: false)
+            }
+            var found = changes.summaries
+            var gone = try changes.vanished.map { try store.knownUIDs(accountID: account.id, mailbox: path, in: $0) } ?? []
+            var knownChanged = try store.knownFlags(accountID: account.id, mailbox: path, uids: found.map(\.uid))
+
+            // Does the server's count match what we'd have after applying this? If not, something
+            // was expunged that we weren't told about (CONDSTORE has no VANISHED), or the local copy
+            // drifted: compare UID sets, which also brings back anything missing.
+            let stored = try store.serverMessageCount(accountID: account.id, mailbox: path)
+            let arriving = found.filter { knownChanged[$0.uid] == nil && !inFlight.sourceUIDs.contains($0.uid) }.count
+            let leaving = inFlight.sourceUIDs.filter { uid in uid < provisionalUIDBase && changes.vanished?.contains(uid) != true }.count
+            let expected = stored - gone.count + arriving + leaving
+            let serverCount = changes.exists ?? selected.exists
+            var how = changes.vanished == nil ? "CONDSTORE" : "QRESYNC"
+            lastPass[path] = .changes(vanished: changes.vanished != nil, uidCheck: expected != serverCount)
+            if expected != serverCount {
+                let onServer = try await session.allUIDs()
+                let local = try store.knownFlags(accountID: account.id, mailbox: path)
+                gone = local.keys.filter { $0 < provisionalUIDBase && !onServer.contains($0) }
+                let seen = Set(found.map(\.uid))
+                let missing = onServer.ranges.lazy.flatMap { $0 }.filter {
+                    local[$0] == nil && !seen.contains($0) && !inFlight.sourceUIDs.contains($0)
+                }
+                if !missing.isEmpty {
+                    found += try await session.fetchSummaries(uids: Array(missing))
+                }
+                knownChanged = local
+                how += " + UID check (expected \(expected), server has \(serverCount))"
+            }
+            SyncLog.info("sync \(path): \(how) since \(since): \(found.count) changed, \(gone.count) gone")
+            summaries = found
+            known = knownChanged
+            vanished = gone
+        } else {
+            summaries = try await session.fetchSummaries()
+            lastPass[path] = .full
+            known = try store.knownFlags(accountID: account.id, mailbox: path)
+            let serverUIDs = Set(summaries.map(\.uid))
+            vanished = known.keys.filter { !serverUIDs.contains($0) && $0 < provisionalUIDBase }
+        }
+        if vanished.contains(where: inFlightUIDs.contains) {
+            heldBack = true
+            vanished.removeAll(where: inFlightUIDs.contains)
+        }
         if !vanished.isEmpty { try store.deleteMessages(accountID: account.id, mailbox: path, uids: vanished) }
+        if summaries.contains(where: { inFlightUIDs.contains($0.uid) }) { heldBack = true }
 
         var flagChanges: [UInt32: String] = [:]
         // On a server that doesn't store our keywords, its flags never have them: keep ours.
@@ -337,19 +440,41 @@ public actor AccountSync {
             emit(.mailboxProgress(mailbox: path, done: done, total: new.count))
         }
 
-        // A mailbox's first sync (a new account or device, or the server reset its UIDs) brings in
-        // mail that was already there, not mail that just arrived: rules don't run on it.
-        if saved?.uidValidity == nil || saved?.uidValidity != selected.uidValidity.map(Int64.init) {
+        if firstSync {
             try store.markRulesChecked(accountID: account.id, mailbox: path)
         }
 
+        // The state is from the SELECT, before anything above: whatever changed since then is
+        // fetched again next time, never missed. A held-back message keeps the old MODSEQ.
         try store.save(MailboxState(
             accountID: account.id, path: path, role: role,
             uidValidity: selected.uidValidity.map(Int64.init), uidNext: selected.uidNext.map(Int64.init),
-            highestModSeq: selected.highestModSeq.map { Int64(bitPattern: $0) },
-            messageCount: summaries.count, lastSync: Date()
+            highestModSeq: heldBack ? saved?.highestModSeq : selected.highestModSeq.map { Int64(bitPattern: $0) },
+            messageCount: selected.exists, lastSync: Date()
         ))
         emit(.mailboxSynced(mailbox: path, newMessages: new.count))
+    }
+
+    static let keywordPolicySyncedKey = "keepsKeywordsAtLastSync"
+
+    /// Whether a sync keeps our keywords against the server (`serverKeepsKeywords`) decides the
+    /// flags of messages that didn't change on the server, which an incremental sync never looks
+    /// at again: when that changes, every mailbox is read in full once.
+    func readAllAfterKeywordPolicyChange() throws {
+        let now = serverKeepsKeywords().map { $0 ? "true" : "false" } ?? ""
+        let synced = try store.setting(Self.keywordPolicySyncedKey, accountID: account.id)
+        guard synced != now else { return }
+        if synced != nil {
+            try store.forgetModSeq(accountID: account.id, mailboxes: Set(try store.mailboxStates(accountID: account.id).map(\.path)))
+        }
+        try store.setSetting(Self.keywordPolicySyncedKey, now, accountID: account.id)
+    }
+
+    /// How many messages the server should hold in this mailbox if the local copy is right:
+    /// the stored ones, plus those a queued move is about to take out (their rows already left).
+    func expectedServerCount(path: String, inFlight: (sourceUIDs: Set<UInt32>, localIDs: Set<Int64>)) throws -> Int {
+        try store.serverMessageCount(accountID: account.id, mailbox: path)
+            + inFlight.sourceUIDs.filter { $0 < provisionalUIDBase }.count
     }
 
     func makeMessage(summary: MessageSummary, data: Data, mailbox: String, validity: UInt32?,

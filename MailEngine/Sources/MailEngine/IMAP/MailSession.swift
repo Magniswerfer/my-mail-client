@@ -173,22 +173,42 @@ public final class MailSession: Sendable {
     }
     private let _qresyncEnabled = Mutex(false)
 
+    /// How much of RFC 7162 this session can use to sync a mailbox incrementally.
+    public enum ResyncMode: Sendable, Hashable, Comparable {
+        /// Neither extension: every sync reads the whole message list.
+        case none
+        /// `CHANGEDSINCE` for flags and new mail; expunges found by comparing UID sets.
+        case condStore
+        /// `CHANGEDSINCE … VANISHED`: expunges reported by the server too.
+        case qresync
+    }
+
+    public var resyncMode: ResyncMode {
+        get { _resyncMode.withLock { $0 } }
+        set { _resyncMode.withLock { $0 = newValue } }
+    }
+    private let _resyncMode = Mutex(ResyncMode.none)
+
     /// The mailbox state from the most recent SELECT/EXAMINE on this session.
     public var selected: SelectedMailbox? { _selected.withLock { $0 } }
-    private let _selected = Mutex<SelectedMailbox?>(nil)
+    let _selected = Mutex<SelectedMailbox?>(nil)
 
     private func enableExtensions() async throws {
+        // CONDSTORE works without ENABLE (SELECT … (CONDSTORE)); QRESYNC needs it.
+        if supports("CONDSTORE") { resyncMode = .condStore }
         guard supports("ENABLE"), supports("QRESYNC") || supports("CONDSTORE") else { return }
         var wanted: [Capability] = []
         if supports("CONDSTORE") { wanted.append(.condStore) }
         if supports("QRESYNC") { wanted.append(.qresync) }
         var confirmed = false
+        var qresyncConfirmed = false
         let tagged = try await connection.send(.enable(wanted)) { _, responses in
             var result: TaggedResponse?
             for try await response in responses {
                 switch response {
                 case .untagged(.enableData(let enabled)):
                     confirmed = enabled.contains(.qresync) || enabled.contains(.condStore)
+                    qresyncConfirmed = enabled.contains(.qresync)
                 case .tagged(let t): result = t
                 default: break
                 }
@@ -197,6 +217,7 @@ public final class MailSession: Sendable {
         }
         if let tagged, case .ok = tagged.state {
             qresyncEnabled = confirmed || profile.enableOmitsEnabledResponse
+            if supports("QRESYNC"), qresyncConfirmed || profile.enableOmitsEnabledResponse { resyncMode = .qresync }
         }
     }
 
