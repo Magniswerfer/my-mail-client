@@ -41,6 +41,27 @@ struct ServerOptions: ParsableArguments {
     @Flag(name: .customLong("simulate-icloud"), help: "Hide MOVE/SPECIAL-USE etc. to exercise iCloud code paths on another server.")
     var simulateICloud = false
 
+    @Option(help: "Sign-in method: login (IMAP LOGIN, the app's default) or plain (AUTHENTICATE PLAIN, with SASL-IR when offered).")
+    var auth: String = "login"
+
+    @Flag(help: "Type the password at a hidden prompt instead of reading it from the Keychain. Nothing is stored or shown.")
+    var askPassword = false
+
+    @Flag(help: "Print sanitized connection and sign-in diagnostics (never the password).")
+    var verbose = false
+
+    var authMethod: IMAPAuthMethod {
+        get throws {
+            guard let method = IMAPAuthMethod(rawValue: auth.lowercased()) else { throw ValidationError("--auth must be login or plain") }
+            return method
+        }
+    }
+
+    func startDiagnostics() {
+        guard verbose else { return }
+        IMAPDiagnostics.echo = { line in FileHandle.standardError.write(Data("[imap] \(line)\n".utf8)) }
+    }
+
     var endpoint: IMAPEndpoint {
         IMAPEndpoint(host: host, port: port, useTLS: !plaintext, username: login ?? address)
     }
@@ -48,6 +69,15 @@ struct ServerOptions: ParsableArguments {
     var profile: ServerProfile? { simulateICloud ? .iCloudSimulation : nil }
 
     func password() throws -> String {
+        if askPassword {
+            var buffer = [CChar](repeating: 0, count: 1024)
+            guard let read = readpassphrase("Password for \(login ?? address) (hidden): ", &buffer, buffer.count, 0) else {
+                throw ValidationError("No password entered.")
+            }
+            let typed = String(cString: read)
+            buffer.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
+            return typed
+        }
         if let testPassword {
             guard host == "127.0.0.1" || host == "localhost" else {
                 throw ValidationError("--test-password is only allowed for localhost. Use the Keychain for real accounts.")
@@ -122,8 +152,9 @@ struct Capabilities: AsyncParsableCommand {
     @OptionGroup var server: ServerOptions
 
     func run() async throws {
+        server.startDiagnostics()
         let password = try server.password()
-        try await MailSession.open(endpoint: server.endpoint, password: password, profile: server.profile) { session in
+        try await MailSession.open(endpoint: server.endpoint, password: password, profile: server.profile, auth: server.authMethod) { session in
             print("Pre-login capabilities:\n  \(session.greetingCapabilities.joined(separator: " "))")
             print("Post-login capabilities:\n  \(session.capabilities.joined(separator: " "))")
             print("CONDSTORE/QRESYNC enabled: \(session.qresyncEnabled)")

@@ -11,7 +11,15 @@ public enum SyncLog {
     #if canImport(OSLog)
     private static let sync = Logger(subsystem: "hk.gnus.tidings", category: "sync")
     private static let cloudLog = Logger(subsystem: "hk.gnus.tidings", category: "cloud")
+    private static let imapLog = Logger(subsystem: "hk.gnus.tidings", category: "imap")
     #endif
+
+    /// Sign-in and connection diagnostics (already sanitized: no passwords or payloads).
+    public static func imap(_ message: String) {
+        #if canImport(OSLog)
+        imapLog.notice("\(message, privacy: .public)")
+        #endif
+    }
 
     public static func info(_ message: String) {
         #if canImport(OSLog)

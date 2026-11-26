@@ -363,9 +363,15 @@ struct RichTextEditor: UIViewRepresentable {
             textViewDidChange(view)
         }
 
-        /// Above the keyboard: Bold, Italic, Underline, the two lists, and hiding the keyboard.
-        func formattingBar() -> UIToolbar {
-            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        /// Above the keyboard: Bold, Italic, Underline, the two lists, and hiding the keyboard,
+        /// with clear space above the pills so the last line of text doesn't touch them.
+        func formattingBar() -> UIView {
+            let gap: CGFloat = 10
+            let container = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + gap))
+            container.backgroundColor = .clear
+            let bar = UIToolbar(frame: CGRect(x: 0, y: gap, width: 320, height: 44))
+            bar.autoresizingMask = [.flexibleWidth, .flexibleTopMargin]
+            container.addSubview(bar)
             func item(_ format: TextFormat) -> UIBarButtonItem {
                 let item = UIBarButtonItem(image: UIImage(systemName: format.symbol),
                                            primaryAction: UIAction { [weak self] _ in self?.apply(format) })
@@ -377,8 +383,7 @@ struct RichTextEditor: UIViewRepresentable {
             hide.accessibilityLabel = String(localized: "Hide Keyboard")
             bar.items = [item(.bold), item(.italic), item(.underline), .fixedSpace(12), item(.bulletList), item(.numberedList),
                          .flexibleSpace(), hide]
-            bar.sizeToFit()
-            return bar
+            return container
         }
 
         func textViewDidChange(_ view: UITextView) {

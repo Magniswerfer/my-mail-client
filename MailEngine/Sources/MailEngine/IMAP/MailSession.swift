@@ -91,21 +91,26 @@ public final class MailSession: Sendable {
         endpoint: IMAPEndpoint,
         password: String,
         profile: ServerProfile? = nil,
+        auth: IMAPAuthMethod = .login,
         _ body: nonisolated(nonsending) (MailSession) async throws -> Result
     ) async throws -> Result {
         let profile = profile ?? ServerProfile.detect(host: endpoint.host)
         let configuration = IMAPConnection.Configuration(
             hostname: endpoint.host, port: endpoint.port, useTLS: endpoint.useTLS, logging: .noLogging
         )
-        return try await IMAPConnection.withConnection(configuration: configuration) { greeting, connection in
-            let greetingCaps = Self.capabilities(in: greeting.status)
+        IMAPDiagnostics.log("connect: \(endpoint.host):\(endpoint.port) \(endpoint.useTLS ? "implicit TLS, certificate checked against the system's trust store" : "NO TLS")")
+        do {
+            return try await IMAPConnection.withConnection(configuration: configuration) { greeting, connection in
+            // The greeting only arrives once TLS is up.
+            IMAPDiagnostics.log("connect: \(endpoint.useTLS ? "TLS handshake done, " : "")greeting \(Self.sanitized(greeting.status))")
+            var greetingCaps = Self.capabilities(in: greeting.status)
+            if greetingCaps.isEmpty {
+                greetingCaps = (try? await Self.fetchCapabilities(connection)) ?? []
+            }
+            IMAPDiagnostics.log("capabilities before sign-in: \(greetingCaps.joined(separator: " "))")
 
-            let login = try await connection.send(.login(username: endpoint.username, password: password)) {
-                _, responses in try await responses.waitForCompletion()
-            }
-            if case .ok = login.state {} else {
-                throw MailSessionError.authenticationFailed(String(describing: login.state))
-            }
+            try await Self.authenticate(connection, endpoint: endpoint, password: password, method: auth,
+                                        capabilities: greetingCaps)
 
             // iCloud: the pre-auth list is minimal and the proxy needs a CAPABILITY after login.
             let caps = try await Self.fetchCapabilities(connection)
@@ -118,6 +123,13 @@ public final class MailSession: Sendable {
             let result = try await body(session)
             _ = try? await connection.send(.logout) { _, responses in try await responses.waitForCompletion() }
             return result
+            }
+        } catch let error as MailSessionError {
+            throw error
+        } catch {
+            // TLS and network failures (a bad certificate, a refused connection) land here.
+            IMAPDiagnostics.log("connect: failed: \(Self.sanitized(error))")
+            throw error
         }
     }
 
