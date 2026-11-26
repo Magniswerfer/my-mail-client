@@ -24,6 +24,9 @@ public struct StateRecord: Codable, Sendable, Hashable {
 public enum StateRecordType: String, CaseIterable, Sendable {
     case rule, smartFolder, senderRule, imageTrust, trustedSender, unsubscribed, inviteResponse
     case mute, messageState, correction, aiCategory, aiChoice, setting
+    /// An account's settings (servers, addresses, identities), keyed by login. Never a password:
+    /// that travels in iCloud Keychain.
+    case account
 }
 
 /// A local change waiting to go to the cloud.
@@ -44,6 +47,10 @@ public struct CloudApplyReport: Sendable {
     public var skipped = 0
     /// App settings that changed (the app writes them to its preferences).
     public var settings: [String: Data] = [:]
+    /// Accounts another device added or changed, by login (decode with `CloudAccountRecord`).
+    public var accounts: [String: Data] = [:]
+    /// Logins of accounts another device removed.
+    public var removedAccounts: Set<String> = []
     public var changedTypes: Set<String> = []
     public init() {}
 }
@@ -57,6 +64,34 @@ public struct CloudAccounts: Sendable {
         loginByID = Dictionary(accounts.map { ($0.id, $0.login.lowercased()) }, uniquingKeysWith: { a, _ in a })
         idByLogin = Dictionary(accounts.map { ($0.login.lowercased(), $0.id) }, uniquingKeysWith: { a, _ in a })
     }
+}
+
+/// An account as it syncs: everything needed to add it on another device except its local id
+/// and its password.
+public struct CloudAccountRecord: Codable, Sendable, Hashable {
+    public var displayName: String
+    public var endpoint: IMAPEndpoint
+    public var addresses: [String]
+    public var smtp: SMTPEndpoint?
+    public var identities: [Identity]?
+
+    public init(_ account: AccountConfig) {
+        displayName = account.displayName
+        endpoint = account.endpoint
+        addresses = account.addresses
+        smtp = account.smtp
+        identities = account.identities
+    }
+
+    /// The account on this device, under a local id.
+    public func account(id: String = UUID().uuidString) -> AccountConfig {
+        AccountConfig(id: id, displayName: displayName, endpoint: endpoint, addresses: addresses, smtp: smtp, identities: identities)
+    }
+
+    /// Stable JSON (sorted keys), so an unchanged account never looks changed.
+    public var payload: Data { (try? CloudJSON.data(self)) ?? Data() }
+
+    public init(payload: Data) throws { self = try CloudJSON.value(CloudAccountRecord.self, payload) }
 }
 
 // MARK: - Payloads (stable JSON: sorted keys, dates as seconds)
@@ -157,9 +192,12 @@ extension MailStore {
     // MARK: Snapshot: all synced state as records
 
     /// type → key → payload, for everything that syncs. `settings`: the app's own preferences.
-    func cloudSnapshot(accounts: CloudAccounts, settings: [String: Data]) throws -> [String: [String: Data]] {
+    /// `accountRecords`: the app's accounts by login (`CloudAccountRecord.payload`).
+    func cloudSnapshot(accounts: CloudAccounts, settings: [String: Data],
+                       accountRecords: [String: Data] = [:]) throws -> [String: [String: Data]] {
         var out: [String: [String: Data]] = [:]
         func put(_ type: StateRecordType, _ key: String, _ payload: Data) { out[type.rawValue, default: [:]][key] = payload }
+        for (login, payload) in accountRecords { put(.account, login.lowercased(), payload) }
 
         for (i, rule) in try rules().enumerated() { put(.rule, rule.id, try CloudJSON.data(RulePayload(position: i, rule: rule))) }
         for (i, folder) in try smartFolders().enumerated() { put(.smartFolder, folder.id, try CloudJSON.data(FolderPayload(position: i, folder: folder))) }
@@ -224,8 +262,9 @@ extension MailStore {
     /// State that existed before it was ever synced is dated far in the past, so on a device
     /// joining an account that already syncs, the cloud's version wins.
     @discardableResult
-    public func collectCloudChanges(accounts: CloudAccounts, settings: [String: Data] = [:], now: Date = Date()) throws -> Int {
-        let current = try cloudSnapshot(accounts: accounts, settings: settings)
+    public func collectCloudChanges(accounts: CloudAccounts, settings: [String: Data] = [:],
+                                    accountRecords: [String: Data] = [:], now: Date = Date()) throws -> Int {
+        let current = try cloudSnapshot(accounts: accounts, settings: settings, accountRecords: accountRecords)
         return try db.write { db in
             var shadow: [String: [String: Data]] = [:]
             for row in try Row.fetchAll(db, sql: "SELECT type, key, payload FROM cloudShadow") {

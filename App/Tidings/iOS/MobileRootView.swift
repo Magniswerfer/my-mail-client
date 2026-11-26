@@ -132,6 +132,9 @@ struct MobileRootView: View {
                 .interactiveDismissDisabled(model.needsAccountSetup)
         }
         .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
+        .sheet(item: $model.accountToSignIn) { account in
+            AccountPasswordSheet(account: account).environment(model)
+        }
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in composeDraft = ComposeDraft(id: id) }

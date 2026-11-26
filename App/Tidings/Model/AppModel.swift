@@ -256,6 +256,11 @@ final class AppModel {
     var isAddingAccount = false
     /// The account Settings or ⌘K asked to remove, waiting for confirmation.
     var accountToRemove: AccountConfig?
+    /// Accounts another device added through iCloud whose password hasn't reached this device's
+    /// Keychain (iCloud Keychain is slow or off). They join as soon as it has one.
+    var accountsAwaitingPassword: [AccountConfig] = []
+    /// ⌘K "Sign In to …": the password sheet for one of them, over the main window.
+    var accountToSignIn: AccountConfig?
     /// Unread Primary conversations per account (the sidebar's per-account Inbox badges).
     private(set) var accountUnreadCounts: [String: Int] = [:]
     internal(set) var threads: [ThreadSummary] = []
@@ -344,6 +349,7 @@ final class AppModel {
         } else {
             accounts = AccountStorage.load()
         }
+        accountsAwaitingPassword = AccountStorage.loadAwaiting(dev: isDevServer)
         if !isDevServer {
             var changed = false
             for index in accounts.indices where accounts[index].identities == nil {
@@ -417,7 +423,7 @@ final class AppModel {
     }
 
     /// Closes one account's connections (it's being removed).
-    private func stopSync(accountID: String) {
+    func stopSync(accountID: String) {
         for task in tasks[accountID] ?? [] { task.cancel() }
         tasks[accountID] = nil
         syncs[accountID] = nil
@@ -552,6 +558,25 @@ final class AppModel {
         try save(account, password: password)
     }
 
+    /// An account another device added through iCloud: its password is checked against the
+    /// servers, then it joins like one added here.
+    func completeAccount(_ account: AccountConfig, password: String) async throws {
+        do {
+            _ = try await MailSession.open(endpoint: account.endpoint, password: password) { session in session.capabilities }
+        } catch {
+            throw AccountSetupError.incoming(String(describing: error))
+        }
+        if let smtp = account.smtp {
+            do {
+                try await SMTPClient.verify(endpoint: smtp, password: password)
+            } catch {
+                throw AccountSetupError.outgoing(String(describing: error))
+            }
+        }
+        accountsAwaitingPassword.removeAll { $0.login == account.login }
+        try save(account, password: password)
+    }
+
     private func checkNotAdded(_ account: AccountConfig) throws {
         if accounts.contains(where: { $0.login == account.login }) { throw AccountSetupError.alreadyAdded }
     }
@@ -569,7 +594,9 @@ final class AppModel {
     /// Removes an account from this device: its connections, its mail and state here, its cached
     /// messages and its Keychain password. Nothing on the mail server or in iCloud changes, so
     /// other devices keep it, and adding it again brings everything back.
-    func removeAccount(_ account: AccountConfig) {
+    /// `everywhere`: with iCloud sync on, your other devices remove it too (its record and its
+    /// iCloud Keychain password go); false when another device removed it and this one follows.
+    func removeAccount(_ account: AccountConfig, everywhere: Bool = true) {
         accountToRemove = nil
         let cloud = cloudAccounts
         stopSync(accountID: account.id)
@@ -582,10 +609,11 @@ final class AppModel {
         if account.id != "dev" {
             let others = accounts.filter { $0.id != account.id }
             for key in Set([account.login, account.endpoint.username]) where !others.contains(where: { $0.login == key || $0.endpoint.username == key }) {
-                Keychain.delete(account: key)
+                Keychain.delete(account: key, everywhere: everywhere && Keychain.synchronizes)
             }
         }
         accounts.removeAll { $0.id == account.id }
+        accountsAwaitingPassword.removeAll { $0.login == account.login }
         persistAccounts()
         cloudSync?.setAccounts(cloudAccounts)
         for (thread, draft) in inlineDrafts where (try? store.outboxItem(id: draft)) == nil { inlineDrafts[thread] = nil }
@@ -1004,6 +1032,15 @@ final class AppModel {
 
 /// Account list persistence. Passwords live only in the Keychain.
 enum AccountStorage {
+    static func loadAwaiting(dev: Bool) -> [AccountConfig] {
+        guard let data = UserDefaults.standard.data(forKey: dev ? "\(devKey).awaiting" : "accounts.awaiting.v1") else { return [] }
+        return (try? JSONDecoder().decode([AccountConfig].self, from: data)) ?? []
+    }
+
+    static func saveAwaiting(_ accounts: [AccountConfig], dev: Bool) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: dev ? "\(devKey).awaiting" : "accounts.awaiting.v1")
+    }
+
     static let key = "accounts.v1"
     /// The dev copy's own list (`-TidingsDevServer`), so it never touches the real one; one per
     /// `-TidingsDevUser`, like its data folder.

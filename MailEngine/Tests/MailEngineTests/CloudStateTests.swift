@@ -53,6 +53,71 @@ import Testing
         }
     }
 
+    // MARK: Accounts
+
+    static let work = AccountConfig(
+        id: "mac-local-id", displayName: "Work",
+        endpoint: IMAPEndpoint(host: "imap.example.com", port: 993, useTLS: true, username: "Me@Example.com"),
+        addresses: ["me@example.com"],
+        smtp: SMTPEndpoint(host: "smtp.example.com", port: 587, security: .startTLS, username: "me@example.com"),
+        identities: [Identity(address: "me@example.com", name: "Magnus", signature: "M")])
+
+    static func records(_ accounts: [AccountConfig]) -> [String: Data] {
+        Dictionary(uniqueKeysWithValues: accounts.map { ($0.login, CloudAccountRecord($0).payload) })
+    }
+
+    @Test func anAccountAddedOnOneDeviceArrivesOnTheOtherWithoutItsLocalID() throws {
+        let cloud = FakeCloud()
+        let mac = try Device("mac-account"), phone = try Device("phone-account")
+        try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: Self.records([Self.work]))
+        try cloud.push(mac.store)
+        // No password and no local id in the record: only what's needed to set it up again.
+        let sent = try #require(cloud.records.values.first { $0.type == StateRecordType.account.rawValue })
+        #expect(sent.key == Self.work.login.lowercased())
+        let text = String(decoding: sent.payload, as: UTF8.self)
+        #expect(!text.contains("mac-local-id"))
+
+        let report = try cloud.pull(into: phone.store, accounts: phone.accounts)
+        let payload = try #require(report.accounts[Self.work.login.lowercased()])
+        let arrived = try CloudAccountRecord(payload: payload).account(id: "phone-local-id")
+        #expect(arrived.id == "phone-local-id")
+        #expect(arrived.displayName == "Work")
+        #expect(arrived.endpoint == Self.work.endpoint)
+        #expect(arrived.smtp == Self.work.smtp)
+        #expect(arrived.identities == Self.work.identities)
+
+        // The phone now has it too: nothing to send back.
+        #expect(try phone.store.collectCloudChanges(accounts: phone.accounts, accountRecords: Self.records([arrived])) == 0)
+    }
+
+    @Test func anUnchangedAccountIsNotSentAgainButAnEditIs() throws {
+        let cloud = FakeCloud()
+        let mac = try Device("mac-account")
+        try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: Self.records([Self.work]))
+        try cloud.push(mac.store)
+        #expect(try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: Self.records([Self.work])) == 0)
+        var renamed = Self.work
+        renamed.identities = [Identity(address: "me@example.com", name: "Magnus H. Kaspersen", signature: "M")]
+        #expect(try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: Self.records([renamed])) == 1)
+    }
+
+    @Test func removingAnAccountRemovesItOnTheOtherDevice() throws {
+        let cloud = FakeCloud()
+        let mac = try Device("mac-account"), phone = try Device("phone-account")
+        try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: Self.records([Self.work]))
+        try cloud.push(mac.store)
+        _ = try cloud.pull(into: phone.store, accounts: phone.accounts)
+
+        // Gone from the Mac's list: its deletion goes up and the phone hears about it.
+        try mac.store.collectCloudChanges(accounts: mac.accounts, accountRecords: [:])
+        let deletion = try #require(try mac.store.pendingCloudChanges().first)
+        #expect(deletion == .delete(type: StateRecordType.account.rawValue, key: Self.work.login.lowercased()))
+        try cloud.push(mac.store)
+        let report = try cloud.pull(into: phone.store, accounts: phone.accounts,
+                                    deleted: [(StateRecordType.account.rawValue, Self.work.login.lowercased())])
+        #expect(report.removedAccounts == [Self.work.login.lowercased()])
+    }
+
     @Test func rulesFoldersSendersAndSettingsTravelBothWays() throws {
         let cloud = FakeCloud()
         let mac = try Device("mac-account"), phone = try Device("phone-account")

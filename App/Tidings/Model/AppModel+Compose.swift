@@ -48,6 +48,9 @@ extension AppModel {
     /// The dev copy keeps its own list (its local Dovecot account included, for its identities).
     func persistAccounts() {
         AccountStorage.save(accounts, dev: isDevServer)
+        AccountStorage.saveAwaiting(accountsAwaitingPassword, dev: isDevServer)
+        // Accounts sync too (names, servers, identities; never passwords).
+        scheduleCloudPush()
     }
 
     // MARK: Opening the composer

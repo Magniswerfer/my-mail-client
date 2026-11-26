@@ -7,6 +7,7 @@ import SwiftUI
 struct OtherAccountForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.closeAccountSetup) private var closeAccountSetup
     /// The address is iCloud's: switch to the iCloud setup with it.
     var useICloud: (String) -> Void
 
@@ -110,7 +111,7 @@ struct OtherAccountForm: View {
         .onChange(of: address) { _, new in addressChanged(new) }
         .sheetButtons {
             if !model.needsAccountSetup {
-                Button("Cancel") { model.isAddingAccount = false; dismiss() }
+                Button("Cancel") { model.isAddingAccount = false; closeAccountSetup?(); dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
         } trailing: {
@@ -246,6 +247,7 @@ struct OtherAccountForm: View {
             source: source ?? "")
         do {
             try await model.addAccount(name: name, address: address, settings: settings, password: password)
+            closeAccountSetup?()
             dismiss()
         } catch {
             self.error = error.localizedDescription

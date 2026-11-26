@@ -309,6 +309,9 @@ struct RootView: View {
                 .interactiveDismissDisabled(model.needsAccountSetup)
         }
         .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
+        .sheet(item: $model.accountToSignIn) { account in
+            AccountPasswordSheet(account: account).environment(model)
+        }
         .onChange(of: model.searchEndedCount) {
             searchFocused = false
             streamFocused = true

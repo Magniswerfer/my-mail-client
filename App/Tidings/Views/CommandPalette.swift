@@ -134,6 +134,10 @@ extension AppModel {
             list.append(AppCommand(id: "removeAccount-\(account.id)", title: String(localized: "Remove Account \(account.displayName)…"),
                                    symbol: "person.crop.circle.badge.minus", keys: nil) { self.accountToRemove = account })
         }
+        for account in accountsAwaitingPassword {
+            list.append(AppCommand(id: "signIn-\(account.login)", title: String(localized: "Sign In to \(account.displayName)…"),
+                                   symbol: "key", keys: nil) { self.accountToSignIn = account })
+        }
         if let checkForUpdates {
             list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
                                    symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })

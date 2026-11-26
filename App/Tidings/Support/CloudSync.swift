@@ -94,10 +94,10 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     // MARK: Sending
 
     /// Finds local changes and hands them to CKSyncEngine, which sends them shortly.
-    func push(settings: [String: Data]) {
+    func push(settings: [String: Data], accountRecords: [String: Data]) {
         guard let engine = currentEngine else { return }
         do {
-            try store.collectCloudChanges(accounts: currentAccounts, settings: settings)
+            try store.collectCloudChanges(accounts: currentAccounts, settings: settings, accountRecords: accountRecords)
             let changes = try store.pendingCloudChanges()
             guard !changes.isEmpty else { return }
             var pending: [CKSyncEngine.PendingRecordZoneChange] = []

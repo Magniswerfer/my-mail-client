@@ -4361,6 +4361,106 @@
         }
       }
     },
+    "Accounts sync through iCloud, with their passwords in iCloud Keychain, so your other devices set them up too. Removing one removes it from all of them. The mail stays on the server.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konti synkroniseres via iCloud med adgangskoderne i iCloud-nøglering, så dine andre enheder også sætter dem op. Fjerner du en, fjernes den fra dem alle. Mailen bliver på serveren."
+          }
+        }
+      }
+    },
+    "It's removed from all your devices, with its mail, drafts, outbox and password there. The mail stays on the server.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den fjernes fra alle dine enheder sammen med dens mail, kladder, udbakke og adgangskode. Mailen bliver på serveren."
+          }
+        }
+      }
+    },
+    "From your other devices · waiting for its password": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fra dine andre enheder · venter på adgangskoden"
+          }
+        }
+      }
+    },
+    "Enter Password…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indtast adgangskode…"
+          }
+        }
+      }
+    },
+    "Account": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto"
+          }
+        }
+      }
+    },
+    "Login": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Login"
+          }
+        }
+      }
+    },
+    "Sign In": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ind"
+          }
+        }
+      }
+    },
+    "An app-specific password from account.apple.com. It's kept in iCloud Keychain.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En appspecifik adgangskode fra account.apple.com. Den gemmes i iCloud-nøglering."
+          }
+        }
+      }
+    },
+    "It's kept in iCloud Keychain, so your other devices have it too.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den gemmes i iCloud-nøglering, så dine andre enheder også har den."
+          }
+        }
+      }
+    },
+    "Sign In to %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ind på %@…"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

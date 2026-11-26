@@ -6,6 +6,7 @@ import SwiftUI
 struct AccountSetupView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.closeAccountSetup) private var closeAccountSetup
     enum Kind: Hashable { case iCloud, other }
     @State private var kind: Kind = .iCloud
     /// An iCloud address typed in the other form, carried over by "Use iCloud Setup".
@@ -42,7 +43,7 @@ struct AccountSetupView: View {
             #if os(iOS)
             if !model.needsAccountSetup, kind == .iCloud {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { model.isAddingAccount = false; dismiss() }
+                    Button("Cancel") { closeSetup() }
                 }
             }
             #endif
@@ -54,6 +55,7 @@ struct AccountSetupView: View {
 /// app-specific password is the only way in; this makes that a two-click step:
 /// open Apple's page → generate → come back and press Paste. A valid password connects at once.
 struct ICloudAccountForm: View {
+    @Environment(\.closeAccountSetup) private var closeAccountSetup
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -113,7 +115,7 @@ struct ICloudAccountForm: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if showsCancel {
-                    Button("Cancel") { model.isAddingAccount = false; dismiss() }
+                    Button("Cancel") { closeSetup() }
                         .keyboardShortcut(.cancelAction)
                 }
                 Button {
@@ -164,7 +166,7 @@ struct ICloudAccountForm: View {
         defer { isConnecting = false }
         do {
             try await model.addAccount(address: address, password: password)
-            dismiss()
+            closeSetup()
         } catch let e as MailSessionError {
             if case .authenticationFailed = e {
                 error = String(localized: "iCloud rejected the login. Check that the address is your @icloud.com address and the password is a fresh app-specific password.")
@@ -263,6 +265,8 @@ struct GeneralSettings: View {
     /// Here, not on the main window: on the Mac Settings is a window of its own.
     @State private var isAdding = false
     @State private var removing: AccountConfig?
+    /// An account from another device that needs its password typed here.
+    @State private var signingIn: AccountConfig?
 
     var body: some View {
         Form {
@@ -271,11 +275,18 @@ struct GeneralSettings: View {
                     AccountRow(account: account) { removing = account }
                 }
                 .onDelete { offsets in removing = offsets.first.map { model.accounts[$0] } }
+                ForEach(model.accountsAwaitingPassword) { account in
+                    AwaitingAccountRow(account: account, signIn: { signingIn = account }, remove: { removing = account })
+                }
                 Button("Add Account…") { isAdding = true }
             } header: {
                 Text("Accounts")
             } footer: {
-                Text("Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.")
+                if model.syncsAccountsThroughICloud {
+                    Text("Accounts sync through iCloud, with their passwords in iCloud Keychain, so your other devices set them up too. Removing one removes it from all of them. The mail stays on the server.")
+                } else {
+                    Text("Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.")
+                }
             }
             Section {
                 Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
@@ -302,8 +313,12 @@ struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(item: $signingIn) { account in
+            AccountPasswordSheet(account: account).environment(model)
+        }
         .sheet(isPresented: $isAdding) {
             NavigationStack { AccountSetupView() }
+                .environment(\.closeAccountSetup, { isAdding = false })
                 .environment(model)
         }
         .modifier(AccountRemovalConfirmation(account: $removing))
@@ -345,6 +360,95 @@ struct AccountRow: View {
 }
 
 /// "Remove this account?" before anything is deleted.
+/// An account another device added, still waiting for its password on this one.
+struct AwaitingAccountRow: View {
+    let account: AccountConfig
+    var signIn: () -> Void
+    var remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "icloud.and.arrow.down")
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.displayName)
+                Text("From your other devices · waiting for its password")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button("Enter Password…", action: signIn)
+        }
+        .contextMenu {
+            Button("Enter Password…", systemImage: "key", action: signIn)
+            Button("Remove Account…", systemImage: "minus.circle", role: .destructive, action: remove)
+        }
+        .swipeActions {
+            Button("Remove", role: .destructive, action: remove)
+        }
+    }
+}
+
+/// Signs in to an account that came from another device. Usually not needed: iCloud Keychain
+/// brings the password along, and the account joins by itself.
+struct AccountPasswordSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let account: AccountConfig
+    @State private var password = ""
+    @State private var isChecking = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("Account", value: account.displayName)
+                    LabeledContent("Login", value: account.login)
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                        .onSubmit(signIn)
+                } footer: {
+                    Text(account.isICloud
+                         ? String(localized: "An app-specific password from account.apple.com. It's kept in iCloud Keychain.")
+                         : String(localized: "It's kept in iCloud Keychain, so your other devices have it too."))
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(.red) }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Sign In")
+            .sheetButtons {
+                Button("Cancel") { dismiss() }
+            } trailing: {
+                if isChecking { ProgressView().controlSize(.small) }
+                Button("Sign In", action: signIn)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(password.isEmpty || isChecking)
+            }
+        }
+        .macFrame(width: 420)
+    }
+
+    private func signIn() {
+        guard !password.isEmpty, !isChecking else { return }
+        isChecking = true
+        error = nil
+        Task {
+            do {
+                try await model.completeAccount(account, password: password)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            isChecking = false
+        }
+    }
+}
+
 struct AccountRemovalConfirmation: ViewModifier {
     @Environment(AppModel.self) private var model
     @Binding var account: AccountConfig?
@@ -358,7 +462,11 @@ struct AccountRemovalConfirmation: ViewModifier {
             Button("Remove Account", role: .destructive) { model.removeAccount(account) }
             Button("Cancel", role: .cancel) { self.account = nil }
         } message: { _ in
-            Text("Its mail, drafts, outbox and password are deleted from this device. The mail stays on the server, and your other devices keep the account.")
+            if model.syncsAccountsThroughICloud {
+                Text("It's removed from all your devices, with its mail, drafts, outbox and password there. The mail stays on the server.")
+            } else {
+                Text("Its mail, drafts, outbox and password are deleted from this device. The mail stays on the server, and your other devices keep the account.")
+            }
         }
     }
 }
@@ -486,5 +594,27 @@ struct BundleScheduleRow: View {
                 model.setSchedule(.daily(hour: c.hour ?? 17, minute: c.minute ?? 0), for: category)
             }
         ), displayedComponents: .hourAndMinute)
+    }
+}
+
+extension EnvironmentValues {
+    /// Closes the add-account sheet. Settings (a window of its own on the Mac) presents it from
+    /// its own state and sets this; the main window's sheet follows the model's flag.
+    @Entry var closeAccountSetup: (@MainActor () -> Void)? = nil
+}
+
+extension AccountSetupView {
+    func closeSetup() {
+        model.isAddingAccount = false
+        closeAccountSetup?()
+        dismiss()
+    }
+}
+
+extension ICloudAccountForm {
+    func closeSetup() {
+        model.isAddingAccount = false
+        closeAccountSetup?()
+        dismiss()
     }
 }

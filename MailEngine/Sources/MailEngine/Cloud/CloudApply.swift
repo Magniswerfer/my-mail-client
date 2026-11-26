@@ -43,6 +43,7 @@ extension MailStore {
                 report.skipped += 1
                 continue
             }
+            if deletion.type == StateRecordType.account.rawValue { report.removedAccounts.insert(deletion.key) }
             try remove(type: deletion.type, key: deletion.key, accounts: accounts)
             try db.write { db in
                 for table in ["cloudShadow", "cloudOutbox", "cloudPending"] {
@@ -156,6 +157,8 @@ extension MailStore {
             for thread in threads { try setMembership(threadID: thread, categoryID: p.categoryID, isMember: p.isMember) }
         case .setting:
             report.settings[key] = record.payload
+        case .account:
+            report.accounts[key] = record.payload
         }
         return .applied
     }
@@ -190,7 +193,7 @@ extension MailStore {
                 try db.write { try $0.execute(sql: "DELETE FROM aiCategoryMember WHERE categoryID = ? AND threadID = ? AND source != 0",
                                               arguments: [p.categoryID, thread]) }
             }
-        case .setting:
+        case .setting, .account:
             break
         }
     }
