@@ -57,6 +57,8 @@
 	<string>Tidings adds invitations you accept to your calendar, keeps them up to date when they change, and warns you about clashes.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Tidings adds reminders for emails you choose, with a link back to the message.</string>
+	<key>TidingsCloudContainer</key>
+	<string>$(TIDINGS_CLOUD_CONTAINER)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -47,6 +47,7 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: hk.gnus.tidings.message
             CFBundleURLSchemes: [tidings]
+        TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)
     entitlements:
       path: Tidings/Tidings.entitlements
       properties:
@@ -54,6 +55,9 @@ targets:
         com.apple.security.network.client: true
         com.apple.security.personal-information.calendars: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.developer.icloud-container-identifiers: [$(TIDINGS_CLOUD_CONTAINER)]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings
@@ -77,6 +81,7 @@ targets:
           - "Mac/**"
           - "Info.plist"
           - "Tidings.entitlements"
+          - "iOS/TidingsMobile.entitlements"
     dependencies:
       - package: MailEngine
         product: MailEngine
@@ -114,6 +119,13 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # "Add to Things" only shows when Things is installed.
         LSApplicationQueriesSchemes: [things]
+        TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)
+    entitlements:
+      path: Tidings/iOS/TidingsMobile.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [$(TIDINGS_CLOUD_CONTAINER)]
+        com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: hk.gnus.tidings

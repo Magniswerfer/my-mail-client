@@ -44,5 +44,7 @@
 	<string>AGPL-3.0</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Tidings adds reminders for emails you choose, with a link back to the message.</string>
+	<key>TidingsCloudContainer</key>
+	<string>$(TIDINGS_CLOUD_CONTAINER)</string>
 </dict>
 </plist>

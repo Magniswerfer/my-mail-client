@@ -589,6 +589,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = Tidings/iOS/TidingsMobile.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = Tidings/iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -606,6 +607,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGN_ENTITLEMENTS = Tidings/iOS/TidingsMobile.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				INFOPLIST_FILE = Tidings/iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
