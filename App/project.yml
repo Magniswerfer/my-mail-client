@@ -22,6 +22,10 @@ settings:
 packages:
   MailEngine:
     path: ../MailEngine
+  # Mac updates (SPEC §17): signed, notarized releases from GitHub Releases.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.10.1"
 targets:
   # Mac app. Shared code lives in Tidings/; Mac-only code in Tidings/Mac and behind #if os(macOS).
   Tidings:
@@ -40,6 +44,8 @@ targets:
     dependencies:
       - package: MailEngine
         product: MailEngine
+      - package: Sparkle
+        product: Sparkle
     info:
       path: Tidings/Info.plist
       properties:
@@ -54,10 +60,19 @@ targets:
           - CFBundleURLName: hk.gnus.tidings.message
             CFBundleURLSchemes: [tidings]
         TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)
+        # Sparkle: the feed is the appcast attached to the latest GitHub release.
+        SUFeedURL: https://github.com/Magniswerfer/my-mail-client/releases/latest/download/appcast.xml
+        SUPublicEDKey: YULVASj55kDhVacQo0JotSL0E1ciHFkLcg6oxOGcFe0=
+        # Sandboxed: Sparkle installs through its own XPC launcher.
+        SUEnableInstallerLauncherService: true
     entitlements:
       path: Tidings/Tidings.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        # Sparkle's installer launcher and its status channel (sandboxed apps).
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
         com.apple.security.network.client: true
         com.apple.security.personal-information.calendars: true
         com.apple.security.files.user-selected.read-write: true

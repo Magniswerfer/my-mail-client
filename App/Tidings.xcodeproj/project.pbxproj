@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		0087065155169B6AAB1FBF96 /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A0203070BD655088A92656 /* CloudSync.swift */; };
 		00D3DA115A23B57E5D003EAA /* MailEngine in Frameworks */ = {isa = PBXBuildFile; productRef = A46209AE4D69B21606AA03A6 /* MailEngine */; };
+		01AD34FCC67BC3BF11B390FA /* Updater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA96B6B942E251F010276D5 /* Updater.swift */; };
 		022EFE4FE3A9309A4A5BEF2E /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0155D1ACEF841230C43B9BE1 /* GlobalHotKey.swift */; };
 		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
+		122B385B2D97126B2A4A8937 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 39484A8621C56475E2632191 /* Sparkle */; };
 		142D55FF416EF333EA5DEF75 /* AppModel+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23B15724889F87A249F69F2 /* AppModel+Attachments.swift */; };
 		186630237B178EECA7307A27 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCE20B1F07F0E21E6FDE27A2 /* AppModel.swift */; };
 		1F50D59D080749A5247D9E7A /* Snippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9781C48BE6F25D01ADF92C /* Snippets.swift */; };
@@ -134,6 +136,7 @@
 		370FB84AB080DC7E92AAB295 /* AppModel+Mute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Mute.swift"; sourceTree = "<group>"; };
 		40F3251184D524F3BBA0BD1D /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		48A2F7CF09F07C275CE96257 /* Platform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Platform.swift; sourceTree = "<group>"; };
+		5CA96B6B942E251F010276D5 /* Updater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updater.swift; sourceTree = "<group>"; };
 		5F01A2507DCD4CBA0277DD92 /* SnippetsAndReaderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsAndReaderViews.swift; sourceTree = "<group>"; };
 		65D5ABDBB138D058BEC0C9E8 /* AICategoryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICategoryViews.swift; sourceTree = "<group>"; };
 		68E240EFD4E2AE1397519653 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -180,6 +183,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1A2B5DD989C49C4146CCB83 /* MailEngine in Frameworks */,
+				122B385B2D97126B2A4A8937 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -272,6 +276,7 @@
 			children = (
 				0155D1ACEF841230C43B9BE1 /* GlobalHotKey.swift */,
 				D4D12F02B8A7B485182F3009 /* TidingsApp.swift */,
+				5CA96B6B942E251F010276D5 /* Updater.swift */,
 			);
 			path = Mac;
 			sourceTree = "<group>";
@@ -349,6 +354,7 @@
 			name = Tidings;
 			packageProductDependencies = (
 				187850F5704A0255AB5BF953 /* MailEngine */,
+				39484A8621C56475E2632191 /* Sparkle */,
 			);
 			productName = Tidings;
 			productReference = B656C7C5D76B62DF59CF7881 /* Tidings.app */;
@@ -404,6 +410,7 @@
 			mainGroup = 1F174EC800775CB862F3936B;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				74922934545DD50D45089A19 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				1192EE7304B0217595053594 /* XCLocalSwiftPackageReference "../MailEngine" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -490,6 +497,7 @@
 				37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */,
 				6B457C0BEAF326BB7325AA69 /* TidingsApp.swift in Sources */,
 				60788449241397BD78F992CC /* UnsubscribeConfirmation.swift in Sources */,
+				01AD34FCC67BC3BF11B390FA /* Updater.swift in Sources */,
 				FCCE426D5FD645E9D4107D5B /* WakeReminders.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -803,10 +811,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		74922934545DD50D45089A19 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		187850F5704A0255AB5BF953 /* MailEngine */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MailEngine;
+		};
+		39484A8621C56475E2632191 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 74922934545DD50D45089A19 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 		A46209AE4D69B21606AA03A6 /* MailEngine */ = {
 			isa = XCSwiftPackageProductDependency;

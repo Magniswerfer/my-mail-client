@@ -119,6 +119,10 @@ extension AppModel {
                 self.isShortcutsShown = true
             },
         ]
+        if let checkForUpdates {
+            list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
+                                   symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })
+        }
         if canAddToThings {
             list.append(AppCommand(id: "addThings", title: String(localized: "Add to Things"), symbol: "checkmark.square",
                                    keys: nil, isEnabled: hasSelection) { self.addToThings() })

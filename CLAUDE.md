@@ -34,3 +34,4 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 - `swift test --package-path MailEngine`
 - `MailEngine/TestServer/make-certs.sh && docker compose -f MailEngine/TestServer/compose.yml up -d` — local Dovecot (IMAP, :31143) and Mailpit (SMTP with STARTTLS, :31587; UI/API at http://127.0.0.1:38025) for integration tests. Mailpit catches everything; nothing is delivered.
 - `swift run --package-path MailEngine tidings-probe --help`
+- `scripts/release.sh [--publish]` — Mac release: Developer ID export, notarized .dmg, Sparkle appcast, GitHub release (bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `App/project.yml` first). Publishing is Magnus's call.

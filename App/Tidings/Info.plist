@@ -44,6 +44,12 @@
 	<string>AGPL-3.0</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Tidings adds reminders for emails you choose, with a link back to the message.</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/Magniswerfer/my-mail-client/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>YULVASj55kDhVacQo0JotSL0E1ciHFkLcg6oxOGcFe0=</string>
 	<key>TidingsCloudContainer</key>
 	<string>$(TIDINGS_CLOUD_CONTAINER)</string>
 </dict>

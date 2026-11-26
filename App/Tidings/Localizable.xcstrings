@@ -4351,6 +4351,16 @@
         }
       }
     },
+    "Check for Updates…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søg efter opdateringer…"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

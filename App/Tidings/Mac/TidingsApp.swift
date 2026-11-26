@@ -13,6 +13,10 @@ struct TidingsApp: App {
         model.start()
         _model = State(initialValue: model)
         GlobalHotKey.shared.registerCopyCode { [weak model] in model?.copyLatestCode() }
+        // Starts Sparkle's scheduled checks; ⌘K and the app menu reach it through the model.
+        if Updater.shared.isAvailable {
+            model.checkForUpdates = { Updater.shared.checkForUpdates() }
+        }
     }
 
     var body: some Scene {
@@ -23,6 +27,10 @@ struct TidingsApp: App {
                 .task { model.start() }
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { model.checkForUpdates?() }
+                    .disabled(model.checkForUpdates == nil)
+            }
             CommandGroup(after: .sidebar) {
                 Button("Go to Inbox") { model.goToInbox() }
                     .keyboardShortcut("1", modifiers: .command)

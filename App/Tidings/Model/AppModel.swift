@@ -159,6 +159,8 @@ final class AppModel {
     // Reply Later: the focused answering session, when open.
     var replySession: ReplySession?
     var isShortcutsShown = false
+    /// Mac release builds: Sparkle's "Check for Updates…" (nil elsewhere, and the command hides).
+    @ObservationIgnored var checkForUpdates: (@MainActor () -> Void)?
     /// The app's model, for App Intents and links that arrive without a view.
     @ObservationIgnored static weak var shared: AppModel?
 
