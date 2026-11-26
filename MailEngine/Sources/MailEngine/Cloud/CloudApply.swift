@@ -250,7 +250,7 @@ extension MailStore {
                     changed += 1
                 }
                 // The wake time matters where the mail is in Snoozed (the move itself is IMAP).
-                if (row["mailbox"] as String) == AccountSync.snoozedMailbox, state.snoozed,
+                if AccountSync.isSnoozedMailbox(row["mailbox"] as String), state.snoozed,
                    !(row["isSnoozed"] as Bool) || (row["snoozedUntil"] as Date?) != state.snoozeUntil {
                     try db.execute(sql: "UPDATE message SET isSnoozed = 1, snoozedUntil = ? WHERE id = ?", arguments: [state.snoozeUntil, row["id"] as Int64])
                     changed += 1

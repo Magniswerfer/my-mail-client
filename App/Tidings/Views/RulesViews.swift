@@ -561,7 +561,7 @@ struct ActionEditor: View {
     private var folders: [String] {
         let excluded: Set<MailboxRole> = [.inbox, .sent, .drafts]
         let paths = model.mailboxes
-            .filter { !($0.role.map(excluded.contains) ?? false) && $0.path != AccountSync.snoozedMailbox && $0.path.uppercased() != "INBOX" }
+            .filter { !($0.role.map(excluded.contains) ?? false) && !AccountSync.isSnoozedMailbox($0.path) && $0.path.uppercased() != "INBOX" }
             .map(\.path)
         return Array(Set(paths)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }

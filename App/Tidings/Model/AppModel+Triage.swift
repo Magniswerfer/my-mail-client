@@ -177,7 +177,9 @@ extension AppModel {
         }
         let source = sourceMailbox
         // A smart folder mixes folders: each conversation is acted on where it lives.
-        let perFolder: Bool = if case .smartFolder = selection { true } else { false }
+        // A smart folder mixes folders, and Snoozed is a different folder on each account
+        // ("INBOX.Snoozed" on some servers): act where each conversation is.
+        let perFolder: Bool = switch selection { case .smartFolder, .snoozed: true; default: false }
         struct Where: Hashable { var accountID: String; var mailbox: String }
         Task {
             // A conversation can live in more than one account (mail sent to two of your
@@ -446,7 +448,7 @@ extension AppModel {
             }
         }
         return mailboxes
-            .filter { $0.accountID == accountID && $0.path != source && $0.path != AccountSync.snoozedMailbox
+            .filter { $0.accountID == accountID && $0.path != source && !AccountSync.isSnoozedMailbox($0.path)
                 && $0.role != .sent && $0.role != .drafts }
             .sorted { rank($0) == rank($1) ? $0.path.localizedStandardCompare($1.path) == .orderedAscending : rank($0) < rank($1) }
     }

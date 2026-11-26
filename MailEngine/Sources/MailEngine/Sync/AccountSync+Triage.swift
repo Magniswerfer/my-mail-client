@@ -40,7 +40,36 @@ public struct TriageChange: Sendable, Identifiable, Hashable {
 }
 
 extension AccountSync {
+    /// The snoozed folder's name. On servers whose folders all live under the personal
+    /// namespace (Dovecot's `INBOX.`), it's `INBOX.Snoozed`: see `snoozedPath()`.
     public static let snoozedMailbox = "Snoozed"
+    static let personalPrefixKey = "personalNamespacePrefix"
+
+    /// The snoozed folder on any account: `Snoozed` at the top, or right under `INBOX.`/`INBOX/`.
+    public static func isSnoozedMailbox(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return lower == "snoozed" || lower == "inbox.snoozed" || lower == "inbox/snoozed"
+    }
+
+    /// Where this account's snoozed mail goes: the folder it already has, else a new one named
+    /// the way the server wants (`INBOX.Snoozed` when every folder sits under `INBOX.`).
+    func snoozedPath() throws -> String {
+        if let existing = try store.mailboxStates(accountID: account.id).first(where: { Self.isSnoozedMailbox($0.path) }) {
+            return existing.path
+        }
+        let prefix = try store.setting(Self.personalPrefixKey, accountID: account.id) ?? ""
+        return prefix + Self.snoozedMailbox
+    }
+
+    /// `INBOX.` (or `INBOX/`) when every folder but the Inbox lives under it, as on Dovecot with
+    /// an `INBOX.` namespace; there a new top-level folder is refused ("nonexistent namespace").
+    static func personalPrefix(in listing: [MailboxListing]) -> String {
+        let others = listing.filter { $0.path.uppercased() != "INBOX" }
+        guard let separator = listing.first(where: { $0.path.uppercased() == "INBOX" })?.separator ?? others.first?.separator,
+              !others.isEmpty else { return "" }
+        let prefix = "INBOX\(separator)"
+        return others.allSatisfy { $0.path.uppercased().hasPrefix(prefix.uppercased()) } ? prefix : ""
+    }
     static let maxAttempts = 3
 
     func path(for role: MailboxRole) throws -> String? {
@@ -60,7 +89,7 @@ extension AccountSync {
 
         switch kind {
         case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze:
-            let source: String = kind == .unsnooze ? Self.snoozedMailbox : mailbox
+            let source: String = kind == .unsnooze ? try snoozedPath() : mailbox
             localIDs = try store.localIDs(threadIDs: threadIDs, mailbox: source, accountID: account.id)
             guard !localIDs.isEmpty else { return nil }
             let snapshots = try store.snapshots(localIDs: localIDs)
@@ -83,7 +112,7 @@ extension AccountSync {
                 remove = Array(Set(snapshots.flatMap { SnoozeKeywords.all(in: $0.flags.split(separator: " ").map(String.init)) }))
                 snooze = (false, nil)
             case .snooze(let until):
-                target = Self.snoozedMailbox
+                target = try snoozedPath()
                 createTarget = true
                 add = SnoozeKeywords.keywords(until: until)
                 snooze = (true, until)
@@ -292,7 +321,17 @@ extension AccountSync {
 
     func execute(_ action: QueuedAction, _ session: MailSession) async throws {
         switch action {
-        case .move(let items, let target, let add, let remove, let createTarget):
+        case .move(let items, let queuedTarget, let add, let remove, let createTarget):
+            // Snoozes queued before the folder followed the server's namespace said "Snoozed";
+            // send them where this server wants it ("INBOX.Snoozed").
+            var target = queuedTarget
+            if Self.isSnoozedMailbox(queuedTarget), let path = try? snoozedPath(), path != queuedTarget {
+                target = path
+                try await store.db.write { db in
+                    try db.execute(sql: "UPDATE message SET mailbox = ? WHERE accountID = ? AND mailbox = ?",
+                                   arguments: [path, account.id, queuedTarget])
+                }
+            }
             if createTarget { try await session.ensureMailbox(target) }
             for (mailbox, group) in Dictionary(grouping: items, by: \.fromMailbox) {
                 _ = try await session.select(mailbox)

@@ -43,7 +43,7 @@ extension AppModel {
             return false
         }
         let place: SidebarItem = message.mailbox == "INBOX" ? .inbox
-            : message.mailbox == AccountSync.snoozedMailbox ? .snoozed
+            : AccountSync.isSnoozedMailbox(message.mailbox) ? .snoozed
             : .mailbox(accountID: message.accountID, path: message.mailbox)
         if selection != place { selection = place }
         endSearch()

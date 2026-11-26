@@ -188,7 +188,9 @@ public actor AccountSync {
         emit(.started)
         try await drain(session)
         let listing = try await session.listMailboxes()
-        let roles = MailboxRoleResolver.resolve(listing)
+        try store.setSetting(Self.personalPrefixKey, Self.personalPrefix(in: listing), accountID: account.id)
+        var roles = MailboxRoleResolver.resolve(listing)
+        try await preferFullest(&roles, listing: listing, session: session)
         let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts]
         var paths: [(String, MailboxRole?)] = order.compactMap { role in roles[role].map { ($0, role) } }
         // User folders too (they're part of the mail you search), but not Trash or Junk.
@@ -209,6 +211,22 @@ public actor AccountSync {
     }
 
     // MARK: One mailbox
+
+    /// Some servers mark two folders with one SPECIAL-USE (Dovecot's default config has both
+    /// "Sent" and "Sent Messages" as \Sent). Take the one that holds the mail, not just the
+    /// first listed; the other stays an ordinary folder.
+    func preferFullest(_ roles: inout [MailboxRole: String], listing: [MailboxListing], session: MailSession) async throws {
+        for (attribute, role) in MailboxRoleResolver.specialUse {
+            let candidates = listing.filter { box in box.attributes.contains { $0.caseInsensitiveCompare(attribute) == .orderedSame } }
+            guard candidates.count > 1 else { continue }
+            var best: (path: String, count: Int)?
+            for box in candidates {
+                let count = (try? await session.select(box.path, readOnly: true).exists) ?? 0
+                if best == nil || count > best!.count { best = (box.path, count) }
+            }
+            if let best { roles[role] = best.path }
+        }
+    }
 
     func syncMailbox(_ session: MailSession, path: String, role: MailboxRole?) async throws {
         let selected = try await session.select(path, readOnly: true)

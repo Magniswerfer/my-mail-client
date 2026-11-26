@@ -720,7 +720,12 @@ final class AppModel {
             case .outbox:
                 threads = []
             case .snoozed:
-                threads = try store.threads(mailbox: AccountSync.snoozedMailbox, ownAddresses: ownAddresses)
+                // Each account's snoozed folder ("Snoozed", or "INBOX.Snoozed" on some servers).
+                let paths = Set(mailboxes.map(\.path).filter(AccountSync.isSnoozedMailbox)
+                                + [AccountSync.snoozedMailbox, "INBOX.Snoozed", "INBOX/Snoozed"])
+                var seen = Set<String>()
+                threads = try paths.flatMap { try store.threads(mailbox: $0, ownAddresses: ownAddresses) }
+                    .filter { seen.insert($0.threadID).inserted }
                     .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
             case .replyLater:
                 threads = try inbox().filter(\.isReplyLater)

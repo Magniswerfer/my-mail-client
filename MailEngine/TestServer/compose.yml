@@ -10,6 +10,17 @@ services:
     ports:
       - "127.0.0.1:31143:31143"   # IMAP, plaintext, localhost only
 
+  # IMAP like servers whose folders all live under INBOX. (Dovecot's INBOX. namespace).
+  dovecot-namespace:
+    image: dovecot/dovecot:latest
+    environment:
+      USER_PASSWORD: tidings-test
+    volumes:
+      - ./tidings.conf:/etc/dovecot/conf.d/tidings.conf:ro
+      - ./namespace.conf:/etc/dovecot/conf.d/zz-namespace.conf:ro
+    ports:
+      - "127.0.0.1:31145:31143"   # IMAP, plaintext, localhost only
+
   # SMTP that catches everything (nothing is ever delivered) and exposes it over an API.
   # Like iCloud: STARTTLS on submission, AUTH required (any credentials accepted).
   mailpit:

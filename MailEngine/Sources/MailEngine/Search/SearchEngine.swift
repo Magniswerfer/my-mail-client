@@ -222,7 +222,14 @@ public struct SearchEngine: Sendable {
         if let d = q.after { p.rowidClauses.append("$K >= ?"); p.rowidArguments.append(SortKey.lowerBound(d)) }
         if let d = q.before { p.rowidClauses.append("$K < ?"); p.rowidArguments.append(SortKey.lowerBound(d)) }
 
-        if let box = q.mailbox { p.messageClauses.append("m.mailbox = ? COLLATE NOCASE"); p.messageArguments.append(box) }
+        if let box = q.mailbox {
+            if AccountSync.isSnoozedMailbox(box) {
+                // in:Snoozed finds snoozed mail on every account, however its server names the folder.
+                p.messageClauses.append("lower(m.mailbox) IN ('snoozed', 'inbox.snoozed', 'inbox/snoozed')")
+            } else {
+                p.messageClauses.append("m.mailbox = ? COLLATE NOCASE"); p.messageArguments.append(box)
+            }
+        }
         if !q.accounts.isEmpty {
             p.messageClauses.append("m.accountID IN (\(q.accounts.map { _ in "?" }.joined(separator: ",")))")
             p.messageArguments += q.accounts

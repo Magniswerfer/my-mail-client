@@ -125,7 +125,7 @@ struct SidebarView: View {
     private func folders(for accountID: String) -> [MailboxState] {
         let order: [MailboxRole?] = [.archive, .sent, .drafts]
         return model.mailboxes
-            .filter { $0.accountID == accountID && $0.role != .inbox && $0.path != AccountSync.snoozedMailbox }
+            .filter { $0.accountID == accountID && $0.role != .inbox && !AccountSync.isSnoozedMailbox($0.path) }
             .sorted { a, b in
                 let ia = order.firstIndex(of: a.role) ?? order.count
                 let ib = order.firstIndex(of: b.role) ?? order.count
