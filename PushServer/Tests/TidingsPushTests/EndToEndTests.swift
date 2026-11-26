@@ -1,6 +1,9 @@
 import APNSTestServer
 import Crypto
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Hummingbird
 import HummingbirdTesting
 import Logging
