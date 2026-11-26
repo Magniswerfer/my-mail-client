@@ -49,6 +49,8 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     /// The files attached (not inline images), as JSON. nil until known: set at sync, from the
     /// cache in the background, or when the message is opened.
     public var attachmentList: [AttachmentInfo]?
+    /// The junk filter's score, when it moved this to Junk or warned about it; 0 after "It's fine".
+    public var junkScore: Double?
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -142,6 +144,7 @@ public final class MailStore: Sendable {
         registerAICategoryMigrations(&m)
         registerEventSuggestionMigrations(&m)
         registerCloudMigrations(&m)
+        registerJunkMigrations(&m)
         return m
     }
 

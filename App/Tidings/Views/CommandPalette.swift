@@ -41,8 +41,9 @@ extension AppModel {
                        symbol: "envelope.open", keys: "U", isEnabled: hasSelection) { self.toggleRead() },
             AppCommand(id: "trash", title: String(localized: "Move to Trash"), symbol: "trash", keys: "#",
                        isEnabled: hasSelection) { self.perform(.trash) },
-            AppCommand(id: "junk", title: String(localized: "Move to Junk"), symbol: "xmark.bin", keys: "!",
-                       isEnabled: hasSelection) { self.perform(.junk) },
+            AppCommand(id: "junk", title: isInJunk ? String(localized: "Not Junk") : String(localized: "Move to Junk"),
+                       symbol: isInJunk ? "tray.and.arrow.down" : "xmark.bin", keys: "!",
+                       isEnabled: hasSelection) { self.toggleJunk() },
             AppCommand(id: "inbox", title: String(localized: "Move to Inbox"), symbol: "tray.and.arrow.down", keys: "I",
                        isEnabled: hasSelection && inSnoozedOrFolder) {
                 self.perform(self.selection == .snoozed ? .unsnooze : .moveToInbox)

@@ -191,10 +191,11 @@ public actor AccountSync {
         try store.setSetting(Self.personalPrefixKey, Self.personalPrefix(in: listing), accountID: account.id)
         var roles = MailboxRoleResolver.resolve(listing)
         try await preferFullest(&roles, listing: listing, session: session)
-        let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts]
+        // Junk too: the junk filter learns from it, and you can rescue mail from it.
+        let order: [MailboxRole] = [.inbox, .sent, .archive, .drafts, .junk]
         var paths: [(String, MailboxRole?)] = order.compactMap { role in roles[role].map { ($0, role) } }
-        // User folders too (they're part of the mail you search), but not Trash or Junk.
-        let skipped = Set([roles[.trash], roles[.junk]].compactMap { $0 })
+        // User folders too (they're part of the mail you search), but not Trash.
+        let skipped = Set([roles[.trash]].compactMap { $0 })
         for box in listing where !paths.contains(where: { $0.0 == box.path }) && !skipped.contains(box.path)
             && !box.attributes.contains(where: { $0.caseInsensitiveCompare("\\Noselect") == .orderedSame })
             && !TestFence.isInsideFence(box.path) {

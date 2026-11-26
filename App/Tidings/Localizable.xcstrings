@@ -2271,6 +2271,126 @@
         }
       }
     },
+    "Not Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke uønsket"
+          }
+        }
+      }
+    },
+    "Moved 1 message to Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 besked flyttet til Uønsket"
+          }
+        }
+      }
+    },
+    "Moved %lld messages to Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld beskeder flyttet til Uønsket"
+          }
+        }
+      }
+    },
+    "This message is in Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne besked ligger i Uønsket"
+          }
+        }
+      }
+    },
+    "Tidings moved it here: it looks like mail you've marked as junk.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings flyttede den hertil: den ligner mail, du har markeret som uønsket."
+          }
+        }
+      }
+    },
+    "If it isn't junk, move it back and Tidings learns from that.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er den ikke uønsket, så flyt den tilbage, og Tidings lærer af det."
+          }
+        }
+      }
+    },
+    "This looks like junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det her ligner uønsket post"
+          }
+        }
+      }
+    },
+    "It resembles mail you've marked as junk.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den ligner mail, du har markeret som uønsket."
+          }
+        }
+      }
+    },
+    "It's Fine": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den er fin"
+          }
+        }
+      }
+    },
+    "Filter Junk": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrér uønsket post"
+          }
+        }
+      }
+    },
+    "Tidings learns from what's in Junk, from mail you move there, and from mail you move back out. New mail that's almost certainly junk goes to Junk; likely junk gets a warning. Mail from people you've written to is never moved.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings lærer af det, der ligger i Uønsket, af mail du flytter dertil, og af mail du flytter ud igen. Ny mail, der næsten helt sikkert er uønsket, lægges i Uønsket; mulig uønsket post får en advarsel. Mail fra folk, du har skrevet til, flyttes aldrig."
+          }
+        }
+      }
+    },
+    "Learned from %lld junk and %lld other messages.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lært af %1$lld uønskede og %2$lld andre beskeder."
+          }
+        }
+      }
+    },
     "Junk": {
       "localizations": {
         "da": {

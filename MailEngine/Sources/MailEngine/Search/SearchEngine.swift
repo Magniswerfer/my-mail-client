@@ -229,6 +229,9 @@ public struct SearchEngine: Sendable {
             } else {
                 p.messageClauses.append("m.mailbox = ? COLLATE NOCASE"); p.messageArguments.append(box)
             }
+        } else {
+            // Junk only turns up when you ask for it (in:Junk, or searching in the Junk folder).
+            p.messageClauses.append("m.mailbox NOT IN (SELECT path FROM mailboxState WHERE accountID = m.accountID AND role = 'junk')")
         }
         if !q.accounts.isEmpty {
             p.messageClauses.append("m.accountID IN (\(q.accounts.map { _ in "?" }.joined(separator: ",")))")

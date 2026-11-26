@@ -10,6 +10,8 @@ public struct RuleReport: Sendable {
     public var deliveries: [RuleDelivery] = []
     /// Everything that arrived in the Inbox since the last pass (for notifications).
     public var arrived: [StoredMessage] = []
+    /// What the junk filter did first.
+    public var junk = JunkReport()
     public init() {}
 }
 
@@ -26,10 +28,16 @@ extension AccountSync {
     /// optimistic, queued triage path as your own key presses, and each run is recorded so it
     /// can be undone.
     @discardableResult
-    public func runRules(engine: RuleEngine) async throws -> RuleReport {
+    /// The junk filter goes first (SPEC §6: spam → sorting → rules) when `filterJunk` is on;
+    /// it learns either way.
+    public func runRules(engine: RuleEngine, filterJunk: Bool = true) async throws -> RuleReport {
         let rules = try store.rules().filter { $0.isEnabled && $0.isComplete }
-        let (candidates, upTo) = try store.ruleCandidates(accountID: account.id)
+        var (candidates, upTo) = try store.ruleCandidates(accountID: account.id)
         var report = RuleReport()
+        try learnJunk()
+        if filterJunk {
+            (candidates, report.junk) = try screenJunk(candidates)
+        }
         report.arrived = candidates
         // Muted conversations: new messages go straight to the Archive (SPEC §11).
         let muted = try store.mutedThreadIDs()

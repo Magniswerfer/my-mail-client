@@ -217,7 +217,11 @@ struct MobileRootView: View {
                     MoveMenuContent(thread: first, threads: chosen)
                 }
                 Button("Move to Folder…", systemImage: "folder") { model.isFolderPickerShown = true }
-                Button("Move to Junk", systemImage: "xmark.bin") { act(.junk) }
+                if model.isInJunk {
+                    Button("Not Junk", systemImage: "tray.and.arrow.down") { act(.moveToInbox) }
+                } else {
+                    Button("Move to Junk", systemImage: "xmark.bin") { act(.junk) }
+                }
                 Button("Move to Trash", systemImage: "trash", role: .destructive) { act(.trash) }
             } label: {
                 Label("More Actions", systemImage: "ellipsis")
@@ -263,7 +267,8 @@ struct MobileRootView: View {
                     MoveMenuContent(thread: thread)
                     Button("Move to Folder…", systemImage: "folder") { model.isFolderPickerShown = true }
                     Divider()
-                    Button("Move to Junk", systemImage: "xmark.bin") { model.perform(.junk) }
+                    Button(model.isInJunk ? "Not Junk" : "Move to Junk",
+                           systemImage: model.isInJunk ? "tray.and.arrow.down" : "xmark.bin") { model.toggleJunk() }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) { model.perform(.trash) }
                 }
             } label: {

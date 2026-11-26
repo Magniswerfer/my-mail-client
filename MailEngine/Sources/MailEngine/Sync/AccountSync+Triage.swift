@@ -37,6 +37,8 @@ public struct TriageChange: Sendable, Identifiable, Hashable {
     let snapshots: [MessageSnapshot]
     let addedFlags: [String]
     let removedFlags: [String]
+    /// The junk filter moved it (undoing it teaches "not junk").
+    public internal(set) var byFilter = false
 }
 
 extension AccountSync {
@@ -80,8 +82,9 @@ extension AccountSync {
 
     /// Applies an action locally right away and queues it for the server. Returns nil when
     /// nothing matched (e.g. Done on a thread that has already left the Inbox).
+    /// `learn`: whether a move into or out of Junk teaches the junk filter (not for its own moves).
     @discardableResult
-    public func perform(_ kind: TriageKind, threadIDs: [String], from mailbox: String = "INBOX") throws -> TriageChange? {
+    public func perform(_ kind: TriageKind, threadIDs: [String], from mailbox: String = "INBOX", learn: Bool = true) throws -> TriageChange? {
         let changeID = UUID().uuidString
         var localIDs: [Int64]
         var add: [String] = []
@@ -134,6 +137,7 @@ extension AccountSync {
                 try store.enqueue(.move(items: items, to: target, addFlags: add, removeFlags: remove, createTarget: createTarget),
                                   accountID: account.id, changeID: changeID, in: db)
             }
+            if learn { try learnFromMove(kind, localIDs: localIDs, from: source, to: target) }
             if case .snooze = kind { try store.noteMessageState(localIDs: localIDs, login: account.login) }
             if kind == .unsnooze { try store.noteMessageState(localIDs: localIDs, login: account.login) }
             signalWork()
@@ -247,6 +251,12 @@ extension AccountSync {
                                       accountID: account.id, changeID: undoID, in: db)
                 }
             }
+        }
+        // An undone move into or out of Junk takes back what it taught the filter.
+        if let junk = try path(for: .junk),
+           change.byFilter || change.kind == .junk || change.kind == .move(toMailbox: junk)
+            || change.snapshots.contains(where: { $0.mailbox.caseInsensitiveCompare(junk) == .orderedSame }) {
+            try unlearnUndone(change)
         }
         // Undone Reply Later / Read Later / snooze: the recorded state follows (or the next
         // re-apply would put it back).

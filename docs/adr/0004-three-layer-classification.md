@@ -15,3 +15,6 @@ Corrections stick per sender. Each decision records its layer and reason for "wh
 ## Consequences
 - Embeddings are stored in tier 1 and reused by semantic search and NL rules.
 - Danish system language must be verified for Foundation Models (M0); English prompts as fallback.
+
+## Addendum · 2026-11-26: junk is its own classifier
+Spam isn't a seventh category: it runs first (SPEC §6 pipeline), on tokens rather than embeddings (naive Bayes, SpamBayes-style), because junk is told apart by wording, senders and link hosts more than by topic, and it must learn from a handful of corrections. It trains on the server's Junk folder plus your moves in and out of it; see SPEC §8.

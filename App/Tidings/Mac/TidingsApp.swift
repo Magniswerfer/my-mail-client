@@ -112,7 +112,7 @@ struct TidingsApp: App {
                 // ⌘⌫ is handled in RootView, not here: a menu shortcut fires before the focused
                 // text field sees the key, so it would trash mail instead of deleting the line.
                 Button("Move to Trash") { model.perform(.trash) }
-                Button("Move to Junk") { model.perform(.junk) }
+                Button(model.isInJunk ? "Not Junk" : "Move to Junk") { model.toggleJunk() }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
                 Button("Move to Folder…") { model.isFolderPickerShown = true }
                     .keyboardShortcut("m", modifiers: [.command, .shift])
@@ -506,7 +506,7 @@ struct RootView: View {
         case "b": if !model.targetThreads.isEmpty { model.isSnoozePickerShown = true }
         case "u": model.toggleRead()
         case "#": model.perform(.trash)
-        case "!": model.perform(.junk)
+        case "!": model.toggleJunk()
         case "i": model.run(commandID: "inbox")
         case "g": pendingG = Date()
         case "m": if !model.targetThreads.isEmpty { model.isCategoryPickerShown = true }

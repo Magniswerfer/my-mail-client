@@ -90,13 +90,16 @@ extension AppModel {
         guard ruleTask == nil else { return }
         let syncs = Array(self.syncs.values)
         let engine = ruleEngine
+        let filterJunk = self.filterJunk
         ruleTask = Task { [weak self] in
+            var junked: [TriageChange] = []
             var matched = 0
             var notify: [RuleRun] = []
             var arrived: [StoredMessage] = []
             var deliveries: [RuleDelivery] = []
             for sync in syncs {
-                guard let report = try? await sync.runRules(engine: engine) else { continue }
+                guard let report = try? await sync.runRules(engine: engine, filterJunk: filterJunk) else { continue }
+                if let change = report.junk.change { junked.append(change) }
                 matched += report.matched
                 notify += report.notify
                 arrived += report.arrived
@@ -105,7 +108,8 @@ extension AppModel {
             guard let self else { return }
             await self.deliver(deliveries)
             self.ruleTask = nil
-            if matched > 0 || !arrived.isEmpty {
+            self.reportJunk(junked)
+            if matched > 0 || !arrived.isEmpty || !junked.isEmpty {
                 self.ruleCounts = (try? self.store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
                 self.reload()
             }

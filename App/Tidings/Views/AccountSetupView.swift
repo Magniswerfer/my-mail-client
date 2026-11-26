@@ -262,6 +262,7 @@ struct SettingsView: View {
 
 struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
+    @AppStorage(AppModel.filterJunkKey) private var filterJunk = true
     /// Here, not on the main window: on the Mac Settings is a window of its own.
     @State private var isAdding = false
     @State private var removing: AccountConfig?
@@ -295,6 +296,18 @@ struct GeneralSettings: View {
                 Text("Reading")
             } footer: {
                 Text("Shows mail as clean text instead of its own layout. Read Later always opens this way.")
+            }
+            Section {
+                Toggle("Filter Junk", isOn: $filterJunk)
+            } header: {
+                Text("Junk")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tidings learns from what's in Junk, from mail you move there, and from mail you move back out. New mail that's almost certainly junk goes to Junk; likely junk gets a warning. Mail from people you've written to is never moved.")
+                    if let totals = try? model.store.junkTotals() {
+                        Text("Learned from \(totals.spam) junk and \(totals.ham) other messages.")
+                    }
+                }
             }
             Section("Storage") {
                 LabeledContent("Location") {
