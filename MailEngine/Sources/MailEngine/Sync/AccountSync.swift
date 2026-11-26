@@ -57,6 +57,8 @@ public actor AccountSync {
         case sending(outboxID: Int64)
         case sent(outboxID: Int64)
         case sendFailed(outboxID: Int64, message: String)
+        /// Snoozed conversations whose time came; they're on their way back to the Inbox.
+        case snoozesWoke(messageIDs: [Int64])
     }
 
     public let account: AccountConfig
@@ -165,7 +167,9 @@ public actor AccountSync {
                             self.emit(.idle)
                             let (wake, continuation) = AsyncStream<Void>.makeStream()
                             self.setWake(continuation)
-                            changed = try await session.idle(timeout: self.idleTimeout(), wake: wake)
+                            // Never IDLE past the next poll, so other mailboxes really are re-synced every `pollInterval`.
+                            let untilPoll = pollInterval - (ContinuousClock.now - lastFullSync)
+                            changed = try await session.idle(timeout: max(.seconds(1), min(self.idleTimeout(), untilPoll)), wake: wake)
                             self.setWake(nil)
                         }
                         try self.wakeDueSnoozes()

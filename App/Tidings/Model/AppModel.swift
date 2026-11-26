@@ -517,6 +517,8 @@ final class AppModel {
             reloadOutbox()
             lastError = message
             show(Toast(message: String(localized: "Couldn't send: \(message)"), symbol: "exclamationmark.triangle"))
+        case .snoozesWoke:
+            reload()
         }
     }
 

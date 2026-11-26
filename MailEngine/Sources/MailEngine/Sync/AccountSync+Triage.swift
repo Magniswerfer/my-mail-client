@@ -292,6 +292,7 @@ extension AccountSync {
                                 arguments: StatementArguments(due))
         }
         try perform(.unsnooze, threadIDs: threads)
+        emit(.snoozesWoke(messageIDs: due))
     }
 
     // MARK: Our keywords on servers that drop them
