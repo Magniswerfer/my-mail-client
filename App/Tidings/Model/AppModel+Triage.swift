@@ -6,13 +6,26 @@ struct Toast: Identifiable, Equatable {
     let id = UUID()
     var message: String
     var symbol: String
-    var undo: ChangeBox? = nil
+    /// The change Undo takes back (registered on the undo manager too).
+    var undo: UndoToken? = nil
     /// Outbox id of a message in its undo-send window.
     var undoSend: Int64? = nil
-    /// Any other undoable change (category moves).
-    var undoAction: (@MainActor () -> Void)? = nil
 
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
+}
+
+/// One undoable change, offered both in a toast and on the undo manager (⌘Z, the Edit menu,
+/// shake). It's the undo manager's target for just this change, so the toast can take back
+/// exactly this one and remove it from the stack. Runs at most once.
+@MainActor final class UndoToken {
+    private var action: (@MainActor () -> Void)?
+    init(_ action: @escaping @MainActor () -> Void) { self.action = action }
+
+    func run() {
+        let action = self.action
+        self.action = nil
+        action?()
+    }
 }
 
 /// Filled in once the engine has applied an action. Undo is registered *during* the key press
@@ -140,8 +153,8 @@ extension AppModel {
         let nextSelection = neighbour(after: targets.map(\.threadID))
         let box = ChangeBox()
         if showToast {
-            registerUndo(box, kind: kind, count: targets.count)
-            show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: box))
+            let undoToken = offerUndo(named: kind.toastText(count: targets.count)) { [weak self] in self?.undo(box: box) }
+            show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: undoToken))
         }
         let ids = Set(targets.map(\.threadID))
         if kind == .done || kind == .markRead || kind == .trash || kind == .junk { ids.forEach(notifier.clear) }
@@ -248,18 +261,16 @@ extension AppModel {
             flags.forEach { self?.undo(box: $0) }
             if let done { self?.undo(box: done) }
         }
-        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(TriageKind.readLater.toastText(count: targets.count))
-        show(Toast(message: TriageKind.readLater.toastText(count: targets.count), symbol: "book", undoAction: undo))
+        let undoToken = offerUndo(named: TriageKind.readLater.toastText(count: targets.count), undo)
+        show(Toast(message: TriageKind.readLater.toastText(count: targets.count), symbol: "book", undo: undoToken))
     }
 
     /// Off the pile; the mail itself stays where it's filed.
     func finishReading(_ targets: [ThreadSummary]) {
         let boxes = targets.map { performQuietly(.clearReadLater, threadID: $0.threadID, accountID: $0.latest.accountID) }
         let undo: @MainActor () -> Void = { [weak self] in boxes.forEach { self?.undo(box: $0) } }
-        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(String(localized: "Finished Reading"))
-        show(Toast(message: String(localized: "Finished reading"), symbol: "book.closed", undoAction: undo))
+        let undoToken = offerUndo(named: String(localized: "Finished Reading"), undo)
+        show(Toast(message: String(localized: "Finished reading"), symbol: "book.closed", undo: undoToken))
     }
 
     func toggleReplyLater() {
@@ -333,22 +344,23 @@ extension AppModel {
 
     // MARK: Undo
 
-    private func registerUndo(_ box: ChangeBox, kind: TriageKind, count: Int) {
-        guard let undoManager else { return }
-        undoManager.registerUndo(withTarget: self) { model in
-            MainActor.assumeIsolated { model.undo(box: box) }
-        }
-        undoManager.setActionName(kind.toastText(count: count))
+    /// Puts a change on the undo manager (registered inside the click or key press, so AppKit's
+    /// grouping sees it) and returns its token for the toast.
+    @discardableResult
+    func offerUndo(named name: String, _ undo: @escaping @MainActor () -> Void) -> UndoToken {
+        let token = UndoToken(undo)
+        // The handler holds the token: the manager keeps only an unowned reference to a target.
+        undoManager?.registerUndo(withTarget: token) { _ in MainActor.assumeIsolated { token.run() } }
+        undoManager?.setActionName(name)
+        return token
     }
 
-    /// Undo from the toast: through the window's undo manager when it has our action on top
-    /// (so ⌘Z and the menu stay in step), otherwise directly.
-    func undoFromToast(_ box: ChangeBox) {
-        if let undoManager, undoManager.canUndo {
-            undoManager.undo()
-        } else {
-            undo(box: box)
-        }
+    /// Undo from the toast: exactly this change, taken off the undo stack so ⌘Z won't repeat it.
+    /// (Asking the undo manager to undo takes whatever is on top: in the reader that can be
+    /// something of the message view's own, and then the toast's change stayed done.)
+    func undoFromToast(_ token: UndoToken) {
+        undoManager?.removeAllActions(withTarget: token)
+        token.run()
     }
 
     func undo(box: ChangeBox) {

@@ -262,9 +262,8 @@ extension AppModel {
                     self?.undoSend(id)
                     allBoxes.forEach { self?.undo(box: $0) }
                 }
-                undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-                undoManager?.setActionName(String(localized: "Send and Done"))
-                show(Toast(message: String(localized: "Sending… and marked done"), symbol: "paperplane", undoAction: undo))
+                let undoToken = offerUndo(named: String(localized: "Send and Done"), undo)
+                show(Toast(message: String(localized: "Sending… and marked done"), symbol: "paperplane", undo: undoToken))
             } else {
                 show(Toast(message: String(localized: "Sending…"), symbol: "paperplane", undoSend: id))
             }

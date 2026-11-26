@@ -180,6 +180,15 @@ extension View {
         #endif
     }
 
+    /// iPhone: a small title in the navigation bar (the Mac has no such bar).
+    @ViewBuilder func navigationBarTitleDisplayModeInline() -> some View {
+        #if os(iOS)
+        navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
+
     /// A sheet's buttons. On iPhone they go in the navigation toolbar. On the Mac they sit in a
     /// bar under the content: toolbar items in a sheet opened from another sheet get clipped or
     /// dropped there, and lose Escape and VoiceOver with them.

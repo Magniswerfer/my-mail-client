@@ -72,9 +72,8 @@ extension AppModel {
                 let undo: @MainActor () -> Void = { [weak self] in
                     self?.undoResponse(outboxID: item.id, invite: invite, accountID: account.id, previous: previous)
                 }
-                undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-                undoManager?.setActionName(String(localized: "Answer"))
-                show(Toast(message: toastText, symbol: symbol, undoAction: undo))
+                let undoToken = offerUndo(named: String(localized: "Answer"), undo)
+                show(Toast(message: toastText, symbol: symbol, undo: undoToken))
             } catch {
                 lastError = String(localized: "Couldn't send your answer: \(String(describing: error))")
             }

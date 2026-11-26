@@ -136,45 +136,110 @@ enum AppPassword {
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
-    var body: some View {
-        TabView {
-            Tab("Identities", systemImage: "person.crop.rectangle.stack") { IdentitiesSettings() }
-            Tab("Bundles", systemImage: "square.stack.3d.up") { BundleSettings() }
-            Tab("Assistant", systemImage: "sparkles") { AssistantSettings() }
-            Tab("Notifications", systemImage: "bell.badge") { NotificationSettings() }
-            Tab("Snippets", systemImage: "text.badge.plus") { SnippetsSettings() }
-            Tab("General", systemImage: "gearshape") {
-                Form {
-                    Section("Accounts") {
-                        ForEach(model.accounts) { account in
-                            LabeledContent(account.displayName, value: account.endpoint.host)
-                        }
-                    }
-                    Section("Storage") {
-                        LabeledContent("Location") {
-                            Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
-                        }
-                        LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
-                    }
-                    Section {
-                        Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
-                                                                 set: { model.isCloudSyncEnabled = $0 }))
-                        LabeledContent("Status", value: model.cloudStatusText)
-                    } header: {
-                        Text("iCloud")
-                    } footer: {
-                        Text("Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.")
-                    }
-                }
-                .formStyle(.grouped)
+    /// Every pane, in order: the Mac's tabs and the iPhone's list are the same panes.
+    enum Pane: String, CaseIterable, Identifiable {
+        case identities, bundles, rules, assistant, notifications, snippets, general
+        var id: Self { self }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .identities: "Identities"
+            case .bundles: "Bundles"
+            case .rules: "Rules"
+            case .assistant: "Assistant"
+            case .notifications: "Notifications"
+            case .snippets: "Snippets"
+            case .general: "General"
             }
         }
-        .macFrame(width: 560, height: 440)
+
+        var symbol: String {
+            switch self {
+            case .identities: "person.crop.rectangle.stack"
+            case .bundles: "square.stack.3d.up"
+            case .rules: "line.3.horizontal.decrease.circle"
+            case .assistant: "sparkles"
+            case .notifications: "bell.badge"
+            case .snippets: "text.badge.plus"
+            case .general: "gearshape"
+            }
+        }
+    }
+
+    var body: some View {
+        if Platform.isMac {
+            TabView {
+                ForEach(Pane.allCases) { pane in
+                    Tab(pane.title, systemImage: pane.symbol) { content(pane) }
+                }
+            }
+            .macFrame(width: 560, height: 440)
+        } else {
+            // iPhone and iPad: a list of panes, as in the system's Settings (seven tabs would
+            // spill into a More tab).
+            List(Pane.allCases) { pane in
+                NavigationLink {
+                    content(pane)
+                        .navigationTitle(pane.title)
+                        .navigationBarTitleDisplayModeInline()
+                } label: {
+                    Label(pane.title, systemImage: pane.symbol)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func content(_ pane: Pane) -> some View {
+        switch pane {
+        case .identities: IdentitiesSettings()
+        case .bundles: BundleSettings()
+        case .rules: RulesView(inSettings: true)
+        case .assistant: AssistantSettings()
+        case .notifications: NotificationSettings()
+        case .snippets: SnippetsSettings()
+        case .general: GeneralSettings()
+        }
     }
 }
 
-/// Sending identities (SPEC §9): the iCloud address plus custom-domain addresses, each with a
-/// name and signature. Sending from a custom domain works when it's set up in iCloud+.
+struct GeneralSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Form {
+            Section("Accounts") {
+                ForEach(model.accounts) { account in
+                    LabeledContent(account.displayName, value: account.endpoint.host)
+                }
+            }
+            Section {
+                Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
+                                                                      set: { model.readerMode = $0 }))
+            } header: {
+                Text("Reading")
+            } footer: {
+                Text("Shows mail as clean text instead of its own layout. Read Later always opens this way.")
+            }
+            Section("Storage") {
+                LabeledContent("Location") {
+                    Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
+                }
+                LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
+            }
+            Section {
+                Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
+                                                         set: { model.isCloudSyncEnabled = $0 }))
+                LabeledContent("Status", value: model.cloudStatusText)
+            } header: {
+                Text("iCloud")
+            } footer: {
+                Text("Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
 struct IdentitiesSettings: View {
     @Environment(AppModel.self) private var model
     @State private var newAddress = ""
@@ -250,30 +315,53 @@ struct BundleScheduleRow: View {
     let category: MailCategory
 
     var body: some View {
-        let schedule = model.bundleSchedules[category] ?? .immediately
-        HStack {
-            Label { Text(category.title) } icon: { Image(systemName: category.symbol).foregroundStyle(category.tint) }
-            Spacer()
-            Picker("", selection: Binding(
-                get: { if case .daily = schedule { 1 } else { 0 } },
-                set: { $0 == 0 ? model.setSchedule(.immediately, for: category) : model.setSchedule(.daily(hour: 17, minute: 0), for: category) }
-            )) {
-                Text("As it arrives").tag(0)
-                Text("Once a day").tag(1)
+        if Platform.isMac {
+            HStack {
+                label
+                Spacer()
+                schedulePicker.labelsHidden().fixedSize()
+                if isDaily { timePicker.labelsHidden().fixedSize() }
             }
-            .labelsHidden()
-            .fixedSize()
-            if case .daily(let hour, let minute) = schedule {
-                DatePicker("", selection: Binding(
-                    get: { Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date())! },
-                    set: { date in
-                        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-                        model.setSchedule(.daily(hour: c.hour ?? 17, minute: c.minute ?? 0), for: category)
-                    }
-                ), displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .fixedSize()
+        } else {
+            // iPhone and iPad: the system's own row (name left, choice right) and the time on a
+            // row of its own, so the name never gets squeezed.
+            schedulePicker
+            if isDaily {
+                timePicker.padding(.leading, 40)
             }
         }
+    }
+
+    private var schedule: BundleSchedule { model.bundleSchedules[category] ?? .immediately }
+
+    private var isDaily: Bool { if case .daily = schedule { true } else { false } }
+
+    private var label: some View {
+        Label { Text(category.title) } icon: { Image(systemName: category.symbol).foregroundStyle(category.tint) }
+    }
+
+    private var schedulePicker: some View {
+        Picker(selection: Binding(
+            get: { isDaily ? 1 : 0 },
+            set: { $0 == 0 ? model.setSchedule(.immediately, for: category) : model.setSchedule(.daily(hour: 17, minute: 0), for: category) }
+        )) {
+            Text("As it arrives").tag(0)
+            Text("Once a day").tag(1)
+        } label: {
+            label
+        }
+    }
+
+    private var timePicker: some View {
+        DatePicker("Arrives at", selection: Binding(
+            get: {
+                guard case .daily(let hour, let minute) = schedule else { return Date() }
+                return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date())!
+            },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                model.setSchedule(.daily(hour: c.hour ?? 17, minute: c.minute ?? 0), for: category)
+            }
+        ), displayedComponents: .hourAndMinute)
     }
 }

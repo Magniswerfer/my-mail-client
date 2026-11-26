@@ -169,9 +169,8 @@ extension AppModel {
                 try? self?.store.setEventSuggestionState(.open, for: message)
                 self?.revision &+= 1
             }
-            undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-            undoManager?.setActionName(String(localized: "Add to Calendar"))
-            show(Toast(message: String(localized: "Added to your calendar"), symbol: "calendar.badge.plus", undoAction: undo))
+            let undoToken = offerUndo(named: String(localized: "Add to Calendar"), undo)
+            show(Toast(message: String(localized: "Added to your calendar"), symbol: "calendar.badge.plus", undo: undoToken))
         }
     }
 
@@ -184,9 +183,8 @@ extension AppModel {
             try? self?.store.setEventSuggestionState(previous, for: message)
             self?.revision &+= 1
         }
-        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(String(localized: "Dismiss Suggestion"))
-        show(Toast(message: String(localized: "Suggestion dismissed"), symbol: "calendar.badge.minus", undoAction: undo))
+        let undoToken = offerUndo(named: String(localized: "Dismiss Suggestion"), undo)
+        show(Toast(message: String(localized: "Suggestion dismissed"), symbol: "calendar.badge.minus", undo: undoToken))
     }
 
     func dismissSelectedDateSuggestions() {

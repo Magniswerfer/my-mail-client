@@ -4,7 +4,8 @@ import SwiftUI
 
 /// iPhone: the Inbox's categories as one Liquid Glass bar at the bottom, in place of the tabs
 /// above the list. Swipe it sideways to go to the next or previous category (the neighbours slide
-/// in under your finger, like Safari's address bar); tap it to pick from all of them. New Message
+/// in under your finger, like Safari's address bar), or tap its left or right side to step one;
+/// hold it to pick from all of them. New Message
 /// sits beside it in the same glass group.
 struct PhoneBottomBar: View {
     @Environment(AppModel.self) private var model
@@ -229,6 +230,12 @@ private struct CategoryPager: View {
     @State private var drag: DragStart?
     /// Counts drags and landings, so a landing that was caught again doesn't select its category.
     @State private var landing = 0
+    /// The category the strip is springing towards, until it lands: taps in quick succession
+    /// step on from here, not from the one still selected.
+    @State private var heading: Int?
+    /// When the middle was last tapped, to tell a double tap there (no recogniser for it: that
+    /// would hold back every single tap on the sides until it gave up).
+    @State private var lastMiddleTap: Date?
     /// Each label's natural width, measured once (and again when its text changes).
     @State private var widths: [String: CGFloat] = [:]
     @State private var presented = PresentedOffset()
@@ -242,14 +249,16 @@ private struct CategoryPager: View {
     private let peek: CGFloat = 22
 
     // Feel
-    /// Slower than this (pt/s) at release is a drag: it snaps to the nearest category.
-    private let flickSpeed: CGFloat = 350
+    /// Slower than this (pt/s) at release is a drag: it snaps to the nearest category. Faster
+    /// goes on to the next one, so a light swipe is enough.
+    private let flickSpeed: CGFloat = 200
     /// A flick only carries past the next category with speed above this (pt/s) …
-    private let momentumFloor: CGFloat = 900
-    /// … and then travels this many points per pt/s above it (a short, firm glide).
-    private let momentumReach: CGFloat = 0.085
+    private let momentumFloor: CGFloat = 600
+    /// … and then travels this many points per pt/s above it, so a quick flick runs through a
+    /// few categories.
+    private let momentumReach: CGFloat = 0.16
     /// One flick never passes more categories than this.
-    private let maxFlickSteps = 3
+    private let maxFlickSteps = 4
 
     var body: some View {
         GeometryReader { proxy in
@@ -272,7 +281,7 @@ private struct CategoryPager: View {
                 }
                 .contentShape(.capsule)
                 .gesture(
-                    DragGesture(minimumDistance: 8)
+                    DragGesture(minimumDistance: 6)
                         .updating($isTouching) { _, touching, _ in touching = true }
                         .onChanged { value in
                             let start: DragStart
@@ -299,9 +308,12 @@ private struct CategoryPager: View {
                             land(from: start, velocity: -value.velocity.width, centres: centres)
                         }
                 )
-                // Double tap: back to Primary. Hold (without moving): every category.
-                .onTapGesture(count: 2, perform: doubleTap)
-                .onLongPressGesture(minimumDuration: 0.4, maximumDistance: 6, perform: hold)
+                // Tap a side: the category that way. Double tap the middle: back to Primary.
+                // Hold (without moving): every category.
+                .gesture(SpatialTapGesture().onEnded { tap in
+                    tapped(at: tap.location.x, width: width, centres: centres)
+                })
+                .onLongPressGesture(minimumDuration: 0.4, maximumDistance: 5, perform: hold)
                 .onChange(of: isTouching) { _, touching in
                     // The system took the touch away (no end event): settle where it is.
                     if !touching, let start = drag {
@@ -352,29 +364,60 @@ private struct CategoryPager: View {
         }
         target = min(max(target, start.index - maxFlickSteps), start.index + maxFlickSteps)
         target = min(max(target, 0), centres.count - 1)
+        settle(on: target, from: x, velocity: velocity, steps: abs(target - start.index), centres: centres)
+    }
 
+    /// A tap: on either side of the label in the middle it steps that way (again and again, as
+    /// fast as you tap); twice in the middle goes back to Primary.
+    private func tapped(at x: CGFloat, width: CGFloat, centres: [CGFloat]) {
+        guard !centres.isEmpty, drag == nil else { return }
+        let current = min(max(heading ?? index, 0), centres.count - 1)
+        let label = min(widths[items[current].id] ?? 110, max(width - 2 * (gap + peek), 60))
+        let side = max(label / 2 + 4, width * 0.2)
+        let fromMiddle = x - width / 2
+        if abs(fromMiddle) > side {
+            lastMiddleTap = nil
+            let target = min(max(current + (fromMiddle > 0 ? 1 : -1), 0), centres.count - 1)
+            guard target != current else { return }
+            feedback.prepare()
+            settle(on: target, from: offset == nil ? centres[index] : presented.value, velocity: 0, steps: 1,
+                   centres: centres)
+        } else if let last = lastMiddleTap, Date.now.timeIntervalSince(last) < 0.35 {
+            lastMiddleTap = nil
+            doubleTap()
+        } else {
+            lastMiddleTap = .now
+        }
+    }
+
+    /// Spring to a category, carrying the finger's speed, and select it once it has landed.
+    private func settle(on target: Int, from x: CGFloat, velocity: CGFloat, steps: Int, centres: [CGFloat]) {
         landing += 1
         let id = landing
         let selected = index
+        heading = target
         let distance = centres[target] - x
         // A little longer for a longer trip. No bounce: it must come to rest on the category.
-        let duration = 0.42 + 0.04 * Double(min(abs(target - start.index), maxFlickSteps))
+        let duration = 0.36 + 0.05 * Double(min(steps, maxFlickSteps))
         let animation: Animation
-        if abs(distance) > 0.5 {
+        if abs(distance) > 0.5, velocity != 0 {
             // The spring starts at the finger's speed (as a share of the trip per second). Capped
             // where a no-bounce spring would visibly overshoot the category.
             let omega = 2 * Double.pi / duration
             let relative = min(max(Double(velocity / distance), -omega), 1.6 * omega)
             animation = .interpolatingSpring(duration: duration, bounce: 0, initialVelocity: relative)
         } else {
+            // A tap (or nothing left to travel). Retargeting a spring keeps its speed, so quick
+            // taps run on smoothly from one category to the next.
             animation = .spring(duration: duration, bounce: 0)
         }
         withAnimation(animation) {
             offset = centres[target]
         } completion: {
-            // Landed (unless a finger caught it again): now select it, once. The strip is already
-            // exactly where the selected category rests, so nothing on it moves.
+            // Landed (unless a finger or tap took it on): now select it, once. The strip is
+            // already exactly where the selected category rests, so nothing on it moves.
             guard landing == id else { return }
+            heading = nil
             offset = nil
             if target != selected { select(target) }
         }

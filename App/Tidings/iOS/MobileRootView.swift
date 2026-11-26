@@ -8,11 +8,15 @@ import SwiftUI
 struct MobileRootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var compactColumn = NavigationSplitViewColumn.content
     @State private var composeDraft: ComposeDraft?
     @State private var isSettingsShown = false
 
     struct ComposeDraft: Identifiable { let id: Int64 }
+
+    /// One column at a time (iPhone) and it's the conversation: the toast goes there.
+    private var isToastInReader: Bool { sizeClass == .compact && compactColumn == .detail }
 
     var body: some View {
         @Bindable var model = model
@@ -46,17 +50,28 @@ struct MobileRootView: View {
             .refreshable { await model.refresh() }
             .toolbar { streamToolbar }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if Platform.isPhone, !model.isSelecting, !model.isSearching { PhoneBottomBar() }
-            }
-            .overlay(alignment: .bottom) {
-                if let toast = model.toast {
-                    ToastView(toast: toast).padding(.bottom, 12)
+                // The toast sits above the bar, inside the safe area: it never covers the bar or
+                // anything else you can tap, and the list scrolls clear of it.
+                VStack(spacing: 8) {
+                    if let toast = model.toast, !isToastInReader {
+                        ToastView(toast: toast)
+                    }
+                    if Platform.isPhone, !model.isSelecting, !model.isSearching { PhoneBottomBar() }
                 }
+                .padding(.bottom, Platform.isPhone ? 0 : 12)
             }
             .animation(.snappy, value: model.toast)
         } detail: {
             ReaderView(threadID: model.readerThreadID)
                 .toolbar { readerToolbar }
+                // iPhone, reading: the list is out of sight, so the toast shows here, just above
+                // the reader's buttons.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let toast = model.toast, isToastInReader {
+                        ToastView(toast: toast).padding(.bottom, 8)
+                    }
+                }
+                .animation(.snappy, value: model.toast)
                 .inspector(isPresented: $model.isContactPanelShown) {
                     NavigationStack {
                         ContactPanel()
@@ -214,9 +229,20 @@ struct MobileRootView: View {
 
     @ToolbarContentBuilder private var readerToolbar: some ToolbarContent {
         let none = model.targetThreads.isEmpty
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
             Button { model.toggleContactPanel() } label: { Label("Contact Info", systemImage: "person.crop.circle") }
                 .disabled(none)
+            // What to do with it later, apart from answering it now (that's the reply button).
+            Menu {
+                Button("Reply Later", systemImage: "arrowshape.turn.up.left.circle") { model.toggleReplyLater() }
+                Button("Read Later", systemImage: "book") { model.readLater() }
+                Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
+                Divider()
+                Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
+            } label: {
+                Label("More", systemImage: "ellipsis")
+            }
+            .disabled(none)
         }
         ToolbarItemGroup(placement: .bottomBar) {
             Button { model.perform(.done) } label: { Label("Done", systemImage: "checkmark") }
@@ -242,18 +268,17 @@ struct MobileRootView: View {
         }
         ToolbarSpacer(.flexible, placement: .bottomBar)
         ToolbarItem(placement: .bottomBar) {
+            // A tap opens just the three ways to answer, side by side in one row (as in Mail).
             Menu {
-                Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply) }
-                Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll) }
-                Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
-                Button("Reply to Introduction", systemImage: "person.2.wave.2") { model.replyToIntroduction() }
-                Button("Reply Later", systemImage: "arrowshape.turn.up.left.circle") { model.toggleReplyLater() }
-                Button("Read Later", systemImage: "book") { model.readLater() }
-                Button("Add to Reminders", systemImage: "checklist") { model.addToReminders() }
+                ControlGroup {
+                    Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply) }
+                    Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll) }
+                    Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward) }
+                }
             } label: {
                 Label("Reply", systemImage: "arrowshape.turn.up.left")
             }
-            // A tap opens the choices (as in Mail); Reply was hidden behind a long press.
+            .menuOrder(.fixed)
             .disabled(none)
         }
     }

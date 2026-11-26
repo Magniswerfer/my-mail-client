@@ -4311,6 +4311,46 @@
         }
       }
     },
+    "Arrives at": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ankommer kl."
+          }
+        }
+      }
+    },
+    "Reader Mode for Every Message": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læsetilstand for alle beskeder"
+          }
+        }
+      }
+    },
+    "Reading": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Læsning"
+          }
+        }
+      }
+    },
+    "Shows mail as clean text instead of its own layout. Read Later always opens this way.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viser mail som ren tekst i stedet for dens eget layout. Læs senere åbner altid sådan."
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

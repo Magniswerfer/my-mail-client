@@ -58,7 +58,7 @@ extension AppModel {
             self?.toast = nil
             self?.reload()
         }
-        registerCategoryUndo(undo)
+        let undoToken = registerCategoryUndo(undo)
         reload()
         let message: String
         if let sender = result.promotedSender {
@@ -67,7 +67,7 @@ extension AppModel {
         } else {
             message = threads.count == 1 ? String(localized: "Moved to \(category.title)") : String(localized: "\(threads.count) moved to \(category.title)")
         }
-        show(Toast(message: message, symbol: category.symbol, undoAction: undo))
+        show(Toast(message: message, symbol: category.symbol, undo: undoToken))
     }
 
     /// "Mail from this sender belongs in X": now and for future mail; undoable.
@@ -96,16 +96,15 @@ extension AppModel {
             self?.toast = nil
             self?.reload()
         }
-        registerCategoryUndo(undo)
+        let undoToken = registerCategoryUndo(undo)
         reload()
         show(Toast(message: String(localized: "\(name) → \(category.title), now and in future"),
-                   symbol: category.symbol, undoAction: undo))
+                   symbol: category.symbol, undo: undoToken))
     }
 
     /// Registered synchronously (inside the click/key event) so AppKit's undo grouping sees it.
-    private func registerCategoryUndo(_ undo: @escaping @MainActor () -> Void) {
-        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(String(localized: "Move"))
+    private func registerCategoryUndo(_ undo: @escaping @MainActor () -> Void) -> UndoToken {
+        offerUndo(named: String(localized: "Move"), undo)
     }
 }
 

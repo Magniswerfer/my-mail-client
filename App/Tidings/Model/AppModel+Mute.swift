@@ -27,11 +27,10 @@ extension AppModel {
             if let box { self?.undo(box: box) }
             self?.revision &+= 1
         }
-        undoManager?.registerUndo(withTarget: self) { _ in MainActor.assumeIsolated { undo() } }
-        undoManager?.setActionName(String(localized: "Mute"))
+        let undoToken = offerUndo(named: String(localized: "Mute"), undo)
         show(Toast(message: ids.count == 1 ? String(localized: "Muted. New replies skip the Inbox.")
                                           : String(localized: "\(ids.count) conversations muted"),
-                   symbol: "bell.slash", undoAction: undo))
+                   symbol: "bell.slash", undo: undoToken))
     }
 
     func unmute(threadID: String) {

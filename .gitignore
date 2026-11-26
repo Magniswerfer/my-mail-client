@@ -11,3 +11,4 @@ MailEngine/TestServer/certs/
 .claude/worktrees/
 App/build-ios/
 App/build-dev-ios/
+App/build-ios-device/

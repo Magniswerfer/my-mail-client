@@ -59,6 +59,21 @@ struct SidebarView: View {
                 }
             }
 
+            if !Platform.isMac {
+                // iPhone and iPad: Rules here as well as in the More menu (the Mac has it in the
+                // menu bar and ⌘K).
+                Section {
+                    Button { model.isRulesShown = true } label: {
+                        // Looks like the rows above: tinted icon, plain title.
+                        Label {
+                            Text("Rules").foregroundStyle(Color.primary)
+                        } icon: {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        }
+                    }
+                }
+            }
+
             // Sync status: a small centred line under the last section that scrolls with the
             // list (as a pinned bar it floated over the rows).
             SidebarStatus()

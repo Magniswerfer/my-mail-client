@@ -395,6 +395,37 @@ struct ToastView: View {
     let toast: Toast
 
     var body: some View {
+        if Platform.isPhone { phone } else { regular }
+    }
+
+    /// iPhone: a slim glass pill, one line, with Undo at its end. Swipe it down to dismiss.
+    private var phone: some View {
+        HStack(spacing: 10) {
+            Image(systemName: toast.symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(toast.message)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            if hasUndo {
+                undoButton
+                    .font(.subheadline)
+                    .padding(.leading, 4)
+            }
+        }
+        .padding(.horizontal, 18)
+        .frame(minHeight: 44)
+        .glassEffect(.regular.tint(Color.windowBackground.opacity(0.6)).interactive(), in: .capsule)
+        .padding(.horizontal, 24)
+        .gesture(DragGesture(minimumDistance: 8).onEnded { drag in
+            if drag.translation.height > 16 { model.toast = nil }
+        })
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var hasUndo: Bool { toast.undo != nil || toast.undoSend != nil }
+
+    private var regular: some View {
         HStack(spacing: 12) {
             Label {
                 Text(toast.message)
@@ -415,17 +446,12 @@ struct ToastView: View {
     }
 
     @ViewBuilder private var undoButton: some View {
-        if let box = toast.undo {
-            Button("Undo") { model.undoFromToast(box) }
+        if let token = toast.undo {
+            Button("Undo") { model.undoFromToast(token) }
                 .buttonStyle(.borderless).fontWeight(.semibold)
         } else if let outboxID = toast.undoSend {
             Button("Undo") { model.undoSend(outboxID) }
                 .buttonStyle(.borderless).fontWeight(.semibold)
-        } else if let action = toast.undoAction {
-            Button("Undo") {
-                if let manager = model.undoManager, manager.canUndo { manager.undo() } else { action() }
-            }
-            .buttonStyle(.borderless).fontWeight(.semibold)
         }
     }
 }

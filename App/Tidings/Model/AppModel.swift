@@ -164,8 +164,11 @@ final class AppModel {
 
     // Attachments (SPEC §11)
     var isAttachmentsShown = false
-    /// Reader mode for every message (View menu, ⌘K); Read Later opens in it anyway.
-    var readerMode = false
+    /// Reader mode for every message (Settings › General, View menu, ⌘K); Read Later opens in it
+    /// anyway. Kept between launches.
+    var readerMode = UserDefaults.standard.bool(forKey: "readerMode") {
+        didSet { UserDefaults.standard.set(readerMode, forKey: "readerMode") }
+    }
     /// What Quick Look shows (nil closes it).
     var quickLookURL: URL?
 

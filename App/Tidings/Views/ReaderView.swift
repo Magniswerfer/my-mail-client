@@ -40,10 +40,14 @@ struct ReaderView: View {
                         DateSuggestionSlot(threadID: threadID)
                     }
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                        // iPhone: no card round each message, just a line between them.
+                        if Platform.isPhone, index > 0 { Divider().padding(.vertical, 4) }
                         MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread)
                     }
                 }
-                .padding(20)
+                // iPhone: Mail's own reading margins.
+                .padding(.horizontal, Platform.isPhone ? 24 : 20)
+                .padding(.vertical, Platform.isPhone ? 16 : 20)
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
@@ -92,21 +96,64 @@ struct MessageCard: View {
                 content
             }
         }
-        .padding(14)
-        .background(.background.secondary, in: .rect(cornerRadius: 14))
+        // On the Mac each message is a card; the iPhone has no room to spare for one.
+        .padding(Platform.isPhone ? 0 : 14)
+        .background {
+            if !Platform.isPhone { RoundedRectangle(cornerRadius: 14).fill(.background.secondary) }
+        }
         .task(id: expanded) {
             guard expanded, body_ == nil else { return }
             await load()
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Button { model.showContact(message.fromAddress) } label: {
-                Avatar(name: message.senderDisplay, size: 34)
+    @ViewBuilder private var header: some View {
+        if Platform.isPhone { phoneHeader } else { macHeader }
+    }
+
+    private func avatar(size: CGFloat) -> some View {
+        Button { model.showContact(message.fromAddress) } label: {
+            Avatar(name: message.senderDisplay, size: size)
+        }
+        .buttonStyle(.plain)
+        .help("About \(message.senderDisplay)")
+    }
+
+    /// iPhone: name and date on one line, then the address and who it went to, each on a line of
+    /// its own and never wrapping, so nothing ends up squeezed into a column.
+    private var phoneHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            avatar(size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(message.senderDisplay).font(.headline).foregroundStyle(.primary).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(expanded ? MailDate.long(message.date) : MailDate.short(message.date))
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+                if expanded {
+                    if message.senderDisplay != message.fromAddress {
+                        Text(message.fromAddress)
+                            .lineLimit(1).truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                    if let to = body_?.to, !to.isEmpty {
+                        Text("To: \(to)").lineLimit(1)
+                    }
+                } else {
+                    Text(message.preview).font(.subheadline).lineLimit(1)
+                }
             }
-            .buttonStyle(.plain)
-            .help("About \(message.senderDisplay)")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var macHeader: some View {
+        HStack(alignment: .top, spacing: 10) {
+            avatar(size: 34)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(message.senderDisplay).font(.headline)
@@ -149,6 +196,9 @@ struct MessageCard: View {
                 let darken = colorScheme == .dark && !originalColors && HTMLDarkMode.canDarken(html.html)
                 MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline, dark: darken)
                     .id("\(showImages)-\(darken)")   // rebuild with the new policy
+                    // iPhone: the page keeps a 12pt margin (for mail with its own background);
+                    // pulled out by as much, its text lines up with the screen's margin.
+                    .padding(.horizontal, Platform.isPhone ? -12 : 0)
                 if colorScheme == .dark, HTMLDarkMode.canDarken(html.html) {
                     Button(originalColors ? "Match Dark Mode" : "Original Colours",
                            systemImage: "circle.lefthalf.filled") { originalColors.toggle() }
@@ -329,6 +379,7 @@ final class PassthroughScrollWebView: WKWebView {
           :root { color-scheme: light; }
           html, body { margin: 0; padding: 12px; background: white; color: #1d1d1f;
                        font: 14px -apple-system, system-ui, sans-serif; overflow-wrap: anywhere; border-radius: 10px; }
+          \(Platform.isPhone ? "html { padding: 0; }" : "")
           img { max-width: 100%; height: auto; }
           table { max-width: 100% !important; }
         </style></head><body>\(html)\(dark ? "<style>\(HTMLDarkMode.darkCSS)</style>" : "")</body></html>

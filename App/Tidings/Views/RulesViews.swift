@@ -11,60 +11,89 @@ struct RulesView: View {
     @State private var selection: Rule.ID?
 
     var body: some View {
+        if inSettings {
+            // Settings: the window (Mac) or the settings sheet's stack (iPhone) is the frame.
+            content
+        } else {
+            NavigationStack { content }
+                .macFrame(minWidth: 640, minHeight: 460)
+        }
+    }
+
+    /// The Mac's Settings window has no toolbar to spare, so there the buttons sit under the list.
+    private var buttonsBelow: Bool { inSettings && Platform.isMac }
+
+    private var content: some View {
         @Bindable var model = model
-        NavigationStack {
-            Group {
-                if model.rules.isEmpty {
-                    ContentUnavailableView {
-                        Label("No rules yet", systemImage: "line.3.horizontal.decrease.circle")
-                    } description: {
-                        Text("Rules sort new mail as it arrives, after Tidings' own sorting: move it to a category or folder, pin it, mark it read or done.")
-                    } actions: {
-                        Button("New Rule") { model.newRule() }.buttonStyle(.glassProminent)
-                    }
-                } else {
-                    List(selection: $selection) {
-                        ForEach(model.rules) { rule in
-                            RuleRow(rule: rule, count: model.ruleCounts[rule.id] ?? 0)
-                                .tag(rule.id)
-                                .contextMenu { menu(for: rule) }
-                        }
-                        .onMove { model.moveRules(from: $0, to: $1) }
-                    }
-                    .contextMenu(forSelectionType: Rule.ID.self) { _ in } primaryAction: { ids in
-                        if let id = ids.first, let rule = model.rules.first(where: { $0.id == id }) { model.editingRule = rule }
-                    }
-                    .onKeyPress(.return) {
-                        guard let id = selection, let rule = model.rules.first(where: { $0.id == id }) else { return .ignored }
-                        model.editingRule = rule
-                        return .handled
-                    }
+        return Group {
+            if model.rules.isEmpty {
+                ContentUnavailableView {
+                    Label("No rules yet", systemImage: "line.3.horizontal.decrease.circle")
+                } description: {
+                    Text("Rules sort new mail as it arrives, after Tidings' own sorting: move it to a category or folder, pin it, mark it read or done.")
+                } actions: {
+                    Button("New Rule") { model.newRule() }.buttonStyle(.glassProminent)
                 }
-            }
-            .navigationTitle("Rules")
-            // Mac: its own window, so these sit in the compact title bar. iPhone: a sheet's toolbar.
-            .toolbar {
-                if !Platform.isMac && !inSettings {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { dismiss() }
+            } else {
+                List(selection: $selection) {
+                    ForEach(model.rules) { rule in
+                        RuleRow(rule: rule, count: model.ruleCounts[rule.id] ?? 0)
+                            .tag(rule.id)
+                            .contextMenu { menu(for: rule) }
                     }
+                    .onMove { model.moveRules(from: $0, to: $1) }
                 }
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
-                        .help("What your rules did, with Undo")
-                    Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
-                        .keyboardShortcut("n", modifiers: [.command, .option])
-                        .help("New Rule (⌥⌘N)")
+                .contextMenu(forSelectionType: Rule.ID.self) { _ in } primaryAction: { ids in
+                    if let id = ids.first, let rule = model.rules.first(where: { $0.id == id }) { model.editingRule = rule }
+                }
+                .onKeyPress(.return) {
+                    guard let id = selection, let rule = model.rules.first(where: { $0.id == id }) else { return .ignored }
+                    model.editingRule = rule
+                    return .handled
                 }
             }
         }
-        .macFrame(minWidth: 640, minHeight: 460)
+        .navigationTitle("Rules")
+        // Mac: its own window, so these sit in the compact title bar. iPhone: a sheet's toolbar.
+        .toolbar {
+            if !Platform.isMac && !inSettings {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            if !buttonsBelow {
+                ToolbarItemGroup(placement: .primaryAction) { historyButton; newButton }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if buttonsBelow {
+                HStack {
+                    newButton
+                    historyButton
+                    Spacer()
+                }
+                .labelStyle(.titleAndIcon)
+                .buttonStyle(.borderless)
+                .padding(10)
+            }
+        }
         .sheet(item: $model.editingRule) { rule in
             RuleEditor(rule: rule).environment(model)
         }
         .sheet(isPresented: $isHistoryShown) {
             RuleHistoryView().environment(model)
         }
+    }
+
+    private var historyButton: some View {
+        Button { isHistoryShown = true } label: { Label("History", systemImage: "clock.arrow.circlepath") }
+            .help("What your rules did, with Undo")
+    }
+
+    private var newButton: some View {
+        Button { model.newRule() } label: { Label("New Rule", systemImage: "plus") }
+            .keyboardShortcut("n", modifiers: [.command, .option])
+            .help("New Rule (⌥⌘N)")
     }
 
     @ViewBuilder private func menu(for rule: Rule) -> some View {
