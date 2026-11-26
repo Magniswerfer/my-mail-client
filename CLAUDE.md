@@ -22,7 +22,9 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 - Automated tests use the local Dovecot container (`MailEngine/TestServer/`).
 - Magnus runs the real app from `App/build` (bundle id `hk.gnus.tidings`). Agents test UI only with the **dev copy** (`hk.gnus.tidings.dev`, own data, local Dovecot), never by clicking in the real instance:
   `xcodebuild -project App/Tidings.xcodeproj -scheme Tidings -derivedDataPath App/build-dev PRODUCT_BUNDLE_IDENTIFIER=hk.gnus.tidings.dev build`, then
-  `open -n App/build-dev/Build/Products/Debug/Tidings.app --args -TidingsDevServer`. With Stage Manager on, `osascript -e 'tell application id "hk.gnus.tidings.dev" to activate'` before screenshots.
+  `open -n App/build-dev/Build/Products/Debug/Tidings.app --args -TidingsDevServer -TidingsNoCloud`.
+- Agents never let an app talk to CloudKit (it's Magnus's iCloud, even in the dev container): always launch with `-TidingsNoCloud`. Sync logic is tested in the engine (`CloudStateTests`); the live round trip is run by Magnus (ADR 0006).
+- Apps are signed with the Creative Oak team (493257NQK3); if a build asks for provisioning, add `-allowProvisioningUpdates`. With Stage Manager on, `osascript -e 'tell application id "hk.gnus.tidings.dev" to activate'` before screenshots.
 
 - iPhone dev copy: run the `TidingsMobile` scheme in the Simulator with `-TidingsDevServer` ticked (Edit Scheme → Arguments); the Simulator reaches the local Dovecot/Mailpit on 127.0.0.1.
 - CI (`.github/workflows/build.yml`) builds both apps and runs the engine tests on every push.

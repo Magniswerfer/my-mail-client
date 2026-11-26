@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0087065155169B6AAB1FBF96 /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A0203070BD655088A92656 /* CloudSync.swift */; };
 		00D3DA115A23B57E5D003EAA /* MailEngine in Frameworks */ = {isa = PBXBuildFile; productRef = A46209AE4D69B21606AA03A6 /* MailEngine */; };
 		022EFE4FE3A9309A4A5BEF2E /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0155D1ACEF841230C43B9BE1 /* GlobalHotKey.swift */; };
 		052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02224CFBE15EBDB9E21E8CB4 /* CommandPalette.swift */; };
@@ -16,6 +17,7 @@
 		1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA0DB174A202248566399CE8 /* CalendarBridge.swift */; };
 		219457FC5BF45622AB8BDF30 /* Snippets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9781C48BE6F25D01ADF92C /* Snippets.swift */; };
 		22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE746A738ECB396D4A3B489 /* AssistViews.swift */; };
+		28584EFDF79A31E8B8F38806 /* CloudSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A0203070BD655088A92656 /* CloudSync.swift */; };
 		2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8DE1053B517D234A2D453E /* CategorySwipeBar.swift */; };
 		2C2D7B77A2C8A1B594CB2A08 /* SendersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C863A5E8187EAFEB176353 /* SendersView.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
@@ -86,6 +88,7 @@
 		C94105F197AA4E939C1E4FE7 /* AppModel+DateSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CCC1DD4A6C152C3D365C18 /* AppModel+DateSuggestions.swift */; };
 		CBE2082C0420EADFA536F760 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		D43B5F57ABDED124CB09F84C /* SnippetsAndReaderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F01A2507DCD4CBA0277DD92 /* SnippetsAndReaderViews.swift */; };
+		D87D2E6B5CB3F6B2509BCB74 /* AppModel+Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */; };
 		DCF313F9E8BFC12F57376C5A /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7F045393AAD8ADDCFB0CF1 /* NotificationSettingsView.swift */; };
 		E48ED2E9CC1723425FF336C3 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F3251184D524F3BBA0BD1D /* Notifications.swift */; };
 		E9C0BB88193E9E59D985DE08 /* AppModel+Links.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */; };
@@ -94,6 +97,7 @@
 		EB30016FB8194D8B34AC3F38 /* HighlightViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */; };
 		EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */; };
 		F05C5839A35FC0FBB354AE3D /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
+		F186A0EAB2D03F2294D60C8A /* AppModel+Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */; };
 		F1C95501152A66AF83C251F2 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
 		F26D21D87F5C61CA11FAC008 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */; };
 		F899F0082C3168203D5E4C39 /* AICategoryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D5ABDBB138D058BEC0C9E8 /* AICategoryViews.swift */; };
@@ -120,6 +124,7 @@
 		14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Compose.swift"; sourceTree = "<group>"; };
 		161F332A1DA0EF3F78430E54 /* UnsubscribeConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsubscribeConfirmation.swift; sourceTree = "<group>"; };
 		1EEBA246801CACDF96D1538A /* MailEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MailEngine; path = ../MailEngine; sourceTree = SOURCE_ROOT; };
+		21A0203070BD655088A92656 /* CloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSync.swift; sourceTree = "<group>"; };
 		224ABE94EA64F0EB4460D8C8 /* SmartFolderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderViews.swift; sourceTree = "<group>"; };
 		2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCard.swift; sourceTree = "<group>"; };
 		2E6FE5C63F7F196349B28623 /* AppModel+Senders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Senders.swift"; sourceTree = "<group>"; };
@@ -142,6 +147,7 @@
 		B48F3A3B6FCDC4ADBB91162A /* DateSuggestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSuggestionCard.swift; sourceTree = "<group>"; };
 		B656C7C5D76B62DF59CF7881 /* Tidings.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tidings.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA0DB174A202248566399CE8 /* CalendarBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarBridge.swift; sourceTree = "<group>"; };
+		C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Cloud.swift"; sourceTree = "<group>"; };
 		CBE746A738ECB396D4A3B489 /* AssistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistViews.swift; sourceTree = "<group>"; };
 		CCF8802ED3444B57EAECF71C /* ComposeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeModel.swift; sourceTree = "<group>"; };
 		D4D12F02B8A7B485182F3009 /* TidingsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsApp.swift; sourceTree = "<group>"; };
@@ -219,6 +225,7 @@
 				90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */,
 				E23B15724889F87A249F69F2 /* AppModel+Attachments.swift */,
 				E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */,
+				C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */,
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				74CCC1DD4A6C152C3D365C18 /* AppModel+DateSuggestions.swift */,
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
@@ -247,6 +254,7 @@
 			isa = PBXGroup;
 			children = (
 				BA0DB174A202248566399CE8 /* CalendarBridge.swift */,
+				21A0203070BD655088A92656 /* CloudSync.swift */,
 				AE87A3779EB9C67A90C913E7 /* Intents.swift */,
 				40F3251184D524F3BBA0BD1D /* Notifications.swift */,
 				48A2F7CF09F07C275CE96257 /* Platform.swift */,
@@ -372,9 +380,11 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					8FA43CD20B8BE322FC1C74B9 = {
+						DevelopmentTeam = 493257NQK3;
 						ProvisioningStyle = Automatic;
 					};
 					9095B8A12FDE08A572AF321F = {
+						DevelopmentTeam = 493257NQK3;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -433,6 +443,7 @@
 				4942686CA734A7DAC5D52DFE /* AppModel+Assist.swift in Sources */,
 				47707F6B11EB196B53CBB5C3 /* AppModel+Attachments.swift in Sources */,
 				59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */,
+				D87D2E6B5CB3F6B2509BCB74 /* AppModel+Cloud.swift in Sources */,
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				951FB4B78B56C2FBBE51F143 /* AppModel+DateSuggestions.swift in Sources */,
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
@@ -447,6 +458,7 @@
 				50ACDB3D6952507F7873FBF7 /* AttachmentBrowser.swift in Sources */,
 				A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */,
 				1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */,
+				0087065155169B6AAB1FBF96 /* CloudSync.swift in Sources */,
 				052875FD9DAF01FABFA74C08 /* CommandPalette.swift in Sources */,
 				8E7BA42491D05C2A439695E6 /* ComposeModel.swift in Sources */,
 				7031F631BFE73A9822227883 /* ComposeView.swift in Sources */,
@@ -486,6 +498,7 @@
 				4D89A4106575722EC1469CD3 /* AppModel+Assist.swift in Sources */,
 				142D55FF416EF333EA5DEF75 /* AppModel+Attachments.swift in Sources */,
 				4C11E35FE59B713DEFD400E0 /* AppModel+Classify.swift in Sources */,
+				F186A0EAB2D03F2294D60C8A /* AppModel+Cloud.swift in Sources */,
 				45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */,
 				C94105F197AA4E939C1E4FE7 /* AppModel+DateSuggestions.swift in Sources */,
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
@@ -501,6 +514,7 @@
 				8457FC7736CB752FE8A55EAD /* BundleSchedule.swift in Sources */,
 				5B9DD7572A39D23B982D71BB /* CalendarBridge.swift in Sources */,
 				2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */,
+				28584EFDF79A31E8B8F38806 /* CloudSync.swift in Sources */,
 				A6AEC3CD061B15B401752417 /* CommandPalette.swift in Sources */,
 				3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */,
 				66C9AEC8FB6D3AFFAC4652AC /* ComposeView.swift in Sources */,
@@ -538,7 +552,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_ENTITLEMENTS = Tidings/Tidings.entitlements;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Tidings/Info.plist;
@@ -557,7 +571,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_ENTITLEMENTS = Tidings/Tidings.entitlements;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Tidings/Info.plist;
@@ -642,6 +656,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 493257NQK3;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -672,6 +687,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				TIDINGS_CLOUD_CONTAINER = "iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)";
 			};
 			name = Debug;
 		};
@@ -712,6 +728,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 493257NQK3;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -735,6 +752,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
+				TIDINGS_CLOUD_CONTAINER = "iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)";
 			};
 			name = Release;
 		};

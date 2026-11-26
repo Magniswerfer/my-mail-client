@@ -42,3 +42,11 @@ Only state syncs, never mail content: Message-IDs, addresses, rule text and sett
 - Agents test sync logic against the engine's change log and a fake transport. The live CloudKit round trip runs in the dev container, which is still your Apple ID's iCloud, so you run it, as with live mail.
 - Moving the container to another team later loses its data, so it's decided now.
 - CloudKit quotas are generous for this size: kilobytes per record, thousands of records.
+
+## Turning it on (status 2026-11-26)
+The engine layer and the app's CKSyncEngine bridge are in place and inert: the app only uses CloudKit when its signature carries the iCloud entitlement for the container named in Info.plist. Creating the containers needs the Creative Oak developer account to accept Apple's latest Program License Agreement (Apple refused provisioning until then). After that:
+1. In `App/project.yml`, add to both apps' `info.properties`: `TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)`.
+2. Add to the Mac entitlements: `com.apple.developer.icloud-container-identifiers: [$(TIDINGS_CLOUD_CONTAINER)]`, `com.apple.developer.icloud-services: [CloudKit]`, `com.apple.developer.aps-environment: development`.
+3. Give the iPhone app an entitlements file (`Tidings/iOS/TidingsMobile.entitlements`, excluded from the Mac sources) with the same container and services, and `aps-environment: development`.
+4. Run `xcodegen generate`, then build the dev copy with `-allowProvisioningUpdates`. That registers `iCloud.hk.gnus.tidings.dev`. The first real build registers `iCloud.hk.gnus.tidings`.
+5. Deploy the schema (the `State` record type) to production in the CloudKit console before a release build.

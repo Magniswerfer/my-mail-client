@@ -177,6 +177,11 @@ final class AppModel {
     /// Bumped when sender data changes (the Senders screen reloads).
     var sendersRevision = 0
 
+    // iCloud sync of app state (ADR 0006)
+    @ObservationIgnored var cloudSync: CloudSync?
+    @ObservationIgnored var cloudPushTask: Task<Void, Never>?
+    var cloudStatus: CloudSync.CloudStatus = .off
+
     // Notifications (SPEC §10)
     var notificationPolicy: NotificationPolicy = NotificationPolicyStorage.load() {
         didSet { NotificationPolicyStorage.save(notificationPolicy) }
@@ -333,6 +338,7 @@ final class AppModel {
     // MARK: Sync
 
     func start() {
+        startCloudSync()
         _ = notifier   // become the notification delegate before any tap arrives
         if refinement == nil {
             // Loading the embedding model takes a moment: keep it off the main thread.
@@ -424,6 +430,7 @@ final class AppModel {
         case .idle:
             syncStatus[account.id] = String(localized: "Up to date")
             lastError = nil
+            cloudAfterMailSync()
             reload()
             scheduleRefinement()
             scheduleAutoDrafts()
@@ -517,6 +524,7 @@ final class AppModel {
     func reload() {
         now = Date()
         revision &+= 1
+        scheduleCloudPush()
         do {
             // One read of the Inbox serves the stream, a category and the unread count.
             var inboxCache: [ThreadSummary]?

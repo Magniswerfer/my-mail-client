@@ -1,6 +1,76 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Sign in to iCloud to sync": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log ind på iCloud for at synkronisere"
+          }
+        }
+      }
+    },
+    "Starting…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starter…"
+          }
+        }
+      }
+    },
+    "Up to date (%@)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opdateret (%@)"
+          }
+        }
+      }
+    },
+    "Sync with iCloud": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synkronisér med iCloud"
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        }
+      }
+    },
+    "iCloud": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud"
+          }
+        }
+      }
+    },
+    "Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regler, smarte mapper, afsenderregler, Svar senere, Læs senere, udsættelser, samtaler uden lyd og indstillinger i din private iCloud. Aldrig din mail."
+          }
+        }
+      }
+    },
     "Booking reference: %@" : {
       "localizations" : {
         "da" : {

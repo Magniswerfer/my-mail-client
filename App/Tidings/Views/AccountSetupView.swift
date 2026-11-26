@@ -156,6 +156,15 @@ struct SettingsView: View {
                         }
                         LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
                     }
+                    Section {
+                        Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
+                                                                 set: { model.isCloudSyncEnabled = $0 }))
+                        LabeledContent("Status", value: model.cloudStatusText)
+                    } header: {
+                        Text("iCloud")
+                    } footer: {
+                        Text("Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.")
+                    }
                 }
                 .formStyle(.grouped)
             }

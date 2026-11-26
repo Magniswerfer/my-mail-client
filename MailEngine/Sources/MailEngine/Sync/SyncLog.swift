@@ -2,19 +2,26 @@
 import OSLog
 #endif
 
-/// Sync diagnostics in the unified log (subsystem `hk.gnus.tidings`, category `sync`):
-/// what we change on the server, and when the server's flags undo one of our keywords.
-/// Only mailbox names, UIDs and flags; never addresses, subjects or bodies.
+/// Sync diagnostics in the unified log (subsystem `hk.gnus.tidings`): what we change on the
+/// server (`sync`), what goes to and comes from CloudKit (`cloud`). Only mailbox names, UIDs,
+/// flags and record counts; never addresses, subjects or bodies.
 ///
-///     log show --last 10m --predicate 'subsystem == "hk.gnus.tidings"'
-enum SyncLog {
+///     /usr/bin/log show --last 10m --predicate 'subsystem == "hk.gnus.tidings"'
+public enum SyncLog {
     #if canImport(OSLog)
-    private static let logger = Logger(subsystem: "hk.gnus.tidings", category: "sync")
+    private static let sync = Logger(subsystem: "hk.gnus.tidings", category: "sync")
+    private static let cloudLog = Logger(subsystem: "hk.gnus.tidings", category: "cloud")
     #endif
 
-    static func info(_ message: String) {
+    public static func info(_ message: String) {
         #if canImport(OSLog)
-        logger.notice("\(message, privacy: .public)")
+        sync.notice("\(message, privacy: .public)")
+        #endif
+    }
+
+    public static func cloud(_ message: String) {
+        #if canImport(OSLog)
+        cloudLog.notice("\(message, privacy: .public)")
         #endif
     }
 }
