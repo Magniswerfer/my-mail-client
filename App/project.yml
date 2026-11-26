@@ -64,7 +64,7 @@ targets:
             CFBundleURLSchemes: [tidings]
         TidingsCloudContainer: $(TIDINGS_CLOUD_CONTAINER)
         # Sparkle: the feed is the appcast attached to the latest GitHub release.
-        SUFeedURL: https://github.com/Magniswerfer/my-mail-client/releases/latest/download/appcast.xml
+        SUFeedURL: https://github.com/Magniswerfer/tidings-mail/releases/latest/download/appcast.xml
         SUPublicEDKey: YULVASj55kDhVacQo0JotSL0E1ciHFkLcg6oxOGcFe0=
         # Sandboxed: Sparkle installs through its own XPC launcher.
         SUEnableInstallerLauncherService: true

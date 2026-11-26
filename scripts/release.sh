@@ -19,7 +19,7 @@ cd "$ROOT"
 PUBLISH=false
 [[ "${1:-}" == "--publish" ]] && PUBLISH=true
 
-REPO="Magniswerfer/my-mail-client"
+REPO="Magniswerfer/tidings-mail"
 IDENTITY="Developer ID Application: Creative Oak ApS (493257NQK3)"
 NOTARY_PROFILE="notary"
 DERIVED="App/build-release"

@@ -1,4 +1,4 @@
-# Tidings (my-mail-client)
+# Tidings (tidings-mail)
 
 Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; big decisions are in `docs/adr/`, iCloud protocol facts in `docs/research/icloud-imap.md`.
 
