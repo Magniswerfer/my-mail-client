@@ -109,12 +109,19 @@ struct ComposeView: View {
     }
     @State private var isSending = false
     @FocusState private var focused: Field?
+    /// iPhone: the keyboard is up. Writing the body then folds the header into one line, so
+    /// what you type isn't squeezed into a sliver above the keyboard.
+    @State private var isKeyboardShown = false
+    /// Tapped open while writing; folds again when you go back to the body.
+    @State private var isHeaderUnfolded = false
+
+    private var foldsHeader: Bool { Platform.isPhone && isKeyboardShown && focused == nil && !isHeaderUnfolded }
 
     enum Field { case to, cc, bcc, subject }
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            if foldsHeader { foldedHeader } else { header }
             Divider()
             RichTextEditor(text: Binding(get: { model.body }, set: { model.body = $0; model.changed() }),
                            focusOnAppear: model.kind != .new && model.kind != .forward,
@@ -133,9 +140,21 @@ struct ComposeView: View {
             }
         }
         // An embedded composer (reading pane, Reply Later) must not retitle the main window.
+        // iPhone: no title; the subject is right under the buttons and the bar has no room for it.
         .modifier(ComposeTitle(title: model.subject.isEmpty ? String(localized: "New Message") : model.subject,
-                               isOn: embeddedActions == nil))
+                               isOn: embeddedActions == nil && !Platform.isPhone))
+        .onChange(of: focused) { _, field in if field == nil { isHeaderUnfolded = false } }
         .toolbar { if embeddedActions == nil { toolbar } }
+        .navigationBarTitleDisplayModeInline()
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardShown = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardShown = false
+        }
+        .animation(.snappy(duration: 0.25), value: foldsHeader)
+        #endif
         .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { model.attach(urls: urls) }
         }
@@ -175,6 +194,35 @@ struct ComposeView: View {
     }
 
     // MARK: Header fields
+
+    /// iPhone, writing the body: who it's to and the subject on one line. Tap for the fields.
+    private var foldedHeader: some View {
+        let people = model.recipients(model.to) + model.recipients(model.cc) + model.recipients(model.bcc)
+        let first = people.first.map { ($0.name?.isEmpty == false ? $0.name! : $0.address) } ?? ""
+        return Button {
+            isHeaderUnfolded = true
+            // The field exists once the header is open: focus it on the next turn.
+            Task { @MainActor in focused = .to }
+        } label: {
+            HStack(spacing: 6) {
+                Text(people.count > 1 ? String(localized: "To: \(first) +\(people.count - 1)") : String(localized: "To: \(first)"))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(verbatim: "·").foregroundStyle(.tertiary)
+                Text(model.subject.isEmpty ? String(localized: "No Subject") : model.subject)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the From, To, Cc and Subject fields")
+        .transition(.opacity)
+    }
 
     private var header: some View {
         VStack(spacing: 0) {
@@ -316,6 +364,17 @@ struct ComposeView: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            #if os(macOS)
+            // iPhone has these in a bar above the keyboard.
+            Menu {
+                ForEach(TextFormat.allCases, id: \.self) { format in
+                    Button(format.title, systemImage: format.symbol) { TextFormatting.send(format) }
+                }
+            } label: {
+                Label("Format", systemImage: "textformat")
+            }
+            .help("Bold, italic, underline and lists")
+            #endif
             Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .help("Attach files (⌘⇧A)")

@@ -202,13 +202,32 @@ struct RichTextEditor: NSViewRepresentable {
         }
     }
 
-    @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate, FormattableEditor {
         var parent: RichTextEditor
-        weak var textView: NSTextView?
+        weak var textView: NSTextView? { didSet { if textView != nil { TextFormatting.active = self } } }
         var isEditing = false
         var lastInsertion: UUID?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
+
+        /// The composer you're in gets the Format menu, the toolbar's Format button and ⌘K.
+        func textViewDidChangeSelection(_ notification: Notification) {
+            TextFormatting.active = self
+        }
+
+        func apply(_ format: TextFormat) {
+            guard let view = textView, let storage = view.textStorage else { return }
+            let edit = TextFormatting.edit(format, in: storage, selection: view.selectedRange(), typing: view.typingAttributes)
+            if let replacement = edit.replacement {
+                // One undoable change, like typing.
+                guard view.shouldChangeText(in: edit.range, replacementString: replacement.string) else { return }
+                storage.replaceCharacters(in: edit.range, with: replacement)
+                view.didChangeText()
+            }
+            view.setSelectedRange(edit.selection)
+            view.typingAttributes = edit.typing
+            view.window?.makeFirstResponder(view)
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let view = textView, let storage = view.textStorage, !isEditing else { return }
@@ -295,6 +314,7 @@ struct RichTextEditor: UIViewRepresentable {
         view.writingToolsBehavior = .complete
         view.dataDetectorTypes = []
         context.coordinator.textView = view
+        view.inputAccessoryView = context.coordinator.formattingBar()
         if focusOnAppear {
             DispatchQueue.main.async {
                 view.becomeFirstResponder()
@@ -318,13 +338,48 @@ struct RichTextEditor: UIViewRepresentable {
         }
     }
 
-    @MainActor final class Coordinator: NSObject, UITextViewDelegate {
+    @MainActor final class Coordinator: NSObject, UITextViewDelegate, FormattableEditor {
         var parent: RichTextEditor
         weak var textView: UITextView?
         var isEditing = false
         var lastInsertion: UUID?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
+
+        func textViewDidBeginEditing(_ view: UITextView) {
+            TextFormatting.active = self
+        }
+
+        func apply(_ format: TextFormat) {
+            guard let view = textView else { return }
+            let edit = TextFormatting.edit(format, in: view.textStorage, selection: view.selectedRange, typing: view.typingAttributes)
+            if let replacement = edit.replacement {
+                view.textStorage.beginEditing()
+                view.textStorage.replaceCharacters(in: edit.range, with: replacement)
+                view.textStorage.endEditing()
+            }
+            view.selectedRange = edit.selection
+            view.typingAttributes = edit.typing
+            textViewDidChange(view)
+        }
+
+        /// Above the keyboard: Bold, Italic, Underline, the two lists, and hiding the keyboard.
+        func formattingBar() -> UIToolbar {
+            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+            func item(_ format: TextFormat) -> UIBarButtonItem {
+                let item = UIBarButtonItem(image: UIImage(systemName: format.symbol),
+                                           primaryAction: UIAction { [weak self] _ in self?.apply(format) })
+                item.accessibilityLabel = format.title
+                return item
+            }
+            let hide = UIBarButtonItem(image: UIImage(systemName: "keyboard.chevron.compact.down"),
+                                       primaryAction: UIAction { [weak self] _ in self?.textView?.resignFirstResponder() })
+            hide.accessibilityLabel = String(localized: "Hide Keyboard")
+            bar.items = [item(.bold), item(.italic), item(.underline), .fixedSpace(12), item(.bulletList), item(.numberedList),
+                         .flexibleSpace(), hide]
+            bar.sizeToFit()
+            return bar
+        }
 
         func textViewDidChange(_ view: UITextView) {
             guard !isEditing else { return }

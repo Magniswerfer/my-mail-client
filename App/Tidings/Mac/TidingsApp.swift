@@ -31,6 +31,20 @@ struct TidingsApp: App {
                 Button("Check for Updates…") { model.checkForUpdates?() }
                     .disabled(model.checkForUpdates == nil)
             }
+            // The composer's formatting, whichever composer you're writing in (window or inline).
+            CommandGroup(replacing: .textFormatting) {
+                Button("Bold") { TextFormatting.send(.bold) }
+                    .keyboardShortcut("b", modifiers: .command)
+                Button("Italic") { TextFormatting.send(.italic) }
+                    .keyboardShortcut("i", modifiers: .command)
+                Button("Underline") { TextFormatting.send(.underline) }
+                    .keyboardShortcut("u", modifiers: .command)
+                Divider()
+                Button("Bulleted List") { TextFormatting.send(.bulletList) }
+                    .keyboardShortcut("7", modifiers: [.command, .shift])
+                Button("Numbered List") { TextFormatting.send(.numberedList) }
+                    .keyboardShortcut("9", modifiers: [.command, .shift])
+            }
             CommandGroup(after: .sidebar) {
                 Button("Go to Inbox") { model.goToInbox() }
                     .keyboardShortcut("1", modifiers: .command)
@@ -162,7 +176,6 @@ struct TidingsApp: App {
             }
         }
         .defaultSize(width: 720, height: 600)
-        .commands { TextFormattingCommands() }
 
         // Rules, Senders and Attachments are windows of their own (as in Mail), with their
         // buttons in a compact title bar rather than a sheet's bottom bar over the inbox.

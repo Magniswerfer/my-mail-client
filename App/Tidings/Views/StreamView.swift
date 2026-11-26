@@ -79,6 +79,8 @@ struct StreamView: View {
             }
             // No line above the first row, only between rows.
             .listRowSeparator(item.id == firstID ? .hidden : .automatic, edges: .top)
+            // Room for the unread dot before the avatars, as in Mail (every row, so they line up).
+            .padding(.leading, ThreadRow.dotGutter)
         }
     }
 
@@ -183,6 +185,9 @@ struct EmptyStream: View {
 }
 
 struct ThreadRow: View {
+    /// Space before every row's avatar, where the unread dot sits.
+    static let dotGutter: CGFloat = Platform.isPhone ? 18 : 8
+
     @Environment(AppModel.self) private var model
     let thread: ThreadSummary
     var inBundle = false
@@ -190,8 +195,9 @@ struct ThreadRow: View {
     var body: some View {
         let m = thread.latest
         let unread = thread.unreadCount > 0
+        let avatarSize: CGFloat = inBundle ? 26 : 32
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: senderLine, size: inBundle ? 26 : 32)
+            Avatar(name: senderLine, size: avatarSize)
                 .padding(.leading, inBundle ? 18 : 0)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -245,10 +251,14 @@ struct ThreadRow: View {
             }
         }
         .padding(.vertical, 4)
-        .overlay(alignment: .leading) {
+        .overlay(alignment: .topLeading) {
             if unread {
-                Circle().fill(Color.accentColor).frame(width: 7, height: 7)
-                    .offset(x: inBundle ? 6 : -10)
+                // Level with the avatar's middle (as in Mail), not the middle of a tall row, in the
+                // gutter before it with a clear gap.
+                let dot: CGFloat = Platform.isPhone ? 9 : 7
+                let gap: CGFloat = Platform.isPhone ? 9 : 5
+                Circle().fill(Color.accentColor).frame(width: dot, height: dot)
+                    .offset(x: (inBundle ? 18 : 0) - gap - dot, y: 4 + avatarSize / 2 - dot / 2)
                     .accessibilityLabel("Unread")
             }
         }

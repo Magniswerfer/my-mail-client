@@ -25,6 +25,7 @@
 		2C2D7B77A2C8A1B594CB2A08 /* SendersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C863A5E8187EAFEB176353 /* SendersView.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
 		35383B4FCF5D678A9D5CBC90 /* AppModel+SmartFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */; };
+		3551F661B8D4C6977D27C0D4 /* TextFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */; };
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF8802ED3444B57EAECF71C /* ComposeModel.swift */; };
 		3D80CF0E4641EA84D51EFB8E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
@@ -94,6 +95,7 @@
 		C94105F197AA4E939C1E4FE7 /* AppModel+DateSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CCC1DD4A6C152C3D365C18 /* AppModel+DateSuggestions.swift */; };
 		CBE2082C0420EADFA536F760 /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		D43B5F57ABDED124CB09F84C /* SnippetsAndReaderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F01A2507DCD4CBA0277DD92 /* SnippetsAndReaderViews.swift */; };
+		D67813FBB491955D0D7CF9DD /* TextFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */; };
 		D87D2E6B5CB3F6B2509BCB74 /* AppModel+Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */; };
 		DCF313F9E8BFC12F57376C5A /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7F045393AAD8ADDCFB0CF1 /* NotificationSettingsView.swift */; };
 		E48ED2E9CC1723425FF336C3 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F3251184D524F3BBA0BD1D /* Notifications.swift */; };
@@ -177,6 +179,7 @@
 		F8E681997413622DF1A1C6A4 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		F9D84A6766D82ADED898767E /* MobileRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileRootView.swift; sourceTree = "<group>"; };
 		FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFormatting.swift; sourceTree = "<group>"; };
 		FC9781C48BE6F25D01ADF92C /* Snippets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Snippets.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -316,6 +319,7 @@
 				CCF8802ED3444B57EAECF71C /* ComposeModel.swift */,
 				B3D6CF25D124BD98F975E0F1 /* ComposeView.swift */,
 				FAAED8300659A42CBB0141E0 /* RichTextEditor.swift */,
+				FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */,
 			);
 			path = Compose;
 			sourceTree = "<group>";
@@ -500,6 +504,7 @@
 				8000A39FD3B21B19D6DDF2A6 /* SnippetsAndReaderViews.swift in Sources */,
 				4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */,
 				37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */,
+				D67813FBB491955D0D7CF9DD /* TextFormatting.swift in Sources */,
 				6B457C0BEAF326BB7325AA69 /* TidingsApp.swift in Sources */,
 				60788449241397BD78F992CC /* UnsubscribeConfirmation.swift in Sources */,
 				01AD34FCC67BC3BF11B390FA /* Updater.swift in Sources */,
@@ -558,6 +563,7 @@
 				D43B5F57ABDED124CB09F84C /* SnippetsAndReaderViews.swift in Sources */,
 				941987B2CC28100F18518280 /* StreamView.swift in Sources */,
 				CBE2082C0420EADFA536F760 /* Support.swift in Sources */,
+				3551F661B8D4C6977D27C0D4 /* TextFormatting.swift in Sources */,
 				5E9CFF78EEEB4E8849552662 /* TidingsMobileApp.swift in Sources */,
 				92DC2EC211626A55EABA86F1 /* UnsubscribeConfirmation.swift in Sources */,
 				929D3EF52789F5AAF56EAF68 /* WakeReminders.swift in Sources */,

@@ -4461,6 +4461,126 @@
         }
       }
     },
+    "To: %@ +%lld": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Til: %@ +%lld"
+          }
+        }
+      }
+    },
+    "To: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Til: %@"
+          }
+        }
+      }
+    },
+    "No Subject": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intet emne"
+          }
+        }
+      }
+    },
+    "Shows the From, To, Cc and Subject fields": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viser felterne Fra, Til, Cc og Emne"
+          }
+        }
+      }
+    },
+    "Bold": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fed"
+          }
+        }
+      }
+    },
+    "Italic": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kursiv"
+          }
+        }
+      }
+    },
+    "Underline": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Understreget"
+          }
+        }
+      }
+    },
+    "Bulleted List": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punktopstilling"
+          }
+        }
+      }
+    },
+    "Numbered List": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nummereret liste"
+          }
+        }
+      }
+    },
+    "Hide Keyboard": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skjul tastatur"
+          }
+        }
+      }
+    },
+    "Format": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formatér"
+          }
+        }
+      }
+    },
+    "Bold, italic, underline and lists": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fed, kursiv, understregning og lister"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

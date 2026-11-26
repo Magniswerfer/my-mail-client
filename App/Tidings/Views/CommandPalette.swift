@@ -142,6 +142,13 @@ extension AppModel {
             list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
                                    symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })
         }
+        // Writing a message: its formatting.
+        if TextFormatting.active != nil {
+            for format in TextFormat.allCases {
+                list.append(AppCommand(id: "format-\(format.rawValue)", title: format.title, symbol: format.symbol,
+                                       keys: format.keys) { TextFormatting.send(format) })
+            }
+        }
         if canAddToThings {
             list.append(AppCommand(id: "addThings", title: String(localized: "Add to Things"), symbol: "checkmark.square",
                                    keys: nil, isEnabled: hasSelection) { self.addToThings() })
