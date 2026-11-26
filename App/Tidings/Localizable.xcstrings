@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "A change couldn't be applied" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En ændring kunne ikke gennemføres"
+          }
+        }
+      }
+    },
     "Show Only Unread" : {
       "localizations" : {
         "da" : {

@@ -53,7 +53,11 @@ public actor AccountSync {
         case mailboxProgress(mailbox: String, done: Int, total: Int)
         case mailboxSynced(mailbox: String, newMessages: Int)
         case idle
+        /// Connecting or syncing failed; the account retries with a pause.
         case failed(String)
+        /// The server refused a queued change (a move, a flag): the connection is fine. Sent each
+        /// pass it's refused, including the last, when it's given up.
+        case changeRefused(String)
         case sending(outboxID: Int64)
         case sent(outboxID: Int64)
         case sendFailed(outboxID: Int64, message: String)
@@ -201,6 +205,7 @@ public actor AccountSync {
             } catch is CancellationError {
                 return
             } catch {
+                SyncLog.info("sync loop: \(error); reconnecting in \(backoff)")
                 emit(.failed(String(describing: error)))
                 try? await Task.sleep(for: backoff)
                 backoff = min(backoff * 2, .seconds(300))

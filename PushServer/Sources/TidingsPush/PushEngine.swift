@@ -112,6 +112,11 @@ public actor PushEngine {
             // The server's own words (an IMAP response or a connection error): never a password.
             logger.warning("account sync failed", metadata: ["account": "\(Self.redacted(login))",
                                                              "error": "\(String(message.prefix(300)))"])
+        case .changeRefused(let message):
+            // A move or flag the mail server refused (the connection is fine): it keeps syncing.
+            statuses[login]?.error = message
+            logger.warning("mail server refused a change", metadata: ["account": "\(Self.redacted(login))",
+                                                                      "error": "\(String(message.prefix(300)))"])
         case .snoozesWoke(let ids):
             await notifyWoke(ids, login: login)
         case .sent(let outboxID):

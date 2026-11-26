@@ -514,6 +514,10 @@ final class AppModel {
             scheduleRefinement()
             scheduleAutoDrafts()
             scheduleEventScan()
+        case .changeRefused(let message):
+            // Connected; the server said no to one change (it's tried again, then let go).
+            syncStatus[account.id] = String(localized: "A change couldn't be applied")
+            lastError = message
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message

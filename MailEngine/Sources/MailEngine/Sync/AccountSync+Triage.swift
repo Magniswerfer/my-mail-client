@@ -331,14 +331,21 @@ extension AccountSync {
     }
 
     /// `drain` for a caller that already holds the server turn (a folder change).
+    /// A change the server refused waits for the next pass (after the next IDLE wake), and so do
+    /// later changes to the same messages (their order matters); changes to other messages go
+    /// ahead, and so does the sync. A connection error still stops the whole pass, so one dropped
+    /// connection doesn't use up every change's tries.
     func drainLocked(_ session: MailSession) async throws {
         hasPendingWork = false
+        var held = Set<Int64>()
+        var refused: [String] = []
         for var pending in try store.pendingActions(accountID: account.id) {
             guard let id = pending.id else { continue }
             guard let action = pending.action else {
                 try store.deletePending(id: id)
                 continue
             }
+            guard action.localIDs.isDisjoint(with: held) else { continue }
             do {
                 try await execute(action, session)
                 try store.deletePending(id: id)
@@ -350,12 +357,17 @@ extension AccountSync {
                     // Give up: forget local placeholders; the next sync restores server truth.
                     try abandon(action)
                     try store.deletePending(id: id)
-                    emit(.failed("Couldn't apply a change on the server: \(error.description)"))
+                    emit(.changeRefused(error.description))
                 } else {
                     try store.savePending(pending)
-                    throw error
+                    held.formUnion(action.localIDs)
+                    refused.append(error.description)
                 }
             }
+        }
+        if !refused.isEmpty {
+            SyncLog.info("queue: \(refused.count) change(s) refused, retried on the next pass")
+            emit(.changeRefused(refused.joined(separator: "; ")))
         }
     }
 
@@ -463,6 +475,16 @@ extension AccountSync {
     public func processPendingActions() async throws {
         try await MailSession.open(endpoint: account.endpoint, password: password, profile: profile) { session in
             try await self.drain(session)
+        }
+    }
+}
+
+extension QueuedAction {
+    /// The messages this change touches.
+    var localIDs: Set<Int64> {
+        switch self {
+        case .move(let items, _, _, _, _): Set(items.map(\.localID))
+        case .flags(let ids, _, _): Set(ids)
         }
     }
 }

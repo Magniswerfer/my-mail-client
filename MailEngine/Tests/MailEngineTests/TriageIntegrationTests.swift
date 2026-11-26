@@ -44,6 +44,26 @@ import Testing
         return Fixture(sync: sync, store: store, endpoint: endpoint, dir: dir)
     }
 
+    /// A change the server refuses holds back only later changes to the same messages: Done on
+    /// another conversation still goes through in the same pass.
+    @Test func aRefusedChangeOnlyHoldsBackItsOwnMessages() async throws {
+        guard let f = try await fixture() else { return }
+        let threads = try f.inbox()
+        let stuck = try #require(threads.first)
+        let other = try #require(threads.first { $0.threadID != stuck.threadID })
+        let archiveBefore = try await f.server("Archive").count
+
+        try await f.sync.perform(.move(toMailbox: "No Such Folder"), threadIDs: [stuck.threadID], from: "INBOX")
+        try await f.sync.perform(.pin, threadIDs: [stuck.threadID])
+        try await f.sync.perform(.done, threadIDs: [other.threadID])
+        try await f.sync.processPendingActions()
+
+        #expect(try await f.server("Archive").count == archiveBefore + other.messageCount, "Done went through")
+        let left = try f.store.pendingActions(accountID: "t")
+        #expect(left.count == 2, "the refused move and the pin behind it wait")
+        #expect(left.map(\.attempts).sorted() == [0, 1], "only the refused move used a try")
+    }
+
     @Test func doneMovesConversationToArchiveOnServer() async throws {
         guard let f = try await fixture() else { return }
         let dinner = try f.thread("Middag")
