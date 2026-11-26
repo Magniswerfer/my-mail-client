@@ -50,6 +50,7 @@ struct NotificationSettings: View {
             } footer: {
                 Text("VIPs' Primary mail always notifies. With “Only from VIPs”, other people's doesn't.")
             }
+            PushServerSection()
         }
         .formStyle(.grouped)
     }

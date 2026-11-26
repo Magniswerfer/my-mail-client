@@ -84,4 +84,18 @@ import Testing
         #expect(try server.rules().isEmpty)
         #expect(try server.isMuted(threadID: "server-thread"))
     }
+
+    @Test func handedOffMailIsNeverSentFromHereButCanBeTakenBack() async throws {
+        let (sync, store) = try fixture()
+        let message = OutgoingMessage(from: MailAddress(name: nil, address: me), to: [MailAddress(name: nil, address: "a@x.dk")],
+                                      subject: "Later", text: "Hej")
+        let item = try await sync.queue(message, sendAt: Date().addingTimeInterval(-1))
+        let id = try #require(item.id)
+        try await sync.markHandedOff(id: id)
+        #expect(try store.outboxItem(id: id)?.state == .remote)
+        #expect(try store.dueOutbox(accountID: "a").isEmpty, "the server sends it, not this device")
+        #expect(try store.outbox().map(\.id) == [id], "still listed as scheduled")
+        #expect(try await sync.cancelSend(id: id)?.state == .draft)
+    }
 }
+

@@ -64,25 +64,26 @@ A new CI job builds and tests the engine on `ubuntu-latest` in the official `swi
 
 ### Decisions (taken 2026-11-26)
 
-1. **Credentials — decided: a separate app password.** a separate iCloud app-specific password for the server, named "Tidings Push". You enter it once in the app's Push settings. It goes over TLS to the server and nowhere else: not the Keychain, not CloudKit. The server stores it AES-GCM-encrypted in its SQLite database on the Coolify volume, under `TIDINGS_MASTER_KEY`, a Coolify secret. A leaked volume or backup reveals nothing without that key. Revoking "Tidings Push" at account.apple.com cuts the server off without touching your devices.
+1. **Credentials — decided: a separate app password.** The server gets its own iCloud app-specific password, named "Tidings Push". You enter it once in the app's Push settings. It goes over TLS to the server and nowhere else: not the Keychain, not CloudKit. The server stores it AES-GCM-encrypted in its SQLite database on the Coolify volume, under `TIDINGS_MASTER_KEY`, a Coolify secret. A leaked volume or backup reveals nothing without that key. Revoking "Tidings Push" at account.apple.com cuts the server off without touching your devices.
    *Not chosen:* reuse the account's existing password from iCloud Keychain and upload it automatically (no setup, but it can't be revoked separately); or put the credentials only in Coolify environment variables (no upload API, but clumsy with several accounts).
 2. **Hosting.** Coolify, as ADR 0003 suggests: one container, a persistent volume for `/data`, and a public HTTPS domain. Magnus picks the server and domain at deploy time; the deploy notes are host-agnostic.
 3. **Apple push key.** Magnus creates an APNs auth key in the Creative Oak team (493257NQK3), under Certificates, Identifiers & Profiles › Keys › Apple Push Notifications service. The `.p8` file goes in Coolify as `APNS_KEY_P8`, with `APNS_KEY_ID` and `APNS_TEAM_ID=493257NQK3`. The topic is `hk.gnus.tidings`. The server picks the sandbox or production endpoint per device from what the device reports. Debug builds use sandbox, TestFlight and release use production.
 4. **Device registration — decided: a pairing secret.**
    - The server starts with `TIDINGS_PAIRING_SECRET`, a Coolify secret.
-   - In Settings › Push you enter the server URL and the secret once.
+   - In Settings › Notifications › Push Server you enter the server URL and the secret once.
    - The secret is stored as a synchronizable Keychain item, so your other iPhone or iPad pairs itself.
    - Pairing (`POST /v1/devices`) returns a per-device token. The device then `PUT`s its APNs token and environment whenever iOS gives it a new one.
    - *Not chosen:* Sign in with Apple, with the server allow-listing your Apple user id (no secret to copy, but more moving parts); or one static token shared by all devices.
 5. **Which mail notifies, and how the server learns your policy.** The server can't read CloudKit's private database without a short-lived web token for your Apple ID, which makes it a poor fit for an unattended server.
-   - *Decided:* the app uploads a **server profile** (`PUT /v1/profile`) whenever its synced state changes. The profile holds your notification policy, VIPs, mutes, structured rules marked Notify, sender rules and own addresses. Pinned needs no upload, because it is `\Flagged` on IMAP. Snooze wake times (`PUT /v1/snoozes`) and send-later items (`PUT`/`DELETE /v1/outbox/:id`) go up the same way. Any of your devices can upload, and last writer wins, as in ADR 0006. The rules are SPEC §10's: Primary from people, VIPs, pinned, replies to conversations where you wrote last, and rules marked Notify.
+   - *Decided:* the app uploads a **server profile** whenever its synced state changes. The profile holds your notification policy, VIPs, mutes, rules, sender rules, corrections and snooze wake times. Pinned needs no upload, because it is `\Flagged` on IMAP. Send-later items go up on their own (below). Any of your devices can upload, and last writer wins, as in ADR 0006. The rules are SPEC §10's: Primary from people, VIPs, pinned, replies to conversations where you wrote last, and rules marked Notify.
    - *Not chosen:* the server notifies on every new INBOX message that layer 1 calls a person, with no policy (simple, noisier); or a silent push lets the iPhone decide (iOS throttles silent pushes and may not wake the app, so not recommended).
 
 ### Send-later hand-off
-- When the server is paired and reachable, an outbox item whose send time is past the undo window is uploaded as raw MIME with its account and time. The device marks it `handedOff`.
+- When the server is paired and has the account, an outbox item due more than 5 minutes from now is uploaded with its account and time (`PUT /v1/scheduled/{id}`). The upload carries the composed message, which the server builds and sends like any outbox item. The device marks the item `.remote`, a new `OutboxItem.State` that only the server sends.
 - Editing or cancelling the item deletes it on the server first.
 - If the upload fails, the device keeps the item and today's behaviour applies.
-- The server marks an item sent before it reports success, so a retry never sends twice.
+- The server's own outbox does the sending, so its usual `sending` state and retry rules apply: a retry never sends twice.
+- The device asks for the ids the server still holds (`GET /v1/scheduled`) when it returns to the foreground, and drops the `.remote` items that have gone out.
 - Agents test this against Mailpit only.
 
 ## Consequences
@@ -91,3 +92,18 @@ A new CI job builds and tests the engine on `ubuntu-latest` in the official `swi
 - On Linux the engine loses layer 2 and 3 sorting, related search and date suggestions. Nothing changes on the devices.
 - The app gains a Push section in Settings (server URL, pairing, status, the server's app-specific password per account) and ⌘K actions for pairing and unpairing.
 - Testing: the server's IMAP side runs against the local Dovecot, and SMTP against Mailpit. APNs is a protocol, so tests use a recording fake. A real push to a device needs Magnus's key and phone.
+
+## As built (2026-11-26)
+- **The profile is the ADR 0006 state records.** The device uploads `MailStore.stateSnapshot` (`PUT /v1/state`), which is its whole state of `MailStore.pushStateTypes`. The server applies it with `applyStateSnapshot`: it diffs the snapshot against what it last applied and runs the result through the same `applyCloudChanges` path CloudKit uses. Records about mail the server doesn't have yet wait in `cloudPending`, and are applied after each sync. The upload is the whole state every time, which keeps it simple and self-healing; it is kilobytes. The upload runs a moment after any change that would go to CloudKit, and when another device's change arrives through CloudKit.
+- **Engine hooks.**
+  - `SyncScope.pushServer` syncs only INBOX, Sent and Snoozed, and caches no bodies.
+  - `AccountSync.notificationPass(policy:)` evaluates rules and the policy without acting: no rule actions, no junk moves, no learning. A rule's category counts for the decision only. Mail a rule would file away stays quiet unless the rule says Notify.
+  - A new `snoozesWoke` event lets the server say "Back in your Inbox".
+  - IDLE now never outlasts `pollInterval`, so Sent and Snoozed really are re-synced on time. This applies to the apps too, at their 10-minute interval.
+- **Localisation in pushes.** The "Back in your Inbox" and "N new messages" (`push.burst`) titles go as `title-loc-key`, so the phone shows them in its own language. Sender and subject go as written.
+- **Tests.** The server's end-to-end tests use APNSwift's `APNSTestServer`, a fake APNs, with the real APNs client. They pass on macOS and on Linux (`swift:6.2-noble`, host network) against the local Dovecot and Mailpit:
+  - new Primary mail pushes, and bulk mail doesn't;
+  - a snooze wakes with no device running;
+  - send-later goes out, and a cancelled one doesn't.
+- **Not verified yet.** A real APNs delivery and the iPhone side on a device both need Magnus's key, server and phone.
+

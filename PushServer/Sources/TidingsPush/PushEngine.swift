@@ -71,12 +71,17 @@ public actor PushEngine {
         let sync = AccountSync(account: accountConfig(account), password: password, store: mail, cache: cache, scope: .pushServer)
         let login = account.login
         let poll = config.pollInterval
+        // Subscribe before the loop starts, or a fast first sync is over before anyone listens.
+        let (started, ready) = AsyncStream<Void>.makeStream()
         let events = Task { [weak self] in
-            for await event in await sync.events() {
-                await self?.handle(event, login: login)
-            }
+            let stream = await sync.events()
+            ready.finish()
+            for await event in stream { await self?.handle(event, login: login) }
         }
-        let task = Task { await sync.run(pollInterval: poll) }
+        let task = Task {
+            for await _ in started {}
+            await sync.run(pollInterval: poll)
+        }
         watchers[login] = Watcher(sync: sync, task: task, events: events)
         statuses[login] = .init(login: login, hasPassword: true, state: "connecting", lastSync: statuses[login]?.lastSync, error: nil)
     }

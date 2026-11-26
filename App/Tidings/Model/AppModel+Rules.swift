@@ -121,6 +121,8 @@ extension AppModel {
 
     /// New mail that deserves it becomes a system notification (SPEC §10).
     func deliverNotifications(arrived: [StoredMessage], ruleRuns: [RuleRun]) async {
+        // The push server already told this iPhone (ADR 0007).
+        guard !serverNotifiesNewMail else { return }
         var policy = notificationPolicy
         // A Focus with Tidings' filter on: only VIPs (and nothing at all if you have none).
         if FocusFilterState.onlyVIPs { policy.onlyVIPs = true; policy.pinned = false; policy.replies = false; policy.rules = false }

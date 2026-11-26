@@ -76,6 +76,7 @@ extension AppModel {
 
     /// A moment after local changes settle, send them.
     func scheduleCloudPush() {
+        schedulePushStateUpload()
         guard let cloudSync else { return }
         cloudPushTask?.cancel()
         cloudPushTask = Task { [weak self] in
@@ -111,7 +112,11 @@ extension AppModel {
             notificationPolicy = NotificationPolicyStorage.load()
         }
         if !report.accounts.isEmpty || !report.removedAccounts.isEmpty { applyCloudAccounts(report) }
-        if report.applied > 0 { reload() }
+        if report.applied > 0 {
+            reload()
+            // Changed on another device: the server hears it from whichever device is awake.
+            schedulePushStateUpload()
+        }
     }
 
     // MARK: Accounts from other devices

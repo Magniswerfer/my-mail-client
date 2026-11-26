@@ -1,0 +1,10 @@
+# Only the push server's image is built from this repository (PushServer/Dockerfile).
+**/.build
+**/.swiftpm
+.git
+.github
+.claude
+App
+docs
+scripts
+MailEngine/TestServer

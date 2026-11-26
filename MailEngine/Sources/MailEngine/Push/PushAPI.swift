@@ -16,6 +16,7 @@ import FoundationNetworking
 /// | `PUT /v1/state` | `StateUpload` | — |
 /// | `PUT /v1/scheduled/{id}` | `ScheduledSend` | — |
 /// | `DELETE /v1/scheduled/{id}` | — | — |
+/// | `GET /v1/scheduled` | — | `[String]` (ids still waiting to go out) |
 /// | `GET /v1/status` | — | `ServerStatus` |
 public enum PushAPI {
     public struct PairRequest: Codable, Sendable, Hashable {
@@ -190,6 +191,11 @@ public struct PushServerClient: Sendable {
 
     public func cancelScheduled(id: String) async throws {
         try await call("DELETE", "v1/scheduled/\(Self.pathComponent(id))")
+    }
+
+    /// Send-later ids the server hasn't sent yet (the rest went out).
+    public func scheduledIDs() async throws -> [String] {
+        try await call("GET", "v1/scheduled", as: [String].self)
     }
 
     public func status() async throws -> PushAPI.ServerStatus {

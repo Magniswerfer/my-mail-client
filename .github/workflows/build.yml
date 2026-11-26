@@ -15,9 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The engine on Linux, as the push server runs it (ADR 0007). Integration tests skip here too.
+  # The engine and the push server on Linux, as Coolify runs them (ADR 0007). Integration and
+  # end-to-end tests skip here (no Dovecot/Mailpit).
   linux:
-    name: Engine on Linux
+    name: Engine and push server on Linux
     runs-on: ubuntu-latest
     container: swift:6.2-noble
     timeout-minutes: 45
@@ -26,6 +27,8 @@ jobs:
       - run: apt-get update -qq && apt-get install -y -qq libsqlite3-dev
       - run: swift build --package-path MailEngine
       - run: swift test --package-path MailEngine
+      - name: Push server
+        run: swift test --package-path PushServer
 
   build:
     name: Engine tests, Mac app, iPhone app

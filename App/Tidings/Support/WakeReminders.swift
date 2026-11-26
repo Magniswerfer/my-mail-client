@@ -64,6 +64,8 @@ extension AppModel {
     }
 
     func scheduleWakeReminders() async {
-        await WakeReminders.schedule(snoozes: (try? store.upcomingSnoozes(limit: 30)) ?? [], sends: scheduledSends)
+        // With the push server, snoozes wake on the server and it says so (ADR 0007).
+        let snoozes = isPushServerPaired ? [] : (try? store.upcomingSnoozes(limit: 30)) ?? []
+        await WakeReminders.schedule(snoozes: snoozes, sends: scheduledSends)
     }
 }

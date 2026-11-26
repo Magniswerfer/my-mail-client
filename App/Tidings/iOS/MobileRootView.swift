@@ -136,6 +136,9 @@ struct MobileRootView: View {
         .sheet(item: $model.accountToSignIn) { account in
             AccountPasswordSheet(account: account).environment(model)
         }
+        .sheet(isPresented: $model.isPushServerSheetShown) {
+            PushServerSheet().environment(model)
+        }
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in composeDraft = ComposeDraft(id: id) }

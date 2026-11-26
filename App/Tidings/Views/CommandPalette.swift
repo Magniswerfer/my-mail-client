@@ -140,6 +140,12 @@ extension AppModel {
             list.append(AppCommand(id: "signIn-\(account.login)", title: String(localized: "Sign In to \(account.displayName)…"),
                                    symbol: "key", keys: nil) { self.accountToSignIn = account })
         }
+        list.append(AppCommand(id: "pushServer", title: String(localized: "Push Server…"), symbol: "bell.badge",
+                               keys: nil) { self.isPushServerSheetShown = true })
+        if isPushServerPaired {
+            list.append(AppCommand(id: "pushServerSync", title: String(localized: "Update Push Server Now"),
+                                   symbol: "arrow.triangle.2.circlepath", keys: nil) { self.syncWithPushServer() })
+        }
         if let checkForUpdates {
             list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
                                    symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })

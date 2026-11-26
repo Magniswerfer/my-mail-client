@@ -335,6 +335,9 @@ struct RootView: View {
         .sheet(item: $model.accountToSignIn) { account in
             AccountPasswordSheet(account: account).environment(model)
         }
+        .sheet(isPresented: $model.isPushServerSheetShown) {
+            PushServerSheet().environment(model)
+        }
         .onChange(of: model.searchEndedCount) {
             searchFocused = false
             streamFocused = true

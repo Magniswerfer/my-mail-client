@@ -13,6 +13,7 @@ struct TidingsMobileApp: App {
     /// One model for the process, so background refresh (which may run with no UI) shares it.
     static let model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
+    @UIApplicationDelegateAdaptor(PushTokenDelegate.self) private var pushDelegate
 
     static let refreshTaskID = "hk.gnus.tidings.refresh"
 
@@ -77,6 +78,17 @@ struct TidingsMobileApp: App {
         let soon = Date().addingTimeInterval(15 * 60)
         request.earliestBeginDate = next.map { min(max($0, Date().addingTimeInterval(60)), soon) } ?? soon
         try? BGTaskScheduler.shared.submit(request)
+    }
+}
+
+/// Hands the push token iOS gives us to the push server (ADR 0007).
+final class PushTokenDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        MainActor.assumeIsolated { TidingsMobileApp.model.pushTokenReceived(deviceToken) }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: any Error) {
+        MainActor.assumeIsolated { TidingsMobileApp.model.pushServerError = error.localizedDescription }
     }
 }
 #endif

@@ -149,6 +149,10 @@ public final class ServerStore: Sendable {
         try db.write { try $0.execute(sql: "DELETE FROM scheduled WHERE id = ?", arguments: [id]) }
     }
 
+    public func scheduledIDs() throws -> [String] {
+        try db.read { try String.fetchAll($0, sql: "SELECT id FROM scheduled ORDER BY id") }
+    }
+
     public func scheduledCount() throws -> Int {
         try db.read { try Int.fetchOne($0, sql: "SELECT count(*) FROM scheduled") ?? 0 }
     }

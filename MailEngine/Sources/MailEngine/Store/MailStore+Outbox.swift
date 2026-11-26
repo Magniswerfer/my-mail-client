@@ -31,6 +31,7 @@ public struct OutboxItem: Sendable, Codable, Identifiable, FetchableRecord, Muta
         case queued     // waiting for sendAt (the undo window, or send later)
         case sending
         case failed     // permanent failure; needs the user
+        case remote     // handed to the push server, which sends it at `sendAt` (ADR 0007)
     }
 
     public var id: Int64?

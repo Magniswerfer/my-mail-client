@@ -82,11 +82,21 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         let action = response.actionIdentifier
-        let threadID = info["threadID"] as? String
-        let accountID = info["accountID"] as? String
-        let link = (info["link"] as? String).flatMap(URL.init(string:))
+        var threadID = info["threadID"] as? String
+        var accountID = info["accountID"] as? String
+        var link = (info["link"] as? String).flatMap(URL.init(string:))
+        // From the push server: the message by Message-ID and account login (ADR 0007).
+        let pushedMessageID = info[PushAPI.PayloadKey.messageID] as? String
+        let pushedAccount = info[PushAPI.PayloadKey.account] as? String
         await MainActor.run {
             guard let model = self.model else { return }
+            if let pushedMessageID {
+                link = MessageLink.url(for: pushedMessageID)
+                if let pushedAccount, let local = model.localConversation(messageID: pushedMessageID, login: pushedAccount) {
+                    threadID = local.threadID
+                    accountID = local.accountID
+                }
+            }
             switch action {
             case Self.doneAction:
                 if let threadID, let accountID { model.performQuietly(.done, threadID: threadID, accountID: accountID) }

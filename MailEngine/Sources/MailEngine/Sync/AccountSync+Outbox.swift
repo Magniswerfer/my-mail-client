@@ -26,11 +26,19 @@ extension AccountSync {
 
     /// Undo send: back to a draft, if it hasn't started sending. Returns the draft.
     public func cancelSend(id: Int64) throws -> OutboxItem? {
-        guard var item = try store.outboxItem(id: id), item.state == .queued || item.state == .failed else { return nil }
+        guard var item = try store.outboxItem(id: id), item.state == .queued || item.state == .failed || item.state == .remote else { return nil }
         item.state = .draft
         item.sendAt = nil
         item.lastError = nil
         return try store.save(item)
+    }
+
+    /// Handed to the push server (ADR 0007): it sends from there, so this device never does.
+    /// `cancelSend` takes it back once the server has let go of it.
+    public func markHandedOff(id: Int64) throws {
+        guard var item = try store.outboxItem(id: id), item.state == .queued else { return }
+        item.state = .remote
+        _ = try store.save(item)
     }
 
     /// Retry a failed message now.

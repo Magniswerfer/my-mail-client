@@ -74,6 +74,10 @@ public enum PushServerAPI {
             guard cancelled else { throw HTTPError(.conflict, message: "already sending or sent") }
             return .noContent
         }
+        api.get("scheduled") { request, context -> Response in
+            _ = try authenticate(request, store)
+            return try json(try store.scheduledIDs())
+        }
         api.get("status") { request, context -> Response in
             _ = try authenticate(request, store)
             return try json(try await engine.status())
