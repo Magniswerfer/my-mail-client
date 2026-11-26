@@ -284,13 +284,17 @@ extension AppModel {
         let ids = visibleThreadIDs
         let removed = Set(removedIDs)
         let remaining = ids.enumerated().filter { !removed.contains($0.element) }
+        // iPhone, in the list: nothing is open, and selecting would open the next conversation.
+        if selectedThreadID == nil, Platform.isPhone { return nil }
         guard let current = selectedThreadID, let index = ids.firstIndex(of: current) else {
             // The selection isn't in the list (it left it, or it's a search result): carry on
             // from where it was in the list, if it was there at all.
             guard !isSearching, let hint = selectionIndexHint, !remaining.isEmpty else { return selectedThreadID }
             return remaining.first { $0.offset >= hint }?.element ?? remaining.last?.element
         }
-        let end = removed.contains(current) ? (ids.indices.last(where: { removed.contains(ids[$0]) }) ?? index) : index
+        // Acting on another row (a swipe, a context menu) leaves the selection where it is.
+        guard removed.contains(current) else { return current }
+        let end = ids.indices.last(where: { removed.contains(ids[$0]) }) ?? index
         return remaining.first { $0.offset > end }?.element ?? remaining.last { $0.offset < end }?.element
     }
 

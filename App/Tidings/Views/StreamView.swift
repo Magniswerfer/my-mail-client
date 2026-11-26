@@ -104,12 +104,26 @@ struct StreamView: View {
                     .tint(.blue)
             }
             #endif
-            // Drag a conversation onto a category (or Archive) in the sidebar to move it.
-            .draggable(ThreadDrag(threadID: thread.threadID)) {
+            .modifier(SidebarDrag(thread: thread))
+    }
+}
+
+/// Drag a conversation onto a category (or Archive) in the sidebar to move it. Not on iPhone:
+/// the sidebar is never beside the list there, and the drag's hold-to-lift caught slower swipes,
+/// so a swipe to Done sprang back instead.
+private struct SidebarDrag: ViewModifier {
+    let thread: ThreadSummary
+
+    func body(content: Content) -> some View {
+        if Platform.isPhone {
+            content
+        } else {
+            content.draggable(ThreadDrag(threadID: thread.threadID)) {
                 Label(thread.latest.subject, systemImage: "envelope")
                     .padding(8)
                     .glassEffect(.regular, in: .capsule)
             }
+        }
     }
 }
 

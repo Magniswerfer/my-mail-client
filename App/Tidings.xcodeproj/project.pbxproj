@@ -564,6 +564,7 @@
 		1F7A8EE40472193469360CA8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Tidings/Tidings.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -583,6 +584,7 @@
 		2370ACAB37BDBC539759F7E4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Tidings/Tidings.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
