@@ -1,4 +1,3 @@
-import Accelerate
 import Foundation
 import GRDB
 #if canImport(FoundationModels)
@@ -43,9 +42,7 @@ public final class OnDeviceRuleJudge: RuleJudge, @unchecked Sendable {
         let messageVector = message.id.flatMap { try? store.embedding(for: $0) }
             ?? embedder.embed(MailStore.embeddingText(message))
         guard let messageVector, messageVector.count == query.count else { return nil }
-        var dot: Float = 0
-        vDSP_dotpr(query, 1, messageVector, 1, &dot, vDSP_Length(query.count))
-        return dot
+        return VectorMath.dot(query, messageVector)
     }
 
     private func vector(for description: String) -> [Float]? {
@@ -67,12 +64,9 @@ public final class OnDeviceRuleJudge: RuleJudge, @unchecked Sendable {
         var scores: [Float] = []
         scores.reserveCapacity(vectors.count)
         for v in vectors where v.count == query.count {
-            var dot: Float = 0
-            vDSP_dotpr(query, 1, v, 1, &dot, vDSP_Length(query.count))
-            scores.append(dot)
+            scores.append(VectorMath.dot(query, v))
         }
-        var mean: Float = 0, std: Float = 0
-        vDSP_normalize(scores, 1, nil, 1, &mean, &std, vDSP_Length(scores.count))
+        let (mean, std) = VectorMath.meanAndDeviation(scores)
         var result = condition
         result.threshold = mean + 1.5 * std
         return result

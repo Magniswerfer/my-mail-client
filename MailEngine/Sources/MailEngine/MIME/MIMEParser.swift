@@ -552,6 +552,7 @@ enum Charsets {
             if let s = String(bytes: bytes, encoding: .utf8) { return s }
             return String(bytes: bytes, encoding: .windowsCP1252) ?? latin1(bytes)
         }
+        #if canImport(Darwin)
         let cf = CFStringConvertIANACharSetNameToEncoding(name as CFString)
         if cf != kCFStringEncodingInvalidId {
             let encoding = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))
@@ -559,6 +560,12 @@ enum Charsets {
             let effective: String.Encoding = encoding == .isoLatin1 ? .windowsCP1252 : encoding
             if let s = String(bytes: bytes, encoding: effective) { return s }
         }
+        #else
+        // No CoreFoundation charset table off Apple platforms (ADR 0007): glibc's iconv knows
+        // the IANA names. Mislabelled ISO-8859-1 is usually Windows-1252 in practice.
+        let effective = (name == "iso-8859-1" || name == "latin1" || name == "iso_8859-1") ? "windows-1252" : name
+        if let s = Iconv.decode(bytes, from: effective) { return s }
+        #endif
         return String(bytes: bytes, encoding: .utf8) ?? latin1(bytes)
     }
 
@@ -584,7 +591,8 @@ public enum HTMLText {
         s = decodeEntities(s)
         // Normalise whitespace: trim lines, collapse runs of blank lines and spaces.
         let lines = s.components(separatedBy: .newlines).map {
-            $0.replacingOccurrences(of: "[ \\t\\u{00A0}]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+            // Literal tab and no-break space: Linux's regex engine misreads the `\u{…}` escape (ADR 0007).
+            $0.replacingOccurrences(of: "[ \t\u{00A0}]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
         }
         var out: [String] = []
         for line in lines {

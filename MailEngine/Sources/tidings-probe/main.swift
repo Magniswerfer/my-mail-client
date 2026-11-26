@@ -1,7 +1,9 @@
 import ArgumentParser
 import Foundation
 import MailEngine
+#if canImport(Darwin)
 import Security
+#endif
 
 @main
 struct TidingsProbe: AsyncParsableCommand {
@@ -70,6 +72,7 @@ struct ServerOptions: ParsableArguments {
 
     func password() throws -> String {
         if askPassword {
+            #if canImport(Darwin)
             var buffer = [CChar](repeating: 0, count: 1024)
             guard let read = readpassphrase("Password for \(login ?? address) (hidden): ", &buffer, buffer.count, 0) else {
                 throw ValidationError("No password entered.")
@@ -77,6 +80,12 @@ struct ServerOptions: ParsableArguments {
             let typed = String(cString: read)
             buffer.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
             return typed
+            #else
+            guard let typed = getpass("Password for \(login ?? address) (hidden): ").map({ String(cString: $0) }) else {
+                throw ValidationError("No password entered.")
+            }
+            return typed
+            #endif
         }
         if let testPassword {
             guard host == "127.0.0.1" || host == "localhost" else {
@@ -90,6 +99,13 @@ struct ServerOptions: ParsableArguments {
 
 enum Keychain {
     static func password(service: String, account: String) throws -> String {
+        #if !canImport(Darwin)
+        // No Keychain on Linux (ADR 0007): the password comes from the environment.
+        guard let password = ProcessInfo.processInfo.environment["TIDINGS_PASSWORD"], !password.isEmpty else {
+            throw ValidationError("No Keychain on this platform: set TIDINGS_PASSWORD.")
+        }
+        return password
+        #else
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -106,6 +122,7 @@ enum Keychain {
                 """)
         }
         return password
+        #endif
     }
 }
 

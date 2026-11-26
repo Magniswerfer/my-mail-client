@@ -26,7 +26,8 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
     EventExtractor.extract(EventExtractor.Input(subject: subject, text: text, html: html, sent: date, timeZone: zone))
 }
 
-@Suite struct EventTextTests {
+/// `NSDataDetector` is Apple-only: on Linux (ADR 0007) the text layer finds nothing.
+@Suite(.enabled(if: DataDetection.isAvailable)) struct EventTextTests {
     @Test func danishDinnerOnFriday() throws {
         let found = extract("Hej Magnus,\n\nVil I komme til middag hos os fredag kl. 19?\n\nKh Anna", subject: "Fredag")
         let s = try #require(found.first)
@@ -289,7 +290,7 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
         #expect(market.end == utcDay(2026, 12, 7), "schema.org end dates are inclusive")
     }
 
-    @Test func calendarInviteForTheBridge() throws {
+    @Test(.enabled(if: DataDetection.isAvailable)) func calendarInviteForTheBridge() throws {
         let s = try #require(extract("Middag hos os fredag kl. 19").first)
         let invite = s.calendarInvite(uid: "u1", notes: "n")
         #expect(invite.method == .publish)
@@ -323,7 +324,7 @@ private struct FakeJudge: EventJudge {
         return m
     }
 
-    @Test func scanStoreDismissAndMove() async throws {
+    @Test(.enabled(if: DataDetection.isAvailable)) func scanStoreDismissAndMove() async throws {
         let s = try store()
         var invite = message(3, "Meeting Friday at 10:00")
         invite.invite = CalendarInvite.parse("""
@@ -371,7 +372,7 @@ private struct FakeJudge: EventJudge {
         #expect(try s.messagesNeedingEventScan(since: .distantPast, limit: 10).allSatisfy { $0.uid != 99 })
     }
 
-    @Test func theModelConfirmsAndTitlesUncertainOnes() async throws {
+    @Test(.enabled(if: DataDetection.isAvailable)) func theModelConfirmsAndTitlesUncertainOnes() async throws {
         let s = try store()
         let messages = [
             message(1, "Kan du i morgen kl. 16?", category: .updates),
@@ -396,7 +397,7 @@ private struct FakeJudge: EventJudge {
         #expect(try s.eventSuggestions(for: messages[2])?.visible().first?.title == "Frokost", "kept as is")
     }
 
-    @Test func withoutAModelUncertainOnesNeedPersonalMail() async throws {
+    @Test(.enabled(if: DataDetection.isAvailable)) func withoutAModelUncertainOnesNeedPersonalMail() async throws {
         let s = try store()
         let messages = [
             message(1, "Kan du i morgen kl. 16?", category: .primary),

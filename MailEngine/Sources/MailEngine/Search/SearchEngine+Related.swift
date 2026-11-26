@@ -1,4 +1,3 @@
-import Accelerate
 import Foundation
 import GRDB
 
@@ -32,14 +31,11 @@ extension SearchEngine {
         for row in rows {
             let vector = MailStore.floats(row["vector"])
             guard vector.count == query.count else { continue }
-            var dot: Float = 0
-            vDSP_dotpr(query, 1, vector, 1, &dot, vDSP_Length(query.count))
             ids.append(row["messageID"])
-            scores.append(dot)
+            scores.append(VectorMath.dot(query, vector))
         }
         guard scores.count >= 20 else { return [] }
-        var mean: Float = 0, std: Float = 0
-        vDSP_normalize(scores, 1, nil, 1, &mean, &std, vDSP_Length(scores.count))
+        let (mean, std) = VectorMath.meanAndDeviation(scores)
         let cut = mean + 2 * std
         let best = scores.indices
             .filter { scores[$0] >= cut && !excluding.contains(ids[$0]) }
