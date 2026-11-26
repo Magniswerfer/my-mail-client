@@ -68,8 +68,6 @@ public enum EventExtractor {
 struct TextDates {
     let input: EventExtractor.Input
 
-    static let detector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue)
-    static let addressDetector = try! NSDataDetector(types: NSTextCheckingResult.CheckingType.address.rawValue)
     static let maxText = 8_000
 
     enum Day: Equatable {
@@ -106,7 +104,7 @@ struct TextDates {
 
     func hits(in text: String, isSubject: Bool) -> [Hit] {
         let ns = text as NSString
-        var hits: [Hit] = Self.detector.matches(in: text, range: NSRange(location: 0, length: ns.length)).compactMap { match in
+        var hits: [Hit] = DataDetection.dates(in: text).compactMap { match in
             guard let date = match.date else { return nil }
             let matched = ns.substring(with: match.range)
             var cal = Calendar(identifier: .gregorian)
@@ -435,7 +433,7 @@ struct TextDates {
            Keywords.firstEvent(in: cleaned.lowercased()) != nil {
             // The subject names it; drop a trailing date ("Middag fredag kl. 19" → "Middag").
             let ns = cleaned as NSString
-            if let first = detector.firstMatch(in: cleaned, range: NSRange(location: 0, length: ns.length)), first.range.location > 0 {
+            if let first = DataDetection.dates(in: cleaned).first, first.range.location > 0 {
                 var head = ns.substring(to: first.range.location)
                 head = trailingFiller.stringByReplacingMatches(in: head, range: NSRange(location: 0, length: (head as NSString).length), withTemplate: "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -484,9 +482,8 @@ struct TextDates {
                 if !value.isEmpty { return value }
             }
         }
-        let sns = sentence as NSString
-        if let m = addressDetector.firstMatch(in: sentence, range: NSRange(location: 0, length: sns.length)) {
-            return sns.substring(with: m.range)
+        if let range = DataDetection.firstAddress(in: sentence) {
+            return (sentence as NSString).substring(with: range)
         }
         return nil
     }

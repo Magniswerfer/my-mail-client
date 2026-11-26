@@ -194,8 +194,16 @@ final class AppModel {
 
     // Notifications (SPEC §10)
     var notificationPolicy: NotificationPolicy = NotificationPolicyStorage.load() {
-        didSet { NotificationPolicyStorage.save(notificationPolicy) }
+        didSet {
+            NotificationPolicyStorage.save(notificationPolicy)
+            schedulePushStateUpload()
+        }
     }
+
+    // The push server (ADR 0007)
+    var pushServerStatus: PushAPI.ServerStatus?
+    var pushServerError: String?
+    @ObservationIgnored var pushUploadTask: Task<Void, Never>?
     @ObservationIgnored lazy var notifier = MailNotifier(model: self)
 
     // Smart folders (SPEC §7): yours; the built-in ones live in `SmartFolder.builtIn`.
@@ -265,6 +273,8 @@ final class AppModel {
     var accountsAwaitingPassword: [AccountConfig] = []
     /// ⌘K "Sign In to …": the password sheet for one of them, over the main window.
     var accountToSignIn: AccountConfig?
+    /// ⌘K "Push Server…" (ADR 0007).
+    var isPushServerSheetShown = false
     /// Unread Primary conversations per account (the sidebar's per-account Inbox badges).
     private(set) var accountUnreadCounts: [String: Int] = [:]
     internal(set) var threads: [ThreadSummary] = []
@@ -391,6 +401,7 @@ final class AppModel {
     func start() {
         startCloudSync()
         _ = notifier   // become the notification delegate before any tap arrives
+        syncWithPushServer()
         if refinement == nil {
             // Loading the embedding model takes a moment: keep it off the main thread.
             let store = self.store
@@ -517,6 +528,8 @@ final class AppModel {
             reloadOutbox()
             lastError = message
             show(Toast(message: String(localized: "Couldn't send: \(message)"), symbol: "exclamationmark.triangle"))
+        case .snoozesWoke:
+            reload()
         }
     }
 
@@ -617,6 +630,7 @@ final class AppModel {
     func removeAccount(_ account: AccountConfig, everywhere: Bool = true) {
         accountToRemove = nil
         accountErrors[account.id] = nil
+        if everywhere { removeAccountFromPushServer(login: account.login) }
         let cloud = cloudAccounts
         stopSync(accountID: account.id)
         do {

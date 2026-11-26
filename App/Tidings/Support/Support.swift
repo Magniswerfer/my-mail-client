@@ -68,6 +68,24 @@ enum Keychain {
         }
     }
 
+    // MARK: Other secrets
+
+    /// A secret kept on this device only, never in iCloud Keychain (say the push server's token
+    /// for this device). nil removes it.
+    static func setDeviceSecret(_ value: String?, account: String) {
+        SecItemDelete(item(account, synchronizable: false) as CFDictionary)
+        if let value { _ = write(value, to: item(account, synchronizable: false)) }
+    }
+
+    /// A secret your devices share through iCloud Keychain when sync is on (say the push
+    /// server's address and pairing secret). nil removes it everywhere.
+    static func setSharedSecret(_ value: String?, account: String) {
+        delete(account: account, everywhere: true)
+        if let value { try? save(password: value, account: account) }
+    }
+
+    static func secret(account: String) -> String? { password(account: account) }
+
     // MARK: Items
 
     private static func item(_ account: String, synchronizable: Bool? = nil) -> [String: Any] {

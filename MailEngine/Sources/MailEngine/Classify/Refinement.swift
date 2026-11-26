@@ -1,7 +1,8 @@
-import Accelerate
 import Foundation
 import GRDB
+#if canImport(NaturalLanguage)
 import NaturalLanguage
+#endif
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -40,8 +41,7 @@ public struct SoftmaxClassifier: Sendable, Codable {
         var logits = [Float](repeating: 0, count: k)
         weights.withUnsafeBufferPointer { w in
             for c in 0..<k {
-                var dot: Float = 0
-                vDSP_dotpr(w.baseAddress! + c * (d + 1), 1, x, 1, &dot, vDSP_Length(d))
+                let dot = x.withUnsafeBufferPointer { VectorMath.dot(w.baseAddress! + c * (d + 1), $0.baseAddress!, count: d) }
                 logits[c] = dot + w[c * (d + 1) + d]
             }
         }
@@ -75,10 +75,8 @@ public struct SoftmaxClassifier: Sendable, Codable {
                     for c in 0..<k {
                         let gradient = (p[c] - (c == target ? 1 : 0)) * weight
                         let base = w.baseAddress! + c * (d + 1)
-                        var shrink = 1 - lr * l2
-                        vDSP_vsmul(base, 1, &shrink, base, 1, vDSP_Length(d))
-                        var step = -lr * gradient
-                        vDSP_vsma(x, 1, &step, base, 1, base, 1, vDSP_Length(d))
+                        VectorMath.scale(base, by: 1 - lr * l2, count: d)
+                        x.withUnsafeBufferPointer { VectorMath.addScaled($0.baseAddress!, times: -lr * gradient, to: base, count: d) }
                         base[d] -= lr * gradient
                     }
                 }
@@ -89,6 +87,8 @@ public struct SoftmaxClassifier: Sendable, Codable {
 }
 
 // MARK: - Real embedder: NLContextualEmbedding (one Latin-script model covers Danish + English)
+
+#if canImport(NaturalLanguage)
 
 public final class ContextualEmbedder: TextEmbedder, @unchecked Sendable {
     private let model: NLContextualEmbedding
@@ -123,17 +123,18 @@ public final class ContextualEmbedder: TextEmbedder, @unchecked Sendable {
         return Self.normalized(sum.map { Float($0 / Double(count)) })
     }
 
-    static func normalized(_ v: [Float]) -> [Float] {
-        var norm: Float = 0
-        vDSP_svesq(v, 1, &norm, vDSP_Length(v.count))
-        norm = sqrt(norm)
-        guard norm > 0 else { return v }
-        var out = v
-        var inv = 1 / norm
-        vDSP_vsmul(v, 1, &inv, &out, 1, vDSP_Length(v.count))
-        return out
-    }
+    static func normalized(_ v: [Float]) -> [Float] { VectorMath.normalized(v) }
 }
+#else
+/// No on-device embedding model off Apple platforms (Linux server, ADR 0007): layer 2 and
+/// semantic search are off there.
+public final class ContextualEmbedder: TextEmbedder, @unchecked Sendable {
+    public let dimension = 0
+    public init?() { return nil }
+    public func embed(_ text: String) -> [Float]? { nil }
+    static func normalized(_ v: [Float]) -> [Float] { VectorMath.normalized(v) }
+}
+#endif
 
 // MARK: - Real judge: Foundation Models
 

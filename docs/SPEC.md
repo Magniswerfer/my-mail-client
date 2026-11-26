@@ -62,8 +62,13 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 - Custom IMAP keywords (e.g. `$Pinned`) mirror simple state for other clients. **Verified usable on iCloud in M0.** CloudKit remains the source of truth.
 
 ### Always-on work — [ADR 0003](adr/0003-headless-engine.md)
-- Background (Mac): sync, rules, snooze wake-ups, send-later and classification run with the app, not its window, so closing the window keeps them going (the app itself is the helper; no second process sharing the store). Settings › General › In the Background: **Open at Login** (`SMAppService.mainApp`; a login launch stays windowless) and **Show in Menu Bar** (unread count, Open, Check for New Mail, New Message, Quit), both in ⌘K. Waking from sleep checks mail at once; an activity keeps App Nap from delaying timers; the Dock icon shows unread Primary mail. ⌘Q quits; the iPhone and 24/7 work wait for the server (iOS-3).
-- `MailEngine` is a headless Swift package (no AppKit/UIKit) so it can later run on a Linux server (e.g. Coolify) for 24/7 rules + iOS push.
+- Background (Mac): sync, rules, snooze wake-ups, send-later and classification run with the app, not its window, so closing the window keeps them going (the app itself is the helper; no second process sharing the store). Settings › General › In the Background: **Open at Login** (`SMAppService.mainApp`; a login launch stays windowless) and **Show in Menu Bar** (unread count, Open, Check for New Mail, New Message, Quit), both in ⌘K. Waking from sleep checks mail at once; an activity keeps App Nap from delaying timers; the Dock icon shows unread Primary mail. ⌘Q quits; the iPhone and 24/7 work belong to the push server below.
+- `MailEngine` is a headless Swift package (no AppKit/UIKit) that also builds and tests on Linux (CI job).
+- **Push server** ([ADR 0007](adr/0007-push-server.md), `PushServer/`, iOS-3). `tidings-server` is your own always-on server, deployed on Coolify:
+  - It holds one IDLE per account and notifies paired iPhones through APNs.
+  - It wakes snoozes and sends send-later mail with no device awake.
+  - It moves nothing else.
+  - On Linux there are no embeddings and no Foundation Models, so its "Primary" comes from header signals, your sender rules and corrections, and your structured rules.
 
 ## 5. On-device AI — [ADR 0004](adr/0004-three-layer-classification.md)
 
@@ -155,6 +160,16 @@ System Writing Tools in the composer, one-line thread summaries, "Summarize" for
 
 Primary-from-people, pinned threads, rules marked "notify", replies to waiting-for threads. Never per-bundle message; optional quiet bundle-delivery summary (off by default). Focus filters via App Intents. Editable VIP list seeded from correspondence frequency.
 
+**Push (iOS-3, [ADR 0007](adr/0007-push-server.md)).**
+- **Pairing.** Settings › Notifications › Push Server (also ⌘K "Push Server…"). You enter the server's address and pairing secret once. They travel through iCloud Keychain, so your other devices pair themselves. Each device gets its own token.
+- **What the server needs.** Each account needs a separate app-specific password ("Tidings Push"), sent to the server only. The server stores it AES-GCM-encrypted under a master key kept in Coolify.
+- **Your state.** The app uploads your notification policy, VIPs, mutes, rules, sender rules, corrections and snooze wake times whenever they change, because the server can't read CloudKit.
+- **Notifications.**
+  - The server decides with the same `NotificationPolicy`, without acting on anything.
+  - It pushes: sender as title, subject as body, grouped by conversation, with Done and Mark as Read.
+  - Once paired, the iPhone stops posting its own new-mail notifications and snooze reminders. The Mac keeps its own.
+- **Send later.** Mail scheduled more than 5 minutes ahead is handed to the server. It shows as scheduled (🕓✓) in the Outbox. To edit or delete it, the app takes it back from the server first.
+
 ## 11. Newsletters, extras
 
 - One-click unsubscribe (RFC 8058, mailto fallback; always confirmed), unsubscribe on bundle rows, **Senders** screen sorted by volume.
@@ -226,4 +241,4 @@ Developer ID + notarized + Sparkle now (sandbox on); Mac App Store later; iOS vi
 | **M7 · Sync & extend** | ~~CloudKit~~ (done as iOS-2), plugin hooks hardened, MCP server |
 | **iOS-1 · iPhone app** (CI-built; not yet run on a device) | Shared app code, collapsing split view, swipes (pin / Done / Snooze), pull to refresh, compose sheet with the same rich-text shortcuts, invites; connections close in the background after flushing undo-send and queued actions, BGAppRefresh catch-up |
 | **iOS-2 · Same state everywhere** ✅ (engine tested; verified live in the dev container, 2026-11-26) | CloudKit sync of app state ([ADR 0006](adr/0006-cloudkit-state-sync.md)): rules, smart folders, sender rules, corrections, AI categories, trust, unsubscribes, invite answers, mutes, Reply Later / Read Later / snooze wake times, bundle schedules, notification policy, snippets. The `State` schema is deployed to Production (2026-11-26), so release builds sync too, accounts included |
-| **iOS-3 · Push** | MailEngine on the server (Linux build: replace NaturalLanguage/FoundationModels/LZFSE/CF charsets behind protocols), IDLE per account, APNs for Primary/VIP/pinned, server-side send-later and snooze wake |
+| **iOS-3 · Push** ✅ (server tested end to end on Linux and macOS against the local Dovecot, Mailpit and a fake APNs; not yet deployed or run on a phone) | [ADR 0007](adr/0007-push-server.md). The engine builds and tests on Linux (CI job): Accelerate, NaturalLanguage, LZFSE, CoreFoundation charsets and `NSDataDetector` sit behind seams with Linux fallbacks. `tidings-server`: IDLE per account, APNs for Primary, VIP, pinned, replies and rules marked Notify, server-side snooze wake and send-later, pairing by secret, passwords sealed at rest. iPhone: pairing, push token, state and account upload, send-later hand-off. Dockerfile and Coolify notes in `PushServer/README.md` |

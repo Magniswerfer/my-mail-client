@@ -251,6 +251,8 @@ extension AppModel {
         guard let sync = syncs[accountID] else { throw MailSessionError.commandFailed(command: "send", detail: "account is offline") }
         let item = try await sync.queue(message, sendAt: sendAt, kind: kind, originalLocalID: originalLocalID, replacingDraft: draftID)
         reloadOutbox()
+        // Sending later: the push server sends it even with every device asleep (ADR 0007).
+        if sendAt != nil { handOffToPushServer(item) }
 
         // Answering takes the conversation off the Reply Later pile, and (Send and Done) out of the Inbox.
         var boxes: [ChangeBox] = []
@@ -293,6 +295,11 @@ extension AppModel {
     func undoSend(_ outboxID: Int64) {
         guard let item = try? store.outboxItem(id: outboxID), let sync = syncs[item.accountID] else { return }
         Task {
+            // Handed to the push server: it has to let go first.
+            if item.state == .remote, await !takeBackFromPushServer(outboxID) {
+                show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
+                return
+            }
             if let draft = try? await sync.cancelSend(id: outboxID), let id = draft.id {
                 toast = nil
                 reloadOutbox()
@@ -311,6 +318,17 @@ extension AppModel {
     func editQueued(_ outboxID: Int64) { undoSend(outboxID) }
 
     func deleteOutboxItem(_ outboxID: Int64) {
+        if let item = try? store.outboxItem(id: outboxID), item.state == .remote {
+            Task {
+                guard await takeBackFromPushServer(outboxID) else {
+                    show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
+                    return
+                }
+                try? store.deleteOutboxItem(id: outboxID)
+                reloadOutbox()
+            }
+            return
+        }
         try? store.deleteOutboxItem(id: outboxID)
         reloadOutbox()
     }

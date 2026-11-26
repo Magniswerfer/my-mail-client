@@ -261,14 +261,33 @@ public final class MailStore: Sendable {
     }
 }
 
+/// Tier-1 body text. LZFSE on Apple platforms (its streams start with "bvx"). Linux has no
+/// LZFSE (ADR 0007), so there the text is stored as is behind a 0x00 tag byte. A store never
+/// leaves its host, so the two forms only meet in tests.
 enum TextCompression {
+    static let plainTag: UInt8 = 0
+    #if canImport(Darwin)
+    static let compresses = true
+    #else
+    static let compresses = false
+    #endif
+
     static func compress(_ text: String) -> Data? {
-        try? (Data(text.utf8) as NSData).compressed(using: .lzfse) as Data
+        #if canImport(Darwin)
+        return try? (Data(text.utf8) as NSData).compressed(using: .lzfse) as Data
+        #else
+        return Data([plainTag]) + Data(text.utf8)
+        #endif
     }
 
     static func decompress(_ data: Data) -> String? {
+        if data.first == plainTag { return String(decoding: data.dropFirst(), as: UTF8.self) }
+        #if canImport(Darwin)
         guard let raw = try? (data as NSData).decompressed(using: .lzfse) as Data else { return nil }
         return String(data: raw, encoding: .utf8)
+        #else
+        return nil
+        #endif
     }
 }
 

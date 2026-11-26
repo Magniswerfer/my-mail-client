@@ -366,3 +366,58 @@ extension MailStore {
         }
     }
 }
+
+// MARK: - The push server's copy of your state (ADR 0007)
+
+extension MailStore {
+    /// What the push server needs to decide on notifications and wake snoozes: rules (for
+    /// "Notify me"), sender rules and corrections (categories), mutes, snooze wake times
+    /// (`messageState`), Use As folders and settings (the notification policy). Accounts go
+    /// up separately, with their password.
+    public static let pushStateTypes: Set<String> = Set([
+        StateRecordType.rule, .senderRule, .correction, .mute, .messageState, .folderRole, .trustedSender, .setting,
+    ].map(\.rawValue))
+
+    /// Everything of `types` as records, for a device to upload in one piece.
+    public func stateSnapshot(types: Set<String> = MailStore.pushStateTypes, accounts: CloudAccounts,
+                              settings: [String: Data] = [:], now: Date = Date()) throws -> [StateRecord] {
+        try cloudSnapshot(accounts: accounts, settings: settings)
+            .filter { types.contains($0.key) }
+            .flatMap { type, records in
+                records.map { StateRecord(type: type, key: $0.key, payload: $0.value, modifiedAt: now) }
+            }
+            .sorted { ($0.type, $0.key) < ($1.type, $1.key) }
+    }
+
+    /// Makes this store's state of `types` match `records` (a device's whole snapshot): applies
+    /// what changed and removes what's gone, through the same path as CloudKit changes, so
+    /// state for mail that isn't here yet waits and is applied after a sync.
+    @discardableResult
+    public func applyStateSnapshot(_ records: [StateRecord], types: Set<String> = MailStore.pushStateTypes,
+                                   accounts: CloudAccounts) throws -> CloudApplyReport {
+        let records = records.filter { types.contains($0.type) }
+        var known: [String: [String: Data]] = [:]
+        try db.read { db in
+            for table in ["cloudShadow", "cloudPending"] {
+                for row in try Row.fetchAll(db, sql: "SELECT type, key, payload FROM \(table)") {
+                    let type: String = row["type"]
+                    guard types.contains(type) else { continue }
+                    known[type, default: [:]][row["key"]] = row["payload"]
+                }
+            }
+        }
+        let saves = records.filter { known[$0.type]?[$0.key] != $0.payload }
+        let incoming = Set(records.map { "\($0.type)\u{1}\($0.key)" })
+        let deletions = known.flatMap { type, keys in
+            keys.keys.filter { !incoming.contains("\(type)\u{1}\($0)") }.map { (type: type, key: $0) }
+        }
+        return try applyCloudChanges(saves: saves, deletions: deletions, accounts: accounts)
+    }
+
+    /// The payload last applied for one record (say the synced notification policy).
+    public func appliedState(type: String, key: String) throws -> Data? {
+        try db.read {
+            try Data.fetchOne($0, sql: "SELECT payload FROM cloudShadow WHERE type = ? AND key = ?", arguments: [type, key])
+        }
+    }
+}

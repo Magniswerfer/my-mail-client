@@ -607,14 +607,14 @@ struct OutboxView: View {
                 }
             }
             Spacer()
-            if item.state == .queued, let sendAt = item.sendAt {
+            if item.state == .queued || item.state == .remote, let sendAt = item.sendAt {
                 Text(sendAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
             }
             if let id = item.id {
                 if item.state == .failed {
                     Button("Retry") { model.retrySend(id) }
                 }
-                if item.state == .queued || item.state == .failed {
+                if item.state == .queued || item.state == .failed || item.state == .remote {
                     Button("Edit") { model.editQueued(id) }
                 }
                 if item.state == .draft {
@@ -634,6 +634,7 @@ struct OutboxView: View {
         case .queued: "clock"
         case .sending: "paperplane"
         case .failed: "exclamationmark.triangle"
+        case .remote: "clock.badge.checkmark"
         }
     }
 }

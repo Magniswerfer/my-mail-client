@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(NaturalLanguage)
 import NaturalLanguage
+#endif
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -31,9 +33,9 @@ public enum OnDeviceAICheck {
         var report = Report(
             systemLanguages: Locale.preferredLanguages,
             foundationModelsAvailability: "FoundationModels not importable",
-            contextualEmbeddingDanish: embeddingStatus(.danish),
-            contextualEmbeddingEnglish: embeddingStatus(.english),
-            sentenceEmbeddingDanish: NLEmbedding.sentenceEmbedding(for: .danish) != nil
+            contextualEmbeddingDanish: embeddingStatus("da"),
+            contextualEmbeddingEnglish: embeddingStatus("en"),
+            sentenceEmbeddingDanish: sentenceEmbeddingDanish
         )
         #if canImport(FoundationModels)
         let model = SystemLanguageModel.default
@@ -52,9 +54,21 @@ public enum OnDeviceAICheck {
         return report
     }
 
-    static func embeddingStatus(_ language: NLLanguage) -> String {
-        guard let embedding = NLContextualEmbedding(language: language) else { return "no model for language" }
+    static func embeddingStatus(_ language: String) -> String {
+        #if canImport(NaturalLanguage)
+        guard let embedding = NLContextualEmbedding(language: NLLanguage(rawValue: language)) else { return "no model for language" }
         return embedding.hasAvailableAssets ? "assets installed (dim \(embedding.dimension))" : "model exists, assets not downloaded"
+        #else
+        return "NaturalLanguage not available on this platform"
+        #endif
+    }
+
+    static var sentenceEmbeddingDanish: Bool {
+        #if canImport(NaturalLanguage)
+        return NLEmbedding.sentenceEmbedding(for: .danish) != nil
+        #else
+        return false
+        #endif
     }
 
     static let samples: [Sample] = [

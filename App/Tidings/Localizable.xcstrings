@@ -1,6 +1,264 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Push Server" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-server"
+          }
+        }
+      }
+    },
+    "Push Server…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-server…"
+          }
+        }
+      }
+    },
+    "Update Push Server Now" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opdater push-serveren nu"
+          }
+        }
+      }
+    },
+    "The server has no Apple push key yet, so it can't notify." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveren har endnu ingen push-nøgle fra Apple, så den kan ikke give besked."
+          }
+        }
+      }
+    },
+    "Refresh" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opdater"
+          }
+        }
+      }
+    },
+    "Unpair…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern parring…"
+          }
+        }
+      }
+    },
+    "Server address" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveradresse"
+          }
+        }
+      }
+    },
+    "Pairing secret" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parringskode"
+          }
+        }
+      }
+    },
+    "Pairing…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parrer…"
+          }
+        }
+      }
+    },
+    "Pair This Device" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Par denne enhed"
+          }
+        }
+      }
+    },
+    "Your own always-on server notifies this iPhone about new mail, wakes snoozes and sends mail you scheduled, even when no device is awake. Each account needs a separate app-specific password for the server, so you can revoke it without touching your devices." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Din egen server, der altid kører, giver denne iPhone besked om ny post, vækker udsatte beskeder og sender post, du har planlagt, også når ingen enhed er vågen. Hver konto skal have sin egen app-specifikke adgangskode til serveren, så du kan tilbagekalde den uden at røre dine enheder."
+          }
+        }
+      }
+    },
+    "Unpair from the push server?" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern parringen med push-serveren?"
+          }
+        }
+      }
+    },
+    "Unpair This Device" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern parring for denne enhed"
+          }
+        }
+      }
+    },
+    "Unpair All Devices" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern parring for alle enheder"
+          }
+        }
+      }
+    },
+    "Mail you scheduled goes back to this device. The server keeps your accounts until you remove them there." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post, du har planlagt, bliver sendt fra denne enhed igen. Serveren beholder dine konti, til du fjerner dem dér."
+          }
+        }
+      }
+    },
+    "Change Password…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skift adgangskode…"
+          }
+        }
+      }
+    },
+    "Add Password…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj adgangskode…"
+          }
+        }
+      }
+    },
+    "Not on the server yet" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke på serveren endnu"
+          }
+        }
+      }
+    },
+    "Watching for new mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder øje med ny post"
+          }
+        }
+      }
+    },
+    "Can't connect: %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke forbinde: %@"
+          }
+        }
+      }
+    },
+    "Connecting…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forbinder…"
+          }
+        }
+      }
+    },
+    "Make a new one named “Tidings Push” at account.apple.com › Sign-In and Security › App-Specific Passwords. It's encrypted on the server and never sent back." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lav en ny med navnet “Tidings Push” på account.apple.com › Log ind og sikkerhed › App-specifikke adgangskoder. Den krypteres på serveren og sendes aldrig tilbage."
+          }
+        }
+      }
+    },
+    "Push Server Password for %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-serverens adgangskode til %@"
+          }
+        }
+      }
+    },
+    "The push server doesn't know this device. Pair again." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push-serveren kender ikke denne enhed. Par den igen."
+          }
+        }
+      }
+    },
+    "push.burst" : {
+      "comment" : "Title of the push server's summary alert when several messages arrive at once (ADR 0007). The argument is the count.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ new messages"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ nye beskeder"
+          }
+        }
+      }
+    },
     "Sign in to iCloud to sync": {
       "localizations": {
         "da": {

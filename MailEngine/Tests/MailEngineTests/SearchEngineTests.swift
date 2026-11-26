@@ -87,7 +87,8 @@ import Testing
         #expect(try engine.hits(SearchQuery(parsing: "kvittering before:\(cutoff)")).hits.map(\.id) == [1])
     }
 
-    @Test func plainTextIsStoredCompressed() throws {
+    /// LZFSE is Apple-only; Linux stores the text as is (ADR 0007).
+    @Test(.enabled(if: TextCompression.compresses)) func plainTextIsStoredCompressed() throws {
         let store = try makeStore()
         let text = String(repeating: "Dette er en lang mail med gentagelser. ", count: 200)
         try store.upsert([(message(1, "Lang", from: "a"), text)])
