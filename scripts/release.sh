@@ -49,9 +49,10 @@ mkdir -p "$OUT"
 (cd App && xcodegen generate >/dev/null)
 
 step "Archive"
+# arm64 for every target, packages too: MailEngine's Float16 embeddings don't exist on Intel.
 xcodebuild archive -project App/Tidings.xcodeproj -scheme Tidings -configuration Release \
     -derivedDataPath "$DERIVED" -archivePath "$OUT/Tidings.xcarchive" \
-    -allowProvisioningUpdates -quiet
+    -allowProvisioningUpdates -quiet ARCHS=arm64
 
 step "Export with Developer ID"
 xcodebuild -exportArchive -archivePath "$OUT/Tidings.xcarchive" \
