@@ -14,3 +14,4 @@ App/build-dev-ios/
 App/build-ios-device/
 App/build-release/
 App/build-ci/
+App/build-sim/
