@@ -8090,6 +8090,376 @@
           }
         }
       }
+    },
+    "Removed %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjernede %@"
+          }
+        }
+      }
+    },
+    "That account is already in Tidings.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den konto er allerede i Tidings."
+          }
+        }
+      }
+    },
+    "Couldn't sign in to the incoming (IMAP) server: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke logge ind på serveren til indgående post (IMAP): %@"
+          }
+        }
+      }
+    },
+    "Signed in to IMAP, but the outgoing (SMTP) server said no: %@": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logget ind på IMAP, men serveren til udgående post (SMTP) sagde nej: %@"
+          }
+        }
+      }
+    },
+    "All Inboxes": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle indbakker"
+          }
+        }
+      }
+    },
+    "Account type": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontotype"
+          }
+        }
+      }
+    },
+    "Other Mail Account": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anden mailkonto"
+          }
+        }
+      }
+    },
+    "Add Account": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj konto"
+          }
+        }
+      }
+    },
+    "Add Account…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilføj konto…"
+          }
+        }
+      }
+    },
+    "Work": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbejde"
+          }
+        }
+      }
+    },
+    "Email address": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E-mailadresse"
+          }
+        }
+      }
+    },
+    "Password": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adgangskode"
+          }
+        }
+      }
+    },
+    "Server": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "Port": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port"
+          }
+        }
+      }
+    },
+    "Username": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brugernavn"
+          }
+        }
+      }
+    },
+    "Security": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sikkerhed"
+          }
+        }
+      }
+    },
+    "SSL/TLS": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSL/TLS"
+          }
+        }
+      }
+    },
+    "STARTTLS": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STARTTLS"
+          }
+        }
+      }
+    },
+    "None": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen"
+          }
+        }
+      }
+    },
+    "Incoming Mail (IMAP)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indgående post (IMAP)"
+          }
+        }
+      }
+    },
+    "Outgoing Mail (SMTP)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udgående post (SMTP)"
+          }
+        }
+      }
+    },
+    "Tidings connects to IMAP with SSL/TLS (usually port 993). STARTTLS for incoming mail isn't supported yet. No encryption only works for a server on this device.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidings forbinder til IMAP med SSL/TLS (som regel port 993). STARTTLS til indgående post understøttes ikke endnu. Uden kryptering virker kun med en server på denne enhed."
+          }
+        }
+      }
+    },
+    "The same password is used for both servers. It's kept in your Keychain.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den samme adgangskode bruges til begge servere. Den gemmes i din nøglering."
+          }
+        }
+      }
+    },
+    "Fill In Local Test Server": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udfyld lokal testserver"
+          }
+        }
+      }
+    },
+    "Server settings from %@.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serverindstillinger fra %@."
+          }
+        }
+      }
+    },
+    "This provider wants an app password: make one in its security settings and use it here.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne udbyder kræver en app-adgangskode: opret en i dens sikkerhedsindstillinger, og brug den her."
+          }
+        }
+      }
+    },
+    "This provider may only let other mail apps in with its own sign-in, which Tidings doesn't support yet. An app password may still work.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne udbyder lukker måske kun andre mailapps ind med sit eget login, som Tidings ikke understøtter endnu. En app-adgangskode kan stadig virke."
+          }
+        }
+      }
+    },
+    "This is an iCloud address.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Det er en iCloud-adresse."
+          }
+        }
+      }
+    },
+    "Use iCloud Setup": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brug iCloud-opsætning"
+          }
+        }
+      }
+    },
+    "Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når du fjerner en konto, slettes dens post, indstillinger og adgangskode fra denne enhed. Intet ændres på mailserveren eller på dine andre enheder."
+          }
+        }
+      }
+    },
+    "Remove…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern…"
+          }
+        }
+      }
+    },
+    "Remove Account…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern konto…"
+          }
+        }
+      }
+    },
+    "Remove %@?": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern %@?"
+          }
+        }
+      }
+    },
+    "Remove Account": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern konto"
+          }
+        }
+      }
+    },
+    "Its mail, drafts, outbox and password are deleted from this device. The mail stays on the server, and your other devices keep the account.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dens post, kladder, udbakke og adgangskode slettes fra denne enhed. Posten bliver på serveren, og dine andre enheder beholder kontoen."
+          }
+        }
+      }
+    },
+    "Go to %@ Inbox": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til indbakken for %@"
+          }
+        }
+      }
+    },
+    "Remove Account %@…": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern kontoen %@…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

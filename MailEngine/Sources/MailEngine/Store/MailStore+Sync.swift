@@ -193,7 +193,7 @@ extension MailStore {
             // An empty IN () is invalid SQL; a never-matching placeholder keeps the query uniform.
             let own = ownAddresses.isEmpty ? [""] : ownAddresses.map { $0.lowercased() }
             let rows = try Row.fetchAll(db, sql: """
-                SELECT threadID, count(*) AS n, sum(instr(flags, '\\Seen') = 0) AS unread,
+                SELECT threadID, count(DISTINCT coalesce(messageID, id)) AS n, sum(instr(flags, '\\Seen') = 0) AS unread,
                        max(instr(flags, '\\Flagged') > 0) AS pinned, max(snoozedUntil) AS snoozed,
                        max(instr(flags, '\(replyLaterKeyword)') > 0) AS replyLater,
                        group_concat(DISTINCT CASE WHEN lower(fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))

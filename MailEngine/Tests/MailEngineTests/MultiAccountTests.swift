@@ -186,6 +186,7 @@ import Testing
         let owners = try store.accountIDs(threadIDs: ["both", "only-w", "missing"], mailbox: "INBOX")
         #expect(owners == ["both": ["p", "w"], "only-w": ["w"]])
         #expect(try store.threads(mailbox: "INBOX").count == 2, "one row in the unified Inbox")
+        #expect(try store.threads(mailbox: "INBOX").first { $0.threadID == "both" }?.messageCount == 1, "one message, two copies")
         #expect(try store.threads(mailbox: "INBOX", accountID: "p").map(\.threadID) == ["both"])
         #expect(try store.threads(mailbox: "INBOX", accountID: "w").count == 2)
     }

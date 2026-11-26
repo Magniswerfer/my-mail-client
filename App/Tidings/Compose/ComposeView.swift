@@ -181,8 +181,18 @@ struct ComposeView: View {
             if model.availableIdentities.count > 1 {
                 row(String(localized: "From")) {
                     Picker("", selection: $model.identity) {
-                        ForEach(model.availableIdentities) { identity in
-                            Text(identity.mailAddress.description).tag(identity)
+                        ForEach(model.identitySections, id: \.account) { section in
+                            if section.account.isEmpty {
+                                ForEach(section.identities) { identity in
+                                    Text(identity.mailAddress.description).tag(identity)
+                                }
+                            } else {
+                                Section(section.account) {
+                                    ForEach(section.identities) { identity in
+                                        Text(identity.mailAddress.description).tag(identity)
+                                    }
+                                }
+                            }
                         }
                     }
                     .labelsHidden()

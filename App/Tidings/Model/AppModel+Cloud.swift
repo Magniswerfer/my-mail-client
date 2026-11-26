@@ -15,7 +15,8 @@ extension AppModel {
         }
     }
 
-    var cloudAccounts: CloudAccounts { CloudAccounts(accounts.map { ($0.id, $0.endpoint.username) }) }
+    /// Accounts are known across devices by their login (an iCloud address stays what it was).
+    var cloudAccounts: CloudAccounts { CloudAccounts(accounts.map { ($0.id, $0.login) }) }
 
     /// Preferences that sync (not per-device ones like the Focus filter or window state).
     static let syncedSettingKeys = [BundleScheduleStorage.key, NotificationPolicyStorage.key, SnippetStore.key]

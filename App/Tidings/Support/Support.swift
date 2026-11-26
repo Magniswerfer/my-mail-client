@@ -6,7 +6,24 @@ import SwiftUI
 // MARK: - Keychain
 
 enum Keychain {
-    static let service = "Tidings"
+    /// "Tidings", or "Tidings-Dev" for the dev copy (set at launch) so it never reads or
+    /// removes the real app's passwords.
+    nonisolated(unsafe) static var service = "Tidings"
+
+    /// An account's password: saved under its login; older iCloud accounts under the username
+    /// (the same thing for them).
+    static func password(for account: AccountConfig) -> String? {
+        password(account: account.login) ?? password(account: account.endpoint.username)
+    }
+
+    static func delete(account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 
     static func password(account: String) -> String? {
         let query: [String: Any] = [

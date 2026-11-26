@@ -10,19 +10,39 @@ struct SidebarView: View {
         @Bindable var model = model
         // One Inbox row stands for All and every category tab: it stays selected while any of
         // them shows, and picking it opens Primary.
+        // With more than one account, each has its own Inbox row under it (a filter on the same
+        // Inbox, tabs and all); the unified Inbox stays the default.
         let selection = Binding<SidebarItem?>(
-            get: { model.isInInbox ? .inbox : model.selection },
+            get: {
+                guard model.isInInbox else { return model.selection }
+                return model.inboxAccountID.map(SidebarItem.accountInbox) ?? .inbox
+            },
             set: { picked in
                 guard let picked else { return }
-                if picked == .inbox { if !model.isInInbox { model.goToInbox() } } else { model.selection = picked }
+                switch picked {
+                case .inbox: if !model.isInInbox || model.inboxAccountID != nil { model.goToInbox() }
+                case .accountInbox(let id): model.goToInbox(account: id)
+                default: model.selection = picked
+                }
                 didPick?()
             })
         List(selection: selection) {
             Section {
                 // `.tag` must be the outermost modifier, or the row can't be selected.
-                Label("Inbox", systemImage: "tray")
+                Label(model.accounts.count > 1 ? "All Inboxes" : "Inbox", systemImage: "tray")
                     .badge(model.inboxUnreadCount)
                     .tag(SidebarItem.inbox)
+                if model.accounts.count > 1 {
+                    // Ids of their own: the folder sections below also go by account, and rows
+                    // sharing an id in one List make SwiftUI drop one of them.
+                    ForEach(model.accounts, id: \.inboxRowID) { account in
+                        Label(account.displayName, systemImage: account.isICloud ? "icloud" : "tray")
+                            .padding(.leading, Platform.isMac ? 14 : 0)
+                            .badge(model.accountUnreadCounts[account.id] ?? 0)
+                            .help(account.endpoint.username)
+                            .tag(SidebarItem.accountInbox(account.id))
+                    }
+                }
                 Label("Snoozed", systemImage: "clock")
                     .dropDestination(for: ThreadDrag.self) { items, _ in
                         guard !items.isEmpty else { return false }
@@ -51,7 +71,7 @@ struct SidebarView: View {
             // Categories (built-in and yours) are the tabs above the Inbox list, not sidebar rows.
             SmartFolderSection()
 
-            ForEach(model.accounts) { account in
+            ForEach(model.accounts, id: \.foldersSectionID) { account in
                 Section(model.accounts.count > 1 ? account.displayName : String(localized: "Folders")) {
                     ForEach(folders(for: account.id), id: \.path) { box in
                         folderRow(box, accountID: account.id)
@@ -143,4 +163,9 @@ extension AppModel {
         let ids = Set(drags.map(\.threadID))
         return threads.filter { ids.contains($0.threadID) }
     }
+}
+
+private extension AccountConfig {
+    var inboxRowID: String { "inbox:\(id)" }
+    var foldersSectionID: String { "folders:\(id)" }
 }

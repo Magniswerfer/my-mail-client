@@ -15,6 +15,7 @@ A native, keyboard-first, local-first mail client for macOS (iOS later) with Goo
 
 - Multi-account architecture from day one, unified inbox. v1 is tested against **iCloud + generic IMAP/SMTP**. Gmail/M365 (OAuth, labels) later.
 - iCloud auth = **app-specific password** (no third-party OAuth). Stored in Keychain only.
+- **More than one account:** add (Settings › General, ⌘K, Mailbox menu) iCloud or any IMAP/SMTP server; the form fills in servers from a built-in table (Gmail, Outlook.com, Yahoo, Fastmail, GMX, …), else the domain's autoconfig or Thunderbird's ISPDB (only the domain is sent), else imap./smtp.<domain>. IMAP needs implicit TLS (no IMAP STARTTLS yet); SMTP TLS or STARTTLS. Both servers are tried before anything is saved; one password, in the Keychain under the account's login. The unified Inbox is the default; each account has its own Inbox row (⌥⌘1…, a filter on the same Inbox and tabs) and `account:` in search. A message that reached two of your accounts is one conversation, acted on in each. New mail comes from the account whose Inbox you're in; the From menu lists every account's addresses and sends through the one it belongs to. Removing an account deletes its local mail, state, cache and Keychain password; nothing changes on the server or in iCloud (other devices keep it).
 - iCloud facts the engine must respect (see [research notes](research/icloud-imap.md)):
   - Re-issue `CAPABILITY` after login (pre-auth list is minimal; proxy quirk).
   - `ENABLE CONDSTORE QRESYNC` returns bare `OK` without `* ENABLED` — treat OK as enabled.

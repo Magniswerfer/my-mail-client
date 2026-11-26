@@ -10,7 +10,7 @@ struct ReaderView: View {
     var body: some View {
         if let threadID {
             let _ = model.revision   // redraw after moves, flag changes and syncs
-            let messages = model.messages(inThread: threadID)
+            let messages = model.readerMessages(inThread: threadID)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if let first = messages.last {

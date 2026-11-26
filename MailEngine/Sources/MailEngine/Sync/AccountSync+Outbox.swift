@@ -119,6 +119,9 @@ extension AccountSync {
     /// Replied → \Answered, forwarded → $Forwarded, through the normal triage queue.
     func markOriginal(_ item: OutboxItem) throws {
         guard let original = item.originalLocalID, item.kind != .new else { return }
+        // A reply sent from another account's address: the original isn't ours to flag (its
+        // local id means nothing on this account's server).
+        guard (try? store.message(id: original))?.accountID == account.id else { return }
         let flag = item.kind == .forward ? "$Forwarded" : "\\Answered"
         try store.db.write { db in
             try store.applyLocalFlags(localIDs: [original], add: [flag], remove: [], in: db)

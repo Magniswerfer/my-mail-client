@@ -38,6 +38,13 @@ struct TidingsApp: App {
                     .keyboardShortcut("2", modifiers: .command)
                 Button("Go to Set Aside") { model.selection = .replyLater }
                     .keyboardShortcut("3", modifiers: .command)
+                // One account's Inbox: ⌥⌘1 … ⌥⌘9, in the sidebar's order.
+                if model.accounts.count > 1 {
+                    ForEach(Array(model.accounts.prefix(9).enumerated()), id: \.element.id) { index, account in
+                        Button("Go to \(account.displayName) Inbox") { model.goToInbox(account: account.id) }
+                            .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                    }
+                }
                 Button("Next Conversation") { model.moveSelection(1) }
                     .keyboardShortcut(.downArrow, modifiers: .command)
                 Button("Previous Conversation") { model.moveSelection(-1) }
@@ -123,6 +130,7 @@ struct TidingsApp: App {
             CommandMenu("Mailbox") {
                 Button("Check for New Mail") { model.checkForNewMail() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Add Account…") { model.isAddingAccount = true }
                 Divider()
                 Button("Sweep Inbox") { model.requestSweep() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -296,10 +304,11 @@ struct RootView: View {
         } message: { _ in
             Text("Pinned conversations stay. You can undo this.")
         }
-        .sheet(isPresented: .constant(model.needsAccountSetup)) {
+        .sheet(isPresented: $model.isAccountSetupShown) {
             AccountSetupView()
-                .interactiveDismissDisabled()
+                .interactiveDismissDisabled(model.needsAccountSetup)
         }
+        .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
         .onChange(of: model.searchEndedCount) {
             searchFocused = false
             streamFocused = true
@@ -401,7 +410,7 @@ struct RootView: View {
         model.isPaletteShown || model.isFolderPickerShown || model.isSnoozePickerShown || model.isCategoryPickerShown
             || model.isShortcutsShown || model.replySession != nil || model.sweepCandidate != nil || model.isRulesShown
             || model.editingSmartFolder != nil || model.isSendersShown || model.unsubscribeCandidate != nil
-            || model.isAttachmentsShown
+            || model.isAttachmentsShown || model.isAccountSetupShown || model.accountToRemove != nil
     }
 
     /// Keys go back to the list (and the conversation the action moved on to), unless the

@@ -8,7 +8,15 @@ import Observation
 final class ComposeModel {
     let draftID: Int64
     var accountID: String
-    var identity: Identity { didSet { if identity != oldValue { swapSignature(from: oldValue) } } }
+    /// Picking an address of another account sends through that account (its SMTP server,
+    /// its Sent folder).
+    var identity: Identity {
+        didSet {
+            guard identity != oldValue else { return }
+            swapSignature(from: oldValue)
+            if let owner = app?.accountID(sending: identity, preferring: accountID) { accountID = owner }
+        }
+    }
     var to = ""
     var cc = ""
     var bcc = ""
@@ -57,7 +65,25 @@ final class ComposeModel {
         }
     }
 
-    var availableIdentities: [Identity] { app?.identities(for: accountID) ?? [identity] }
+    /// Every address of every account (this draft's account first).
+    var availableIdentities: [Identity] {
+        guard let app else { return [identity] }
+        let own = app.identities(for: accountID)
+        let others = app.accounts.filter { $0.id != accountID }.flatMap(\.sendingIdentities)
+            .filter { other in !own.contains { $0.id == other.id } }
+        let all = own + others
+        return all.contains(identity) ? all : [identity] + all
+    }
+
+    /// The From menu in sections per account, when there's more than one.
+    var identitySections: [(account: String, identities: [Identity])] {
+        guard let app, app.accounts.count > 1 else { return [("", availableIdentities)] }
+        let available = availableIdentities
+        return app.accounts.compactMap { account in
+            let mine = available.filter { identity in account.sendingIdentities.contains { $0.id == identity.id } }
+            return mine.isEmpty ? nil : (account.displayName, mine)
+        }
+    }
 
     var attachmentBytes: Int { attachments.reduce(0) { $0 + $1.data.count } }
 

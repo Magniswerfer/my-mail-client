@@ -44,7 +44,7 @@ struct MobileRootView: View {
             .navigationSubtitle(model.isSelecting
                 ? (model.multiSelection.isEmpty ? String(localized: "Select conversations")
                                                 : String(localized: "\(model.multiSelection.count) selected"))
-                : "")
+                : (model.isInInbox ? model.inboxAccountID.flatMap(model.account(id:))?.displayName ?? "" : ""))
             .searchable(text: $model.searchText, placement: .navigationBarDrawer(displayMode: .automatic),
                         prompt: Text("Search mail"))
             .refreshable { await model.refresh() }
@@ -126,10 +126,12 @@ struct MobileRootView: View {
             }
             .environment(model)
         }
-        .sheet(isPresented: .constant(model.needsAccountSetup)) {
-            ScrollView { AccountSetupView() }
-                .interactiveDismissDisabled()
+        .sheet(isPresented: $model.isAccountSetupShown) {
+            NavigationStack { AccountSetupView() }
+                .environment(model)
+                .interactiveDismissDisabled(model.needsAccountSetup)
         }
+        .modifier(AccountRemovalConfirmation(account: $model.accountToRemove))
         .onAppear {
             model.undoManager = undoManager
             model.openComposeWindow = { id in composeDraft = ComposeDraft(id: id) }

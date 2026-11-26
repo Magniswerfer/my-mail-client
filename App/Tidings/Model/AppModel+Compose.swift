@@ -9,7 +9,14 @@ extension AppModel {
         accounts.first { $0.id == accountID }?.sendingIdentities ?? []
     }
 
-    var defaultAccount: AccountConfig? { accounts.first }
+    /// New mail comes from the account whose Inbox you're looking at, else the first one.
+    var defaultAccount: AccountConfig? { inboxAccountID.flatMap(account(id:)) ?? accounts.first }
+
+    /// The account that sends as this identity: `preferring` if it has it, else the first that does.
+    func accountID(sending identity: Identity, preferring: String? = nil) -> String? {
+        let owners = accounts.filter { $0.sendingIdentities.contains { $0.id == identity.id } }
+        return owners.first { $0.id == preferring }?.id ?? owners.first?.id
+    }
 
     func addIdentity(address: String, accountID: String) {
         let trimmed = address.trimmingCharacters(in: .whitespaces).lowercased()
@@ -38,8 +45,9 @@ extension AppModel {
     }
 
     /// Identities and addresses live in the account list (UserDefaults), never in the Keychain.
+    /// The dev copy keeps its own list (its local Dovecot account included, for its identities).
     func persistAccounts() {
-        if !isDevServer { AccountStorage.save(accounts) }
+        AccountStorage.save(accounts, dev: isDevServer)
     }
 
     // MARK: Opening the composer

@@ -45,7 +45,11 @@ extension AppModel {
     var isInInbox: Bool { currentCategoryTab != nil }
 
     /// The sidebar's Inbox, ⌘1 and G I open on Primary; All is one of the tabs.
-    func goToInbox() { selection = .category(.primary) }
+    /// Every account's Inbox together (the unified one), even when one account's was showing.
+    func goToInbox() {
+        inboxAccountID = nil
+        selection = .category(.primary)
+    }
 
     /// The tab for what's on screen, if it's one of them.
     var currentCategoryTab: CategoryTab? {

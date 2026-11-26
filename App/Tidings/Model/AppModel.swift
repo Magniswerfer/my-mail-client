@@ -4,6 +4,9 @@ import Observation
 
 enum SidebarItem: Hashable {
     case inbox
+    /// One account's Inbox (sidebar row under the unified Inbox). The model shows it as the
+    /// Inbox with `inboxAccountID` set; `selection` itself never holds this.
+    case accountInbox(String)
     case snoozed
     /// Conversations set aside with Reply Later (L).
     case replyLater
@@ -46,6 +49,8 @@ final class AppModel {
     // Navigation
     var selection: SidebarItem = .category(.primary) {
         didSet {
+            // One account's Inbox is a filter on the Inbox: leaving the Inbox ends it.
+            if !isInInbox { inboxAccountID = nil }
             if selection != oldValue {
                 selectedThreadID = nil
                 selectionIndexHint = nil
@@ -244,6 +249,15 @@ final class AppModel {
 
     // Data
     var accounts: [AccountConfig] = []
+    /// Showing one account's Inbox (and its category tabs) instead of the unified one. Nil, the
+    /// default, is every account together. Set with `goToInbox(account:)`.
+    var inboxAccountID: String?
+    /// The add-account sheet (Settings, ⌘K); it also shows by itself while there are no accounts.
+    var isAddingAccount = false
+    /// The account Settings or ⌘K asked to remove, waiting for confirmation.
+    var accountToRemove: AccountConfig?
+    /// Unread Primary conversations per account (the sidebar's per-account Inbox badges).
+    private(set) var accountUnreadCounts: [String: Int] = [:]
     internal(set) var threads: [ThreadSummary] = []
     private(set) var mailboxes: [MailboxState] = []
     private(set) var inboxUnreadCount = 0
@@ -288,12 +302,19 @@ final class AppModel {
 
     var needsAccountSetup: Bool { accounts.isEmpty }
 
+    /// The account setup sheet: when there are none yet, or when adding another.
+    var isAccountSetupShown: Bool {
+        get { needsAccountSetup || isAddingAccount }
+        set { if !newValue { isAddingAccount = false } }
+    }
+
     let store: MailStore
     let cache: MessageCache
     let dataDirectory: URL
     let isDevServer: Bool
     var syncs: [String: AccountSync] = [:]
-    private var tasks: [Task<Void, Never>] = []
+    /// Each account's event listener and sync loop, so one account can be stopped on its own.
+    private var tasks: [String: [Task<Void, Never>]] = [:]
 
     init() {
         isDevServer = ProcessInfo.processInfo.arguments.contains("-TidingsDevServer")
@@ -310,9 +331,19 @@ final class AppModel {
             fatalError("Could not open the mail store at \(base.path): \(error)")
         }
         cache = MessageCache(directory: base.appendingPathComponent("Cache", isDirectory: true))
+        // The dev copy keeps its own account list and Keychain items, apart from the real app's.
+        Keychain.service = isDevServer ? "Tidings-Dev" : "Tidings"
         var dev = Self.devAccount
         dev.endpoint.username = devUser
-        accounts = isDevServer ? [dev] : AccountStorage.load()
+        if isDevServer {
+            if devUser != "magnus" { AccountStorage.devKey = "accounts.dev.v1.\(devUser)" }
+            // The local Dovecot account is always there; accounts added in the dev copy follow it.
+            var saved = AccountStorage.load(dev: true)
+            if let i = saved.firstIndex(where: { $0.id == "dev" }) { dev.identities = saved.remove(at: i).identities ?? dev.identities }
+            accounts = [dev] + saved
+        } else {
+            accounts = AccountStorage.load()
+        }
         if !isDevServer {
             var changed = false
             for index in accounts.indices where accounts[index].identities == nil {
@@ -360,11 +391,12 @@ final class AppModel {
         for account in accounts where syncs[account.id] == nil {
             guard let sync = makeSync(for: account) else { continue }
             syncs[account.id] = sync
+            let id = account.id
             // Subscribe before starting the loop, or a fast first sync can finish (and emit
             // everything, including "idle") before anyone is listening.
-            tasks.append(Task { [weak self] in
+            tasks[id, default: []].append(Task { [weak self] in
                 let events = await sync.events()
-                self?.tasks.append(Task.detached { await sync.run() })
+                self?.tasks[id, default: []].append(Task.detached { await sync.run() })
                 for await event in events { self?.handle(event, account: account) }
             })
         }
@@ -374,7 +406,7 @@ final class AppModel {
         let password: String
         if account.id == "dev" {
             password = "tidings-test"
-        } else if let stored = Keychain.password(account: account.endpoint.username) {
+        } else if let stored = Keychain.password(for: account) {
             password = stored
         } else {
             lastError = String(localized: "No password in the Keychain for \(account.endpoint.username).")
@@ -384,12 +416,20 @@ final class AppModel {
                            profile: account.id == "dev" ? .iCloudSimulation : nil)
     }
 
+    /// Closes one account's connections (it's being removed).
+    private func stopSync(accountID: String) {
+        for task in tasks[accountID] ?? [] { task.cancel() }
+        tasks[accountID] = nil
+        syncs[accountID] = nil
+        syncStatus[accountID] = nil
+    }
+
     // MARK: Foreground and background (iPhone)
 
     /// Closes every connection. `start()` opens them again.
     func stopSync() {
-        for task in tasks { task.cancel() }
-        tasks = []
+        for task in tasks.values.joined() { task.cancel() }
+        tasks = [:]
         syncs = [:]
     }
 
@@ -477,18 +517,102 @@ final class AppModel {
 
     // MARK: Accounts
 
+    /// iCloud: an app-specific password for the address (SPEC §16).
     func addAccount(address: String, password: String) async throws {
         let trimmed = address.trimmingCharacters(in: .whitespaces).lowercased()
         let endpoint = IMAPEndpoint.iCloud(address: trimmed)
-        // Validate before saving anything: read-only login + capability check.
-        _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
-        try Keychain.save(password: password, account: trimmed)
         let account = AccountConfig(displayName: trimmed, endpoint: endpoint, addresses: [trimmed],
                                     identities: [Identity(address: trimmed, name: Platform.fullUserName)])
-        accounts.append(account)
-        AccountStorage.save(accounts)
-        start()
+        try checkNotAdded(account)
+        // Validate before saving anything: read-only login + capability check.
+        _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
+        try save(account, password: password)
     }
+
+    /// Any IMAP/SMTP account. Both servers are tried with the password before anything is saved.
+    func addAccount(name: String, address: String, settings: MailServerSettings, password: String) async throws {
+        let trimmed = address.trimmingCharacters(in: .whitespaces).lowercased()
+        var smtp = settings.smtp
+        // The dev copy's local Mailpit has a self-signed certificate (only ever for localhost).
+        if isDevServer { smtp.allowSelfSignedLocalhost = true }
+        let title = name.trimmingCharacters(in: .whitespaces)
+        let account = AccountConfig(displayName: title.isEmpty ? trimmed : title, endpoint: settings.imap, addresses: [trimmed],
+                                    smtp: smtp, identities: [Identity(address: trimmed, name: Platform.fullUserName)])
+        try checkNotAdded(account)
+        do {
+            _ = try await MailSession.open(endpoint: settings.imap, password: password) { session in session.capabilities }
+        } catch {
+            throw AccountSetupError.incoming(String(describing: error))
+        }
+        do {
+            try await SMTPClient.verify(endpoint: smtp, password: password)
+        } catch {
+            throw AccountSetupError.outgoing(String(describing: error))
+        }
+        try save(account, password: password)
+    }
+
+    private func checkNotAdded(_ account: AccountConfig) throws {
+        if accounts.contains(where: { $0.login == account.login }) { throw AccountSetupError.alreadyAdded }
+    }
+
+    private func save(_ account: AccountConfig, password: String) throws {
+        try Keychain.save(password: password, account: account.login)
+        accounts.append(account)
+        persistAccounts()
+        isAddingAccount = false
+        cloudSync?.setAccounts(cloudAccounts)
+        start()
+        reload()
+    }
+
+    /// Removes an account from this device: its connections, its mail and state here, its cached
+    /// messages and its Keychain password. Nothing on the mail server or in iCloud changes, so
+    /// other devices keep it, and adding it again brings everything back.
+    func removeAccount(_ account: AccountConfig) {
+        accountToRemove = nil
+        let cloud = cloudAccounts
+        stopSync(accountID: account.id)
+        do {
+            try store.deleteAccount(account.id, cloudAccounts: cloud)
+        } catch {
+            lastError = String(describing: error)
+        }
+        cache.removeAccount(account.id)
+        if account.id != "dev" {
+            let others = accounts.filter { $0.id != account.id }
+            for key in Set([account.login, account.endpoint.username]) where !others.contains(where: { $0.login == key || $0.endpoint.username == key }) {
+                Keychain.delete(account: key)
+            }
+        }
+        accounts.removeAll { $0.id == account.id }
+        persistAccounts()
+        cloudSync?.setAccounts(cloudAccounts)
+        for (thread, draft) in inlineDrafts where (try? store.outboxItem(id: draft)) == nil { inlineDrafts[thread] = nil }
+        if inboxAccountID == account.id { inboxAccountID = nil }
+        if case .mailbox(let id, _) = selection, id == account.id { goToInbox() }
+        selectedThreadID = nil
+        reloadOutbox()
+        reload()
+        show(Toast(message: String(localized: "Removed \(account.displayName)"), symbol: "person.crop.circle.badge.minus"))
+    }
+
+    /// One account's Inbox (nil: every account together, the default).
+    func goToInbox(account id: String?) {
+        let changed = inboxAccountID != id
+        inboxAccountID = id
+        if !isInInbox {
+            selection = .category(.primary)     // reloads
+        } else if changed {
+            selectedThreadID = nil
+            selectionIndexHint = nil
+            heldCategories = [:]
+            endSearch()
+            reload()
+        }
+    }
+
+    func account(id: String) -> AccountConfig? { accounts.first { $0.id == id } }
 
     // MARK: Loading
 
@@ -498,6 +622,7 @@ final class AppModel {
     /// in the subtitle.
     var listTitle: String {
         if isSearching { return String(localized: "Search") }
+        if isInInbox, let id = inboxAccountID, let account = account(id: id) { return account.displayName }
         return isInInbox ? String(localized: "Inbox") : currentMailboxTitle
     }
 
@@ -515,6 +640,7 @@ final class AppModel {
     var currentMailboxTitle: String {
         switch selection {
         case .inbox: String(localized: "Inbox")
+        case .accountInbox(let id): account(id: id)?.displayName ?? String(localized: "Inbox")
         case .snoozed: String(localized: "Snoozed")
         case .replyLater: String(localized: "Set Aside")
         case .outbox: String(localized: "Outbox")
@@ -532,15 +658,24 @@ final class AppModel {
         scheduleCloudPush()
         do {
             // One read of the Inbox serves the stream, a category and the unread count.
-            var inboxCache: [ThreadSummary]?
-            func inbox() throws -> [ThreadSummary] {
-                if let inboxCache { return inboxCache }
+            var unifiedCache: [ThreadSummary]?
+            func unified() throws -> [ThreadSummary] {
+                if let unifiedCache { return unifiedCache }
                 let loaded = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
-                inboxCache = loaded
+                unifiedCache = loaded
+                return loaded
+            }
+            // The Inbox on screen: every account's, or one account's.
+            var filteredCache: [ThreadSummary]?
+            func inbox() throws -> [ThreadSummary] {
+                guard let id = inboxAccountID else { return try unified() }
+                if let filteredCache { return filteredCache }
+                let loaded = try store.threads(mailbox: "INBOX", accountID: id, ownAddresses: ownAddresses)
+                filteredCache = loaded
                 return loaded
             }
             switch selection {
-            case .inbox:
+            case .inbox, .accountInbox:
                 threads = try inbox()
             case .outbox:
                 threads = []
@@ -566,8 +701,12 @@ final class AppModel {
             if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
             if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
-            inboxUnreadCount = try inbox().filter { $0.latest.category == .primary }.reduce(0) { $0 + $1.unreadCount }
-            replyLaterCount = try inbox().filter(\.isReplyLater).count
+            let primary = try unified().filter { $0.latest.category == .primary }
+            inboxUnreadCount = primary.reduce(0) { $0 + $1.unreadCount }
+            accountUnreadCounts = accounts.count > 1
+                ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
+                : [:]
+            replyLaterCount = try unified().filter(\.isReplyLater).count
             scheduleSmartFolderCounts()
         } catch {
             lastError = String(describing: error)
@@ -756,9 +895,11 @@ final class AppModel {
 
     /// The search as typed, plus the scope's own operators.
     private var scopedSearchText: String {
+        // In one account's Inbox, a category search stays in that account.
+        let account = inboxAccountID.map { " account:\($0)" } ?? ""
         switch searchScope {
-        case .category(let c): return "\(searchText) category:\(c.rawValue)"
-        case .mailbox(_, let path): return "\(searchText) in:\"\(path)\""
+        case .category(let c): return "\(searchText) category:\(c.rawValue)\(account)"
+        case .mailbox(let id, let path): return "\(searchText) in:\"\(path)\" account:\(id)"
         case .snoozed: return "\(searchText) in:\"\(AccountSync.snoozedMailbox)\""
         case .smartFolder(let id): return "\(smartFolder(id: id)?.query ?? "") \(searchText)"
         default: return searchText
@@ -775,7 +916,7 @@ final class AppModel {
             relatedHits = []
             return
         }
-        let query = SearchQuery(parsing: scopedSearchText)
+        let query = SearchQuery(parsing: scopedSearchText).resolvingAccounts(accounts)
         let engine = SearchEngine(store: store)
         do {
             let hits = try engine.hits(query)
@@ -836,6 +977,23 @@ final class AppModel {
         (try? store.messages(inThread: threadID)) ?? []
     }
 
+    /// The conversation as the reader shows it: a message that reached two of your accounts
+    /// (same Message-ID) once, the copy in the account you're looking at (else the first).
+    func readerMessages(inThread threadID: String) -> [StoredMessage] {
+        let all = messages(inThread: threadID)
+        guard accounts.count > 1 else { return all }
+        var chosen: [String: StoredMessage] = [:]
+        for message in all {
+            guard let key = message.messageID else { continue }
+            if let existing = chosen[key], existing.accountID == inboxAccountID || message.accountID != inboxAccountID { continue }
+            chosen[key] = message
+        }
+        return all.filter { message in
+            guard let key = message.messageID else { return true }
+            return chosen[key]?.id == message.id
+        }
+    }
+
     func rawMessage(_ message: StoredMessage) async throws -> Data {
         guard let sync = syncs[message.accountID] else {
             throw MailSessionError.commandFailed(command: "read", detail: "account is not connected")
@@ -847,13 +1005,31 @@ final class AppModel {
 /// Account list persistence. Passwords live only in the Keychain.
 enum AccountStorage {
     static let key = "accounts.v1"
+    /// The dev copy's own list (`-TidingsDevServer`), so it never touches the real one; one per
+    /// `-TidingsDevUser`, like its data folder.
+    nonisolated(unsafe) static var devKey = "accounts.dev.v1"
 
-    static func load() -> [AccountConfig] {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+    static func load(dev: Bool = false) -> [AccountConfig] {
+        guard let data = UserDefaults.standard.data(forKey: dev ? devKey : key) else { return [] }
         return (try? JSONDecoder().decode([AccountConfig].self, from: data)) ?? []
     }
 
-    static func save(_ accounts: [AccountConfig]) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: key)
+    static func save(_ accounts: [AccountConfig], dev: Bool = false) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: dev ? devKey : key)
+    }
+}
+
+/// Why adding an account didn't work, for the setup form.
+enum AccountSetupError: LocalizedError {
+    case alreadyAdded
+    case incoming(String)
+    case outgoing(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .alreadyAdded: String(localized: "That account is already in Tidings.")
+        case .incoming(let detail): String(localized: "Couldn't sign in to the incoming (IMAP) server: \(detail)")
+        case .outgoing(let detail): String(localized: "Signed in to IMAP, but the outgoing (SMTP) server said no: \(detail)")
+        }
     }
 }

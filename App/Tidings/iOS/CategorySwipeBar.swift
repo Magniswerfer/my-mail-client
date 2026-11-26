@@ -96,7 +96,7 @@ struct CategorySwipeBar: View {
 
     /// Counts every category from the whole Inbox (`model.threads` only holds the one on screen).
     private func recount() {
-        let inbox = (try? model.store.threads(mailbox: "INBOX", ownAddresses: model.ownAddresses)) ?? []
+        let inbox = (try? model.store.threads(mailbox: "INBOX", accountID: model.inboxAccountID, ownAddresses: model.ownAddresses)) ?? []
         var counts: [String: Int] = [:]
         for tab in model.categoryTabs { counts[tab.id] = model.unreadCount(for: tab, inbox: inbox) }
         if counts != unread { unread = counts }

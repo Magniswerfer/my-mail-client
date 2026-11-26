@@ -105,8 +105,8 @@ extension AccountSync {
                 try store.enqueue(.move(items: items, to: target, addFlags: add, removeFlags: remove, createTarget: createTarget),
                                   accountID: account.id, changeID: changeID, in: db)
             }
-            if case .snooze = kind { try store.noteMessageState(localIDs: localIDs, login: account.endpoint.username) }
-            if kind == .unsnooze { try store.noteMessageState(localIDs: localIDs, login: account.endpoint.username) }
+            if case .snooze = kind { try store.noteMessageState(localIDs: localIDs, login: account.login) }
+            if kind == .unsnooze { try store.noteMessageState(localIDs: localIDs, login: account.login) }
             signalWork()
             return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
                                 snapshots: snapshots, addedFlags: add, removedFlags: remove)
@@ -155,7 +155,7 @@ extension AccountSync {
                                   accountID: account.id, changeID: changeID, in: db)
             }
             if [.replyLater, .clearReplyLater, .readLater, .clearReadLater].contains(kind) {
-                try store.noteMessageState(localIDs: localIDs, login: account.endpoint.username)
+                try store.noteMessageState(localIDs: localIDs, login: account.login)
             }
             signalWork()
             return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
@@ -223,7 +223,7 @@ extension AccountSync {
         // re-apply would put it back).
         switch change.kind {
         case .replyLater, .clearReplyLater, .readLater, .clearReadLater, .snooze, .unsnooze:
-            try store.noteMessageState(localIDs: change.snapshots.map(\.localID), login: account.endpoint.username)
+            try store.noteMessageState(localIDs: change.snapshots.map(\.localID), login: account.login)
         default: break
         }
         signalWork()

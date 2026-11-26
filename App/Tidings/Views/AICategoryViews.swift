@@ -7,7 +7,7 @@ struct CategoryTabs: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let inbox = (try? model.store.threads(mailbox: "INBOX", ownAddresses: model.ownAddresses)) ?? []
+        let inbox = (try? model.store.threads(mailbox: "INBOX", accountID: model.inboxAccountID, ownAddresses: model.ownAddresses)) ?? []
         let current = model.currentCategoryTab
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {

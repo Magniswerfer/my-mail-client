@@ -1,13 +1,65 @@
 import MailEngine
 import SwiftUI
 
+/// Adding an account: iCloud (an app-specific password, SPEC §16) or any IMAP/SMTP server.
+/// Shown by itself while there are none, and from Settings › General and ⌘K to add another.
+struct AccountSetupView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    enum Kind: Hashable { case iCloud, other }
+    @State private var kind: Kind = .iCloud
+    /// An iCloud address typed in the other form, carried over by "Use iCloud Setup".
+    @State private var iCloudAddress = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Picker("Account type", selection: $kind) {
+                Text("iCloud").tag(Kind.iCloud)
+                Text("Other Mail Account").tag(Kind.other)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, Platform.isMac ? 24 : 16)
+            .padding(.top, Platform.isMac ? 20 : 8)
+            switch kind {
+            case .iCloud:
+                ScrollView {
+                    ICloudAccountForm(address: iCloudAddress, showsCancel: !model.needsAccountSetup && Platform.isMac)
+                        .id(iCloudAddress)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            case .other:
+                OtherAccountForm(useICloud: { address in
+                    iCloudAddress = address
+                    kind = .iCloud
+                })
+            }
+        }
+        .macFrame(width: 540, height: kind == .other ? 640 : 470)
+        .navigationTitle("Add Account")
+        .navigationBarTitleDisplayModeInline()
+        .toolbar {
+            #if os(iOS)
+            if !model.needsAccountSetup, kind == .iCloud {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { model.isAddingAccount = false; dismiss() }
+                }
+            }
+            #endif
+        }
+    }
+}
+
 /// Onboarding (SPEC §16). iCloud has no third-party OAuth (docs/research/icloud-imap.md), so an
 /// app-specific password is the only way in; this makes that a two-click step:
 /// open Apple's page → generate → come back and press Paste. A valid password connects at once.
-struct AccountSetupView: View {
+struct ICloudAccountForm: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
-    @State private var address = ""
+    @Environment(\.dismiss) private var dismiss
+    @State var address = ""
+    /// Adding another account (not the first): Cancel shows.
+    var showsCancel = false
     @State private var password = ""
     @State private var isConnecting = false
     @State private var openedApple = false
@@ -60,6 +112,10 @@ struct AccountSetupView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                if showsCancel {
+                    Button("Cancel") { model.isAddingAccount = false; dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                }
                 Button {
                     Task { await connect() }
                 } label: {
@@ -71,7 +127,6 @@ struct AccountSetupView: View {
             }
         }
         .padding(24)
-        .macFrame(width: 520)
     }
 
     private func step(_ n: Int, done: Bool, title: LocalizedStringKey, detail: LocalizedStringKey,
@@ -109,6 +164,7 @@ struct AccountSetupView: View {
         defer { isConnecting = false }
         do {
             try await model.addAccount(address: address, password: password)
+            dismiss()
         } catch let e as MailSessionError {
             if case .authenticationFailed = e {
                 error = String(localized: "iCloud rejected the login. Check that the address is your @icloud.com address and the password is a fresh app-specific password.")
@@ -204,13 +260,22 @@ struct SettingsView: View {
 
 struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
+    /// Here, not on the main window: on the Mac Settings is a window of its own.
+    @State private var isAdding = false
+    @State private var removing: AccountConfig?
 
     var body: some View {
         Form {
-            Section("Accounts") {
+            Section {
                 ForEach(model.accounts) { account in
-                    LabeledContent(account.displayName, value: account.endpoint.host)
+                    AccountRow(account: account) { removing = account }
                 }
+                .onDelete { offsets in removing = offsets.first.map { model.accounts[$0] } }
+                Button("Add Account…") { isAdding = true }
+            } header: {
+                Text("Accounts")
+            } footer: {
+                Text("Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.")
             }
             Section {
                 Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
@@ -237,6 +302,64 @@ struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $isAdding) {
+            NavigationStack { AccountSetupView() }
+                .environment(model)
+        }
+        .modifier(AccountRemovalConfirmation(account: $removing))
+    }
+}
+
+/// One account in Settings: what it is, where it connects, and Remove.
+struct AccountRow: View {
+    @Environment(AppModel.self) private var model
+    let account: AccountConfig
+    var remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: account.isICloud ? "icloud" : "envelope")
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.displayName)
+                Text(verbatim: account.isICloud ? account.endpoint.username
+                                                : "\(account.endpoint.username) · \(account.endpoint.host)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let status = model.syncStatus[account.id] {
+                    Text(status).font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+            Spacer()
+            if Platform.isMac {
+                Button("Remove…", role: .destructive, action: remove)
+            }
+        }
+        .contextMenu {
+            Button("Remove Account…", systemImage: "minus.circle", role: .destructive, action: remove)
+        }
+    }
+}
+
+/// "Remove this account?" before anything is deleted.
+struct AccountRemovalConfirmation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var account: AccountConfig?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            account.map { String(localized: "Remove \($0.displayName)?") } ?? "",
+            isPresented: Binding(get: { account != nil }, set: { if !$0 { account = nil } }),
+            titleVisibility: .visible, presenting: account
+        ) { account in
+            Button("Remove Account", role: .destructive) { model.removeAccount(account) }
+            Button("Cancel", role: .cancel) { self.account = nil }
+        } message: { _ in
+            Text("Its mail, drafts, outbox and password are deleted from this device. The mail stays on the server, and your other devices keep the account.")
+        }
     }
 }
 

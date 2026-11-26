@@ -131,7 +131,7 @@ extension AppModel {
     /// The mailbox the current view shows (where moves start from).
     var sourceMailbox: String {
         switch selection {
-        case .inbox, .category, .outbox, .replyLater, .aiCategory: "INBOX"
+        case .inbox, .accountInbox, .category, .outbox, .replyLater, .aiCategory: "INBOX"
         case .snoozed: AccountSync.snoozedMailbox
         case .mailbox(_, let path): path
         // Results come from any folder: act where the selected conversation is.
@@ -142,7 +142,8 @@ extension AppModel {
     // MARK: Performing
 
     @discardableResult
-    func perform(_ kind: TriageKind, on threads: [ThreadSummary]? = nil, toast showToast: Bool = true) -> ChangeBox? {
+    func perform(_ kind: TriageKind, on threads: [ThreadSummary]? = nil, toast showToast: Bool = true,
+                 inAccount onlyAccount: String? = nil) -> ChangeBox? {
         let targets = threads ?? targetThreads
         guard !targets.isEmpty else { return nil }
         // In Read Later, Done means "finished reading": the mail itself is already filed.
@@ -179,7 +180,15 @@ extension AppModel {
         let perFolder: Bool = if case .smartFolder = selection { true } else { false }
         struct Where: Hashable { var accountID: String; var mailbox: String }
         Task {
-            let groups = Dictionary(grouping: targets) { Where(accountID: $0.latest.accountID, mailbox: perFolder ? $0.latest.mailbox : source) }
+            // A conversation can live in more than one account (mail sent to two of your
+            // addresses): it's acted on in each, unless you're looking at one account's Inbox.
+            let owners = self.owningAccounts(of: targets.map(\.threadID))
+            var groups: [Where: [ThreadSummary]] = [:]
+            for thread in targets {
+                for account in onlyAccount.map({ [$0] }) ?? owners[thread.threadID] ?? [thread.latest.accountID] {
+                    groups[Where(accountID: account, mailbox: perFolder ? thread.latest.mailbox : source), default: []].append(thread)
+                }
+            }
             for (place, group) in groups {
                 guard let sync = syncs[place.accountID] else { continue }
                 do {
@@ -209,13 +218,23 @@ extension AppModel {
         }
         let box = ChangeBox()
         Task {
-            if let change = try? await syncs[accountID]?.perform(kind, threadIDs: [threadID], from: mailbox) {
-                box.changes.append(change)
+            for account in owningAccounts(of: [threadID])[threadID] ?? [accountID] {
+                if let change = try? await syncs[account]?.perform(kind, threadIDs: [threadID], from: mailbox) {
+                    box.changes.append(change)
+                }
             }
             if box.undone { await undo(box) }
             reload()
         }
         return box
+    }
+
+    /// The accounts to act in for each conversation: every account that has a message of it,
+    /// or only the one whose Inbox you're looking at.
+    func owningAccounts(of threadIDs: [String]) -> [String: [String]] {
+        if isInInbox, let id = inboxAccountID { return Dictionary(uniqueKeysWithValues: threadIDs.map { ($0, [id]) }) }
+        let found = (try? store.accountIDs(threadIDs: threadIDs)) ?? [:]
+        return found.mapValues { $0.sorted() }
     }
 
     /// Whether an action takes the conversation out of the list on screen.
@@ -442,7 +461,8 @@ extension AppModel {
         case .junk: .junk
         default: .move(toMailbox: box.path)
         }
-        perform(kind, on: threads)
+        // A folder belongs to one account; the others don't get a folder of that name.
+        if case .move = kind { perform(kind, on: threads, inAccount: box.accountID) } else { perform(kind, on: threads) }
     }
 }
 

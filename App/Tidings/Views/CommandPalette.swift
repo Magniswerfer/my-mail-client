@@ -119,6 +119,21 @@ extension AppModel {
                 self.isShortcutsShown = true
             },
         ]
+        // Accounts: add one, open one account's Inbox (⌥⌘1 … on the Mac), remove one.
+        list.append(AppCommand(id: "addAccount", title: String(localized: "Add Account…"), symbol: "person.crop.circle.badge.plus",
+                               keys: nil) { self.isAddingAccount = true })
+        if accounts.count > 1 {
+            for (index, account) in accounts.enumerated() {
+                list.append(AppCommand(id: "goAccountInbox-\(account.id)", title: String(localized: "Go to \(account.displayName) Inbox"),
+                                       symbol: account.isICloud ? "icloud" : "tray", keys: index < 9 ? "⌥⌘\(index + 1)" : nil) {
+                    self.goToInbox(account: account.id)
+                })
+            }
+        }
+        for account in accounts {
+            list.append(AppCommand(id: "removeAccount-\(account.id)", title: String(localized: "Remove Account \(account.displayName)…"),
+                                   symbol: "person.crop.circle.badge.minus", keys: nil) { self.accountToRemove = account })
+        }
         if let checkForUpdates {
             list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
                                    symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })
