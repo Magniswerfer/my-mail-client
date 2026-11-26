@@ -266,7 +266,12 @@ extension AppModel {
             }
         }
 
-        if let id = item.id, sendAt == nil {
+        if sendAt == nil, accountErrors[accountID] != nil {
+            // It can't go out until this account connects: no "Sending…" that never ends.
+            let name = accounts.first { $0.id == accountID }?.displayName ?? ""
+            show(Toast(message: String(localized: "Not sent yet: can't connect to \(name). It's waiting in the Outbox."),
+                       symbol: "exclamationmark.triangle", undoSend: item.id))
+        } else if let id = item.id, sendAt == nil {
             let allBoxes = boxes
             if markedDone {
                 let undo: @MainActor () -> Void = { [weak self] in

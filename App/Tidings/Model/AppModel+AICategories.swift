@@ -76,7 +76,9 @@ extension AppModel {
     func unreadCount(for tab: CategoryTab, inbox: [ThreadSummary]) -> Int {
         let unread = inbox.filter { $0.unreadCount > 0 && !$0.isReplyLater }
         switch tab {
-        case .all: return unread.count
+        // Only what the All list shows: mail a scheduled bundle holds until its delivery isn't
+        // there yet (its own tab still counts it).
+        case .all: return unread.filter { !isHeldForDelivery($0) }.count
         case .builtIn(let c): return unread.filter { displayCategory($0) == c }.count
         case .ai(let id): return unread.filter { aiMembership[$0.threadID]?.contains(id) == true }.count
         }

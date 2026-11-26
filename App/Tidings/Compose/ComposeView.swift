@@ -599,6 +599,11 @@ struct OutboxView: View {
                 }
                 if let error = item.lastError {
                     Text(error).font(.caption).foregroundStyle(item.state == .failed ? .red : .orange)
+                } else if item.state == .queued, (item.sendAt ?? .distantFuture) <= Date(),
+                          let error = model.accountErrors[item.accountID] {
+                    // Due, but its account can't connect: it goes out once it can.
+                    let name = model.accounts.first { $0.id == item.accountID }?.displayName ?? ""
+                    Text("Waiting: can't connect to \(name) (\(error))").font(.caption).foregroundStyle(.orange)
                 }
             }
             Spacer()

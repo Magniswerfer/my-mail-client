@@ -4581,6 +4581,26 @@
         }
       }
     },
+    "Not sent yet: can't connect to %@. It's waiting in the Outbox.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke sendt endnu: kan ikke forbinde til %@. Den venter i udbakken."
+          }
+        }
+      }
+    },
+    "Waiting: can't connect to %@ (%@)": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Venter: kan ikke forbinde til %1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

@@ -269,6 +269,8 @@ final class AppModel {
     /// How many conversations are set aside with Reply Later (the sidebar badge).
     private(set) var replyLaterCount = 0
     private(set) var syncStatus: [String: String] = [:]
+    /// Why an account can't connect right now (its sign-in or network error), until it does.
+    private(set) var accountErrors: [String: String] = [:]
     var lastError: String?
 
     // Search
@@ -480,6 +482,7 @@ final class AppModel {
         case .mailboxSynced: reload()
         case .idle:
             syncStatus[account.id] = String(localized: "Up to date")
+            accountErrors[account.id] = nil
             lastError = nil
             cloudAfterMailSync()
             reload()
@@ -489,6 +492,14 @@ final class AppModel {
         case .failed(let message):
             syncStatus[account.id] = String(localized: "Offline")
             lastError = message
+            let first = accountErrors[account.id] == nil
+            accountErrors[account.id] = message
+            // Mail only goes out over a working connection: say so instead of a silent wait.
+            let due = outboxItems.contains { $0.accountID == account.id && $0.state == .queued && ($0.sendAt ?? .distantFuture) <= Date() }
+            if first, due {
+                show(Toast(message: String(localized: "Not sent yet: can't connect to \(account.displayName). It's waiting in the Outbox."),
+                           symbol: "exclamationmark.triangle"))
+            }
         case .sending:
             syncStatus[account.id] = String(localized: "Sending…")
             reloadOutbox()
@@ -598,6 +609,7 @@ final class AppModel {
     /// iCloud Keychain password go); false when another device removed it and this one follows.
     func removeAccount(_ account: AccountConfig, everywhere: Bool = true) {
         accountToRemove = nil
+        accountErrors[account.id] = nil
         let cloud = cloudAccounts
         stopSync(accountID: account.id)
         do {
@@ -761,6 +773,15 @@ final class AppModel {
               let next = schedule.nextDelivery(after: now) else { return nil }
         let count = threads.filter { displayCategory($0) == category && $0.arrivedAt > last }.count
         return count > 0 ? (count, next) : nil
+    }
+
+    /// Waiting for its bundle's next delivery, so the Inbox stream doesn't show it yet (the
+    /// same rule `streamItems` uses).
+    func isHeldForDelivery(_ thread: ThreadSummary) -> Bool {
+        guard !thread.isReplyLater, !thread.isPinned else { return false }
+        let category = displayCategory(thread)
+        guard category != .primary, let delivered = bundleSchedules[category]?.lastDelivery(before: now) else { return false }
+        return thread.arrivedAt > delivered
     }
 
     func setSchedule(_ schedule: BundleSchedule, for category: MailCategory) {
