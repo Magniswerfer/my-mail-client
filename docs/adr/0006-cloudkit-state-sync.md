@@ -10,7 +10,7 @@ ADR 0002 made CloudKit the source of truth for state with no IMAP meaning. It wa
 ### What syncs, and what doesn't
 | Syncs (CloudKit) | Stays per device | Stays IMAP |
 |---|---|---|
-| Rules, smart folders, sender rules ("always for this sender"), conversation moves (corrections), AI categories and their ✓/✗, image trust, trusted senders, unsubscribed senders, invite answers, muted conversations, Reply Later, Read Later, snooze wake times, bundle schedules, notification policy and VIPs, snippets, dismissed suggestions (Auto Drafts, calendar), accounts (name, servers, addresses, identities; passwords travel in iCloud Keychain, never CloudKit) | Messages, bodies, the FTS index, embeddings, classifier weights (retrained locally from the synced corrections), the outbox, the pending-action queue, mailbox state, rule history, each account's local id, "does this server keep keywords" | Done → Archive, Snooze → `Snoozed` folder, Junk, read, pinned (`\Flagged`), sent/replied flags; keywords stay as a mirror where the server keeps them |
+| Rules, smart folders, sender rules ("always for this sender"), conversation moves (corrections), AI categories and their ✓/✗, image trust, trusted senders, unsubscribed senders, invite answers, muted conversations, Reply Later, Read Later, snooze wake times, bundle schedules, notification policy and VIPs, snippets, dismissed suggestions (Auto Drafts, calendar), folders chosen with Use As (keyed login + role), accounts (name, servers, addresses, identities; passwords travel in iCloud Keychain, never CloudKit) | Messages, bodies, the FTS index, embeddings, classifier weights (retrained locally from the synced corrections), the outbox, the pending-action queue, mailbox state, rule history, each account's local id, "does this server keep keywords" | Done → Archive, Snooze → `Snoozed` folder, Junk, read, pinned (`\Flagged`), sent/replied flags; keywords stay as a mirror where the server keeps them |
 
 ### Shape
 - One custom zone (`TidingsState`) in the **private** database of `iCloud.hk.gnus.tidings`, owned by the Creative Oak ApS team (493257NQK3). The dev copy (`hk.gnus.tidings.dev`) uses its own container, `iCloud.hk.gnus.tidings.dev`, so test data never meets real state.
@@ -25,7 +25,8 @@ ADR 0002 made CloudKit the source of truth for state with no IMAP meaning. It wa
   - a message is account + `Message-ID`;
   - a conversation is the Message-IDs of its messages at the time, matched on arrival;
   - rules, smart folders and categories use their UUIDs;
-  - a sender is their address, lowercased.
+  - a sender is their address, lowercased;
+  - a Use As choice is login + role (`folderRole`, `me@x.dk|archive`), waiting like other state until that account exists here.
 - **State for mail not here yet:** it's kept in a pending table and applied when the message arrives in a sync. This covers a new device, or mail synced before the state record arrived.
 
 ### Conflicts

@@ -150,6 +150,34 @@ import Testing
         #expect(try mac.store.rules().isEmpty)
     }
 
+    /// "Use as Archive" on the Mac: the phone uses that folder too, and "back to the server's
+    /// choice" follows.
+    @Test func useAsTravelsByLogin() throws {
+        let cloud = FakeCloud()
+        let mac = try Device("mac-account"), phone = try Device("phone-account")
+        for device in [mac, phone] {
+            for (path, role) in [("INBOX.Archive", MailboxRole.archive), ("INBOX.Done", nil)] {
+                try device.store.save(MailboxState(accountID: device.accountID, path: path, role: role, uidValidity: 1, uidNext: nil,
+                                                   highestModSeq: nil, messageCount: 0, lastSync: nil))
+            }
+        }
+        try mac.store.useFolder("INBOX.Done", for: .archive, accountID: mac.accountID)
+        #expect(try mac.store.collectCloudChanges(accounts: mac.accounts, settings: [:]) == 1)
+        try cloud.push(mac.store)
+        #expect(try cloud.pull(into: phone.store, accounts: phone.accounts).applied == 1)
+        let roles = try phone.store.mailboxStates(accountID: phone.accountID)
+        #expect(roles.first { $0.role == .archive }?.path == "INBOX.Done")
+        #expect(try phone.store.setting(AccountSync.roleChoiceKey(.archive), accountID: phone.accountID) == "INBOX.Done")
+        #expect(try phone.store.collectCloudChanges(accounts: phone.accounts, settings: [:]) == 0, "no echo")
+
+        // Back to the server's choice on the phone: the Mac forgets its choice too.
+        try phone.store.useFolder(nil, for: .archive, accountID: phone.accountID)
+        #expect(try phone.store.collectCloudChanges(accounts: phone.accounts, settings: [:]) == 1)
+        try cloud.push(phone.store)
+        _ = try cloud.pull(into: mac.store, accounts: mac.accounts, deleted: [("folderRole", "magnus@tidings.test|archive")])
+        #expect(try mac.store.setting(AccountSync.roleChoiceKey(.archive), accountID: mac.accountID) == "")
+    }
+
     @Test func replyLaterFollowsTheMessageEvenBeforeItArrives() async throws {
         let cloud = FakeCloud()
         let mac = try Device("mac-account"), phone = try Device("phone-account")

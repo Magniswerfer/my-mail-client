@@ -122,17 +122,11 @@ extension AccountSync {
     }
 
     /// Uses `path` for `role` from now on (nil: back to what the server says). Applied locally at
-    /// once; the next sync keeps it. Stays on this device.
+    /// once; the next sync keeps it. Syncs to your other devices through iCloud.
     public func chooseFolder(_ path: String?, for role: MailboxRole) throws {
         guard Self.choosableRoles.contains(role) else { return }
-        try store.setSetting(Self.roleChoiceKey(role), path ?? "", accountID: account.id)
-        guard let path else { checkNow(); return }
-        try store.db.write { db in
-            try db.execute(sql: "UPDATE mailboxState SET role = NULL WHERE accountID = ? AND role = ?",
-                           arguments: [account.id, role.rawValue])
-            try db.execute(sql: "UPDATE mailboxState SET role = ? WHERE accountID = ? AND path = ?",
-                           arguments: [role.rawValue, account.id, path])
-        }
+        try store.useFolder(path, for: role, accountID: account.id)
+        if path == nil { checkNow() }
     }
 
     /// Hand-picked roles win over SPECIAL-USE and names, while the folder exists.
@@ -386,5 +380,23 @@ extension MessageCache {
     func removeMailbox(_ mailbox: String, account: String) {
         guard !account.isEmpty, !account.contains("/") else { return }
         try? FileManager.default.removeItem(at: url(account: account, mailbox: mailbox, validity: 0, uid: 0).deletingLastPathComponent())
+    }
+}
+
+extension MailStore {
+    /// "Use as Archive": remembered for the account, and the folder takes the role now if it's
+    /// already known here (from you, or from another device through iCloud).
+    func useFolder(_ path: String?, for role: MailboxRole, accountID: String) throws {
+        guard AccountSync.choosableRoles.contains(role) else { return }
+        try setSetting(AccountSync.roleChoiceKey(role), path ?? "", accountID: accountID)
+        guard let path else { return }
+        try db.write { db in
+            guard try Bool.fetchOne(db, sql: "SELECT 1 FROM mailboxState WHERE accountID = ? AND path = ?",
+                                    arguments: [accountID, path]) == true else { return }
+            try db.execute(sql: "UPDATE mailboxState SET role = NULL WHERE accountID = ? AND role = ?",
+                           arguments: [accountID, role.rawValue])
+            try db.execute(sql: "UPDATE mailboxState SET role = ? WHERE accountID = ? AND path = ?",
+                           arguments: [role.rawValue, accountID, path])
+        }
     }
 }

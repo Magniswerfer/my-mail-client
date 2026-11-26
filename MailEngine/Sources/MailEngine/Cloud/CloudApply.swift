@@ -157,6 +157,10 @@ extension MailStore {
             for thread in threads { try setMembership(threadID: thread, categoryID: p.categoryID, isMember: p.isMember) }
         case .setting:
             report.settings[key] = record.payload
+        case .folderRole:
+            guard let (login, name) = Self.split(key), let role = MailboxRole(rawValue: name) else { return .applied }
+            guard let accountID = accounts.idByLogin[login] else { return .deferred }
+            try useFolder(try CloudJSON.value(FolderRolePayload.self, record.payload).path, for: role, accountID: accountID)
         case .account:
             report.accounts[key] = record.payload
         }
@@ -192,6 +196,10 @@ extension MailStore {
             for thread in try threadIDs(holding: p.messageIDs) {
                 try db.write { try $0.execute(sql: "DELETE FROM aiCategoryMember WHERE categoryID = ? AND threadID = ? AND source != 0",
                                               arguments: [p.categoryID, thread]) }
+            }
+        case .folderRole:
+            if let (login, name) = Self.split(key), let role = MailboxRole(rawValue: name), let accountID = accounts.idByLogin[login] {
+                try useFolder(nil, for: role, accountID: accountID)
             }
         case .setting, .account:
             break

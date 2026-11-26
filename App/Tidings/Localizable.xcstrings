@@ -4751,6 +4751,26 @@
         }
       }
     },
+    "“%@” has mail in it now, so it stays.": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” har mail i sig nu, så den bliver."
+          }
+        }
+      }
+    },
+    "Folder Change": {
+      "localizations": {
+        "da": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappeændring"
+          }
+        }
+      }
+    },
     "As it arrives": {
       "localizations": {
         "da": {

@@ -60,3 +60,23 @@ extension MailStore {
         }
     }
 }
+
+extension SmartFolder {
+    /// The query with `in:` pointing at a renamed or moved folder (or one inside it) rewritten
+    /// to its new path; nil when it doesn't search that folder.
+    public static func query(_ query: String, renamingFolder from: String, to: String, separator: Character?) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"(?i)(?<![^\s(])in:(?:"([^"]*)"|(\S+))"#) else { return nil }
+        let ns = query as NSString
+        var result = query
+        var changed = false
+        for match in regex.matches(in: query, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let group = match.range(at: 1).location != NSNotFound ? 1 : 2
+            let value = ns.substring(with: match.range(at: group))
+            guard let moved = FolderPath.renamed(value, from: from, to: to, separator: separator) else { continue }
+            let token = moved.contains(" ") ? "in:\"\(moved)\"" : "in:\(moved)"
+            result = (result as NSString).replacingCharacters(in: match.range, with: token)
+            changed = true
+        }
+        return changed ? result : nil
+    }
+}

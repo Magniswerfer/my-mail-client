@@ -7,6 +7,15 @@ import Testing
 @Suite(.serialized) struct FolderTests {
     // MARK: Paths
 
+    @Test func smartFoldersFollowARename() {
+        let q = SmartFolder.query
+        #expect(q("in:INBOX.Kunder from:anna", "INBOX.Kunder", "INBOX.Clients", ".") == "in:INBOX.Clients from:anna")
+        #expect(q("is:unread in:INBOX.Kunder.Acme", "INBOX.Kunder", "INBOX.Old Clients", ".") == "is:unread in:\"INBOX.Old Clients.Acme\"")
+        #expect(q("in:\"INBOX.Sent Messages\" to:bo", "INBOX.Sent Messages", "INBOX.Sendt", ".") == "in:INBOX.Sendt to:bo")
+        #expect(q("in:INBOX.Kunderne", "INBOX.Kunder", "INBOX.X", ".") == nil, "a different folder with the same start")
+        #expect(q("join:INBOX.Kunder", "INBOX.Kunder", "INBOX.X", ".") == nil)
+    }
+
     @Test func pathsUnderANamespacePrefix() throws {
         let sep: Character = "."
         #expect(FolderPath.child(named: "Receipts", of: nil, separator: sep, prefix: "INBOX.") == "INBOX.Receipts")

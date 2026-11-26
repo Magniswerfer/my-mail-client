@@ -24,6 +24,8 @@ public struct StateRecord: Codable, Sendable, Hashable {
 public enum StateRecordType: String, CaseIterable, Sendable {
     case rule, smartFolder, senderRule, imageTrust, trustedSender, unsubscribed, inviteResponse
     case mute, messageState, correction, aiCategory, aiChoice, setting
+    /// "Use as Archive/Sent/Drafts", keyed by login and role.
+    case folderRole
     /// An account's settings (servers, addresses, identities), keyed by login. Never a password:
     /// that travels in iCloud Keychain.
     case account
@@ -116,6 +118,7 @@ struct RulePayload: Codable { var position: Int; var rule: Rule }
 struct FolderPayload: Codable { var position: Int; var folder: SmartFolder }
 struct SenderRulePayload: Codable { var category: String }
 struct NothingPayload: Codable {}
+struct FolderRolePayload: Codable { var path: String }
 struct UnsubscribedPayload: Codable { var method: String; var at: Date }
 struct InvitePayload: Codable { var sequence: Int; var status: String; var respondedAt: Date }
 struct ConversationPayload: Codable { var messageIDs: [String] }
@@ -242,6 +245,14 @@ extension MailStore {
                 let categoryID: String = row["categoryID"]
                 put(.aiChoice, "\(categoryID)|\(root)",
                     try CloudJSON.data(AIChoicePayload(categoryID: categoryID, isMember: (row["source"] as Int) > 0, messageIDs: ids)))
+            }
+        }
+        try db.read { db in
+            // Folders you chose for a role ("role.archive" → "INBOX.Done"); empty means none.
+            for row in try Row.fetchAll(db, sql: "SELECT accountID, key, value FROM accountSetting WHERE key LIKE 'role.%' AND value != ''") {
+                guard let login = accounts.loginByID[row["accountID"]] else { continue }
+                let role = String((row["key"] as String).dropFirst("role.".count))
+                put(.folderRole, "\(login)|\(role)", try CloudJSON.data(FolderRolePayload(path: row["value"])))
             }
         }
         for (key, value) in settings { put(.setting, key, value) }

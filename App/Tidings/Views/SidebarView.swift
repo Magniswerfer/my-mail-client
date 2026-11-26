@@ -1,5 +1,6 @@
 import MailEngine
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
@@ -88,6 +89,11 @@ struct SidebarView: View {
                     .contextMenu {
                         Button("New Folder…", systemImage: "folder.badge.plus") { model.newFolder(accountID: account.id) }
                     }
+                    // Dropped on the header: to the top level.
+                    .dropDestination(for: FolderDrag.self) { items, _ in
+                        guard let item = items.first else { return false }
+                        return model.dropFolder(item, into: nil, accountID: account.id)
+                    }
                 }
             }
 
@@ -132,9 +138,29 @@ struct SidebarView: View {
                     return true
                 }
                 .tag(SidebarItem.mailbox(accountID: accountID, path: box.path))
+        } else if box.role == nil, !Platform.isPhone {
+            // Drag a folder onto another to put it inside (the iPhone has Move To… instead).
+            label
+                .draggable(FolderDrag(accountID: accountID, path: box.path)) {
+                    Label(row.name, systemImage: "folder").padding(8).glassEffect(.regular, in: .capsule)
+                }
+                .dropDestination(for: FolderDrag.self) { items, _ in
+                    guard let item = items.first else { return false }
+                    return model.dropFolder(item, into: box.path, accountID: accountID)
+                }
+                .tag(SidebarItem.mailbox(accountID: accountID, path: box.path))
         } else {
             label.tag(SidebarItem.mailbox(accountID: accountID, path: box.path))
         }
+    }
+}
+
+/// What a dragged folder carries. JSON, so a conversation drop (plain data) never takes it.
+struct FolderDrag: Codable, Transferable {
+    var accountID: String
+    var path: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
     }
 }
 

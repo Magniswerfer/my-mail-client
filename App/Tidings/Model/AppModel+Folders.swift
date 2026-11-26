@@ -158,8 +158,16 @@ extension AppModel {
         do {
             let path = try await sync.createFolder(named: name, in: parent)
             reload()
-            show(Toast(message: String(localized: "Created “\(FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator))”"),
-                       symbol: "folder.badge.plus"))
+            let shown = FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator)
+            let undo = undoFolderChange(accountID: accountID) { [weak self] sync in
+                // Only while it's still empty: undo never deletes mail.
+                guard let self, (self.mailboxes.first { $0.accountID == accountID && $0.path == path }?.messageCount ?? 0) == 0 else {
+                    throw FolderFailure(String(localized: "“\(shown)” has mail in it now, so it stays."))
+                }
+                let gone = try await sync.deleteFolder(path, allowSpecial: false)
+                if case .mailbox(let id, let selected) = self.selection, id == accountID, gone.contains(selected) { self.goToInbox() }
+            }
+            show(Toast(message: String(localized: "Created “\(shown)”"), symbol: "folder.badge.plus", undo: undo))
         } catch { throw FolderFailure(folderErrorMessage(error)) }
     }
 
@@ -168,21 +176,31 @@ extension AppModel {
         do {
             let newPath = try await sync.renameFolder(path, to: name, allowSpecial: true)
             folderMoved(from: path, to: newPath, accountID: accountID)
+            let oldName = FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator)
+            let undo = undoFolderChange(accountID: accountID) { [weak self] sync in
+                let back = try await sync.renameFolder(newPath, to: oldName, allowSpecial: true)
+                self?.folderMoved(from: newPath, to: back, accountID: accountID)
+            }
             show(Toast(message: String(localized: "Renamed to “\(FolderPath.name(of: newPath, separator: folderLayout(accountID: accountID).separator))”"),
-                       symbol: "pencil"))
+                       symbol: "pencil", undo: undo))
         } catch { throw FolderFailure(folderErrorMessage(error)) }
     }
 
     func moveFolder(_ path: String, into parent: String?, accountID: String) async throws {
         guard let sync = syncs[accountID] else { throw FolderFailure(String(localized: "This account isn't connected.")) }
         do {
+            let oldParent = parentFolder(of: path, accountID: accountID)
             let newPath = try await sync.moveFolder(path, into: parent, allowSpecial: true)
             folderMoved(from: path, to: newPath, accountID: accountID)
+            let undo = undoFolderChange(accountID: accountID) { [weak self] sync in
+                let back = try await sync.moveFolder(newPath, into: oldParent, allowSpecial: true)
+                self?.folderMoved(from: newPath, to: back, accountID: accountID)
+            }
             let separator = folderLayout(accountID: accountID).separator
             let name = FolderPath.name(of: newPath, separator: separator)
             let message = parent.map { String(localized: "Moved “\(name)” into “\(FolderPath.name(of: $0, separator: separator))”") }
                 ?? String(localized: "Moved “\(name)” to the top level")
-            show(Toast(message: message, symbol: "folder"))
+            show(Toast(message: message, symbol: "folder", undo: undo))
         } catch { throw FolderFailure(folderErrorMessage(error)) }
     }
 
@@ -220,6 +238,26 @@ extension AppModel {
         }
     }
 
+    /// A folder dropped on another (or on the account's header: `parent` nil). False when it
+    /// can't go there; server errors show as a toast.
+    func dropFolder(_ item: FolderDrag, into parent: String?, accountID: String) -> Bool {
+        guard item.accountID == accountID, item.path != parent,
+              parentFolder(of: item.path, accountID: accountID) != parent,
+              let box = mailboxes.first(where: { $0.accountID == accountID && $0.path == item.path }), canChangeFolder(box)
+        else { return false }
+        if let parent, !folderLocations(accountID: accountID, excluding: item.path).contains(where: { $0.box.path == parent }) {
+            return false
+        }
+        Task {
+            do {
+                try await moveFolder(item.path, into: parent, accountID: accountID)
+            } catch {
+                show(Toast(message: folderErrorMessage(error), symbol: "exclamationmark.triangle"))
+            }
+        }
+        return true
+    }
+
     /// After a rename or move: the folder on screen and rules that file mail there follow.
     private func folderMoved(from old: String, to new: String, accountID: String) {
         let separator = folderLayout(accountID: accountID).separator
@@ -237,7 +275,39 @@ extension AppModel {
             }
         }
         if changed { saveRules() }
+        // Smart folders that search it (`in:INBOX.Clients`) follow too.
+        var folders = smartFolders
+        var foldersChanged = false
+        for index in folders.indices {
+            if let query = SmartFolder.query(folders[index].query, renamingFolder: old, to: new, separator: separator) {
+                folders[index].query = query
+                foldersChanged = true
+            }
+        }
+        if foldersChanged {
+            try? store.saveSmartFolders(folders)
+            smartFolders = folders
+        }
         reload()
+    }
+
+    /// Undo for a folder change (toast and ⌘Z): runs `reverse` on the server, says if it can't.
+    private func undoFolderChange(accountID: String,
+                                  _ reverse: @escaping @MainActor (AccountSync) async throws -> Void) -> UndoToken {
+        offerUndo(named: String(localized: "Folder Change")) { [weak self] in
+            guard let self else { return }
+            self.toast = nil
+            guard let sync = self.syncs[accountID] else { return }
+            Task { @MainActor in
+                do {
+                    try await reverse(sync)
+                    self.reload()
+                } catch {
+                    self.show(Toast(message: String(localized: "Couldn't undo: \(self.folderErrorMessage(error))"),
+                                    symbol: "exclamationmark.triangle"))
+                }
+            }
+        }
     }
 
     func folderErrorMessage(_ error: any Error) -> String {
