@@ -36,6 +36,15 @@ public struct AccountConfig: Sendable, Codable, Hashable, Identifiable {
     }
 }
 
+/// Which mailboxes a sync keeps.
+public enum SyncScope: Sendable, Hashable {
+    /// Everything you can search: INBOX, Sent, Archive, Drafts, Junk and your folders (the apps).
+    case everything
+    /// What the push server needs (ADR 0007): INBOX (new mail), Sent ("have I written to them",
+    /// replies to mail you're waiting on) and Snoozed (wake-ups). No bodies are cached.
+    case pushServer
+}
+
 /// Keeps the local store in step with one account. **Read-only in M1**: mailboxes are opened
 /// with EXAMINE and bodies fetched with BODY.PEEK, so syncing never marks anything read.
 public actor AccountSync {
@@ -55,6 +64,7 @@ public actor AccountSync {
     let password: String
     let profile: ServerProfile
     let cache: MessageCache
+    public let scope: SyncScope
 
     /// Messages newer than this are fetched in full and kept in the cache tier.
     public var offlineWindow: TimeInterval = 30 * 86_400
@@ -105,12 +115,15 @@ public actor AccountSync {
         wakeContinuation?.yield()
     }
 
-    public init(account: AccountConfig, password: String, store: MailStore, cache: MessageCache, profile: ServerProfile? = nil) {
+    public init(account: AccountConfig, password: String, store: MailStore, cache: MessageCache, profile: ServerProfile? = nil,
+                scope: SyncScope = .everything) {
         self.account = account
         self.password = password
         self.store = store
         self.cache = cache
         self.profile = profile ?? ServerProfile.detect(host: account.endpoint.host)
+        self.scope = scope
+        if scope == .pushServer { offlineWindow = 0 }
     }
 
     public func events() -> AsyncStream<Event> {
@@ -230,6 +243,9 @@ public actor AccountSync {
             && !box.attributes.contains(where: { $0.caseInsensitiveCompare("\\Noselect") == .orderedSame })
             && !TestFence.isInsideFence(box.path) {
             paths.append((box.path, nil))
+        }
+        if scope == .pushServer {
+            paths = paths.filter { path, role in role == .inbox || role == .sent || Self.isSnoozedMailbox(path) }
         }
         // A folder changed while we listed: this listing is stale, start over.
         guard generation == folderGeneration else { fullSyncRequested = true; return }
