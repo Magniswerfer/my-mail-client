@@ -1,6 +1,36 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Search Mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søg i mail"
+          }
+        }
+      }
+    },
+    "Clear the search" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ryd søgningen"
+          }
+        }
+      }
+    },
+    "Search mail (⌘F or /)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søg i mail (⌘F eller /)"
+          }
+        }
+      }
+    },
     "Show Website Icons" : {
       "localizations" : {
         "da" : {

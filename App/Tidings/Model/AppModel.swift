@@ -338,6 +338,8 @@ final class AppModel {
     /// Bumped when search is left on purpose (a place picked, a link opened), so the window can
     /// move focus to the list. Emptying the field by typing doesn't count: you're still searching.
     private(set) var searchEndedCount = 0
+    /// ⌘F (Mac): bumped to put the cursor in the search field.
+    var searchFocusRequest = 0
 
     func endSearch() {
         guard !searchText.isEmpty else { return }

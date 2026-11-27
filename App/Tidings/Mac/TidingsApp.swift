@@ -83,6 +83,10 @@ struct TidingsApp: App {
             }
             // Single-letter shortcuts are handled in RootView (so they never fire while typing);
             // the menu carries ⌘ equivalents and makes every action discoverable.
+            CommandGroup(after: .textEditing) {
+                Button("Search Mail") { model.searchFocusRequest &+= 1 }
+                    .keyboardShortcut("f", modifiers: .command)
+            }
             CommandMenu("Message") {
                 Button("Command Palette…") { model.isPaletteShown.toggle() }
                     .keyboardShortcut("k", modifiers: .command)
@@ -319,16 +323,9 @@ struct RootView: View {
             .frame(minWidth: 460)
             .navigationSplitViewColumnWidth(min: 460, ideal: 680)
             .toolbar { readerToolbar }
-            // Search belongs to the reader's part of the toolbar, with Contact Info beside it:
-            // on the window, it sat over the contact panel whenever that was open.
-            .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
-            .searchFocused($searchFocused)
                 .inspector(isPresented: $model.isContactPanelShown) {
                     ContactPanel()
                         .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
-                        // Open, the panel has Contact Info and search over it, side by side and
-                        // as wide as the panel, instead of search spilling over it from the reader.
-                        .toolbar { if model.isContactPanelShown { contactAndSearchItems } }
                 }
         }
         .overlay(alignment: .top) {
@@ -399,6 +396,7 @@ struct RootView: View {
             searchFocused = false
             streamFocused = true
         }
+        .onChange(of: model.searchFocusRequest) { searchFocused = true }
         .onChange(of: isOverlayOpen) { _, open in
             if !open { returnFocusToList() }
         }
@@ -482,19 +480,18 @@ struct RootView: View {
             .disabled(none)
         }
         ToolbarSpacer(.flexible, placement: .primaryAction)
-        // Closed, Contact Info and search sit at the reader's trailing edge (open, over the panel).
-        if !model.isContactPanelShown { contactAndSearchItems }
-    }
-
-    /// Contact Info with the search field right after it.
-    @ToolbarContentBuilder private var contactAndSearchItems: some ToolbarContent {
+        // Contact Info, then search, at the reader's trailing edge whether or not the contact
+        // panel is open. Tidings' own field: the system one grew over the panel and pushed
+        // Contact Info away from it.
         ToolbarItem(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { model.isContactPanelShown }, set: { _ in model.toggleContactPanel() })) {
                 Label("Contact Info", systemImage: "person.crop.circle")
             }
             .help("Who this is (⌃⌘I)")
         }
-        DefaultToolbarItem(kind: .search, placement: .primaryAction)
+        ToolbarItem(placement: .primaryAction) {
+            ToolbarSearchField(focus: $searchFocused)
+        }
     }
 
     /// A picker, the palette or a sheet over the window. The V picker and ⌘K palette take focus
@@ -690,6 +687,39 @@ struct MinimizedReplyBar: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 38)
+    }
+}
+
+/// The toolbar's search field (Mac): a fixed width right after Contact Info, so it never spreads
+/// over the contact panel. Return opens the first result; Escape (the window's) leaves search.
+struct ToolbarSearchField: View {
+    @Environment(AppModel.self) private var model
+    var focus: FocusState<Bool>.Binding
+
+    var body: some View {
+        @Bindable var model = model
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField("Search mail", text: $model.searchText)
+                .textFieldStyle(.plain)
+                .focused(focus)
+                .onSubmit {
+                    if let first = model.searchHits.first { model.selectedHitID = first.id }
+                    focus.wrappedValue = false
+                }
+            if !model.searchText.isEmpty {
+                Button { model.endSearch() } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Clear the search")
+                    .accessibilityLabel(Text("Clear the search"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(width: 230)
+        .help("Search mail (⌘F or /)")
     }
 }
 
