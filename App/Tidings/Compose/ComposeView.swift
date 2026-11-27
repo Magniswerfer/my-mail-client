@@ -46,7 +46,26 @@ struct InlineComposer: View {
             // Sent or discarded somewhere else in the meantime.
             if model == nil { app.inlineDrafts[threadID] = nil }
         }
-        .onDisappear { model?.saveNow() }
+        .onChange(of: app.inlineConversions[threadID]) { _, conversion in
+            guard let conversion, let model else { return }
+            model.adopt(conversion)
+            app.inlineConversions[threadID] = nil
+        }
+        .onDisappear {
+            guard let model else { return }
+            // Opened and left without a change (you moved to another message): it isn't kept
+            // for when you come back. One Tidings suggested stays a suggestion; a minimized one
+            // stays as it is.
+            if app.inlineDrafts[threadID] == draftID, !app.minimizedReplies.contains(threadID), !model.wasEdited {
+                app.inlineDrafts[threadID] = nil
+                if !app.autoDrafts.contains(where: { $0.outboxID == draftID }) {
+                    model.discard()
+                    app.reloadOutbox()
+                }
+            } else {
+                model.saveNow()
+            }
+        }
     }
 
     private func actions(_ model: ComposeModel) -> some View {
@@ -72,6 +91,18 @@ struct InlineComposer: View {
                 .labelStyle(.iconOnly)
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .help("Open in its own window (⇧⌘O)")
+            Button {
+                model.saveNow()
+                withAnimation(.snappy) { app.toggleMinimizedReply(threadID: threadID) }
+            } label: { Label("Minimize", systemImage: "chevron.down") }
+                .labelStyle(.iconOnly)
+                .help("Minimize to a bar")
+            Button {
+                if model.wasEdited { model.saveNow() }
+                withAnimation(.snappy) { app.closeInlineReply(threadID: threadID) }
+            } label: { Label("Close", systemImage: "xmark") }
+                .labelStyle(.iconOnly)
+                .help("Close (what you wrote stays in Drafts)")
         }
     }
 }

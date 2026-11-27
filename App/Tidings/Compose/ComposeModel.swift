@@ -32,6 +32,8 @@ final class ComposeModel {
     var references: [String] = []
     var error: String?
     var isDirty = false
+    /// Whether you've changed anything since it opened (isDirty resets on every save).
+    @ObservationIgnored var wasEdited = false
     /// Text waiting to go in at the caret (Share Availability).
     var insertion: TextInsertion?
 
@@ -113,16 +115,48 @@ final class ComposeModel {
         return full
     }
 
-    /// Takes a reply's quote out of the editor (it ends the text); "•••" brings it back.
-    private func foldQuotedReply() {
-        guard kind == .reply || kind == .replyAll, body.length > 0 else { return }
+    /// Where the quoted (or forwarded) part of a text starts, if it has one.
+    static func quoteStart(in text: NSAttributedString) -> Int? {
         var start: Int?
-        body.enumerateAttribute(.tidingsQuotedReply, in: NSRange(location: 0, length: body.length)) { value, range, stop in
+        text.enumerateAttribute(.tidingsQuotedReply, in: NSRange(location: 0, length: text.length)) { value, range, stop in
             if value != nil { start = range.location; stop.pointee = true }
         }
-        guard let start else { return }
+        return start
+    }
+
+    /// Takes a reply's quote out of the editor (it ends the text); "•••" brings it back.
+    private func foldQuotedReply() {
+        guard kind == .reply || kind == .replyAll, body.length > 0, let start = Self.quoteStart(in: body) else { return }
         foldedQuote = body.attributedSubstring(from: NSRange(location: start, length: body.length - start))
         body = body.attributedSubstring(from: NSRange(location: 0, length: start))
+    }
+
+    /// Forward after Reply (or back): becomes the other kind. What you wrote stays; recipients,
+    /// subject and the quoted part are the new kind's (a forward starts with no one in To).
+    func adopt(_ conversion: InlineConversion) {
+        let typedEnd = foldedQuote != nil ? body.length : (Self.quoteStart(in: body) ?? body.length)
+        let combined = NSMutableAttributedString(attributedString: body.attributedSubstring(from: NSRange(location: 0, length: typedEnd)))
+        if let start = Self.quoteStart(in: conversion.body) {
+            combined.append(conversion.body.attributedSubstring(from: NSRange(location: start, length: conversion.body.length - start)))
+        }
+        let message = conversion.message
+        kind = conversion.kind
+        to = message.to.map(\.description).joined(separator: ", ")
+        cc = message.cc.map(\.description).joined(separator: ", ")
+        showCcBcc = !cc.isEmpty || !bcc.isEmpty
+        subject = message.subject
+        inReplyTo = message.inReplyTo
+        references = message.references
+        originalLocalID = conversion.originalLocalID
+        if kind == .forward {
+            for attachment in message.attachments where !attachments.contains(where: { $0.filename == attachment.filename && $0.data == attachment.data }) {
+                attachments.append(attachment)
+            }
+        }
+        foldedQuote = nil
+        body = combined
+        foldQuotedReply()
+        changed()
     }
 
     /// "•••": the quoted mail back in the editor, to edit or trim.
@@ -167,6 +201,8 @@ final class ComposeModel {
 
     func changed() {
         isDirty = true
+        wasEdited = true
+        app?.editedDrafts.insert(draftID)
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
@@ -179,6 +215,8 @@ final class ComposeModel {
         guard let app, var item = try? app.store.outboxItem(id: draftID), item.state == .draft else { return }
         item.message = buildMessage()
         item.accountID = accountID
+        item.kind = kind
+        item.originalLocalID = originalLocalID
         _ = try? app.store.save(item)
         isDirty = false
     }
@@ -245,3 +283,16 @@ final class ComposeModel {
 }
 
 import UniformTypeIdentifiers
+
+/// Forward after Reply (or back) on an open inline reply: the new kind's draft, for the open
+/// composer to take on (`ComposeModel.adopt`).
+struct InlineConversion: Equatable {
+    let id = UUID()
+    var kind: ComposeKind
+    var message: OutgoingMessage
+    var body: NSAttributedString
+    var originalLocalID: Int64?
+
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id }
+}
+

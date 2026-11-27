@@ -11,6 +11,7 @@ struct ReaderView: View {
         if let threadID {
             let _ = model.revision   // redraw after moves, flag changes and syncs
             let messages = model.readerMessages(inThread: threadID)
+            let reactions = model.reactions(on: messages)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if let first = messages.last {
@@ -43,7 +44,8 @@ struct ReaderView: View {
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                         // iPhone: no card round each message, just a line between them.
                         if Platform.isPhone, index > 0 { Divider().padding(.vertical, 4) }
-                        MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread)
+                        MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread,
+                                    reactions: message.id.flatMap { reactions[$0] } ?? [])
                     }
                 }
                 // iPhone: Mail's own reading margins.
@@ -71,6 +73,20 @@ struct MessageRibbon: View {
             button("Reply", "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
             button("Reply All", "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
             button("Forward", "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
+            if model.canReact(to: message) {
+                Divider().frame(height: 14).padding(.horizontal, 2)
+                let liked = model.myReaction(to: message) == "👍"
+                button(liked ? "Remove Like" : "Like", liked ? "hand.thumbsup.fill" : "hand.thumbsup") {
+                    model.toggleReaction("👍", to: message)
+                }
+                ReactionMenu(message: message) {
+                    Image(systemName: "face.smiling")
+                        .font(.system(size: 13))
+                        .frame(width: 30, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
@@ -91,6 +107,70 @@ struct MessageRibbon: View {
     }
 }
 
+/// The likes on a message, grouped by emoji ("👍 2"); yours stands out. Clicking one gives
+/// that reaction too, or takes yours back.
+struct ReactionRow: View {
+    @Environment(AppModel.self) private var model
+    let message: StoredMessage
+    let reactions: [MailReaction]
+
+    var body: some View {
+        let groups = Dictionary(grouping: reactions, by: \.emoji)
+            .sorted { ($0.value.map(\.date).min() ?? .distantPast) < ($1.value.map(\.date).min() ?? .distantPast) }
+        HStack(spacing: 6) {
+            ForEach(groups, id: \.key) { emoji, people in
+                let mine = people.contains(where: \.isMine)
+                Button { model.toggleReaction(emoji, to: message) } label: {
+                    HStack(spacing: 4) {
+                        Text(emoji)
+                        if people.count > 1 { Text("\(people.count)").monospacedDigit() }
+                    }
+                    .font(.callout)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(mine ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary), in: .capsule)
+                    .overlay { if mine { Capsule().strokeBorder(.tint.opacity(0.5)) } }
+                }
+                .buttonStyle(.plain)
+                // On your own mail the chips only show who reacted.
+                .allowsHitTesting(model.canReact(to: message))
+                .help(Text(people.map(\.fromName).joined(separator: ", ")))
+                .accessibilityLabel(Text("\(emoji) from \(people.map(\.fromName).joined(separator: ", "))"))
+            }
+            if Platform.isPhone, model.canReact(to: message) {
+                ReactionMenu(message: message) {
+                    Image(systemName: "face.smiling")
+                        .font(.callout)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.quaternary, in: .capsule)
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Outlook's six reactions, to pick one.
+struct ReactionMenu<Label: View>: View {
+    @Environment(AppModel.self) private var model
+    let message: StoredMessage
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        Menu {
+            ForEach(AppModel.reactionChoices, id: \.self) { emoji in
+                Button { model.toggleReaction(emoji, to: message) } label: {
+                    Text(model.myReaction(to: message) == emoji ? "\(emoji) ✓" : emoji)
+                }
+            }
+        } label: { label() }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("React")
+    }
+}
+
 struct MessageCard: View {
     @Environment(AppModel.self) private var model
     let message: StoredMessage
@@ -104,8 +184,12 @@ struct MessageCard: View {
     @State private var isHovered = false
     @Environment(\.colorScheme) private var colorScheme
 
-    init(message: StoredMessage, startsExpanded: Bool) {
+    /// Reactions on this message (likes from Outlook, Gmail and Tidings).
+    var reactions: [MailReaction] = []
+
+    init(message: StoredMessage, startsExpanded: Bool, reactions: [MailReaction] = []) {
         self.message = message
+        self.reactions = reactions
         _expanded = State(initialValue: startsExpanded)
     }
 
@@ -137,6 +221,11 @@ struct MessageCard: View {
                         .zIndex(1)
                 }
                 content
+            }
+            // Likes under the message; on the iPhone also the button to add one (the Mac has
+            // it in the hover ribbon).
+            if !reactions.isEmpty || (Platform.isPhone && expanded && model.canReact(to: message)) {
+                ReactionRow(message: message, reactions: reactions)
             }
         }
         // On the Mac each message is a card; the iPhone has no room to spare for one.

@@ -1,6 +1,116 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Like" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synes godt om"
+          }
+        }
+      }
+    },
+    "Remove Like" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern synes godt om"
+          }
+        }
+      }
+    },
+    "React" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reagér"
+          }
+        }
+      }
+    },
+    "Minimize" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimér"
+          }
+        }
+      }
+    },
+    "Minimize to a bar" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimér til en bjælke"
+          }
+        }
+      }
+    },
+    "Close (what you wrote stays in Drafts)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luk (det, du har skrevet, bliver i Kladder)"
+          }
+        }
+      }
+    },
+    "Show the reply" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis svaret"
+          }
+        }
+      }
+    },
+    "Minimize or Show Reply" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimér eller vis svar"
+          }
+        }
+      }
+    },
+    "%@ reacted to your message" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ reagerede på din besked"
+          }
+        }
+      }
+    },
+    "Couldn't send the reaction: %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke sende reaktionen: %@"
+          }
+        }
+      }
+    },
+    "%@ from %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ fra %2$@"
+          }
+        }
+      }
+    },
     "Show the quoted mail" : {
       "localizations" : {
         "da" : {

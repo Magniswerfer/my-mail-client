@@ -76,15 +76,56 @@ extension AppModel {
             openDraftInPlace(suggested, threadID: thread.threadID)
             return
         }
-        // Mac: a conversation with a reply already open in the reading pane keeps that one.
-        if Platform.isMac, let open = inlineDrafts[thread.threadID],
-           (try? store.outboxItem(id: open))?.state == .draft {
-            return
-        }
+        if reuseInlineDraft(kind, thread: thread, message: nil) { return }
         Task {
             guard let id = await prepareDraft(kind, thread: thread, account: account) else { return }
             openDraftInPlace(id, threadID: thread.threadID)
         }
+    }
+
+    /// Mac: a conversation with a reply already open in the reading pane keeps that one (shown
+    /// again if minimized); asked for another kind (Forward after Reply), it becomes that kind,
+    /// keeping what you wrote. True when it handled the request.
+    private func reuseInlineDraft(_ kind: ComposeKind, thread: ThreadSummary, message: StoredMessage?) -> Bool {
+        guard Platform.isMac, let open = inlineDrafts[thread.threadID],
+              let item = try? store.outboxItem(id: open), item.state == .draft else { return false }
+        minimizedReplies.remove(thread.threadID)
+        guard item.kind != kind else { return true }
+        Task {
+            guard let account = accounts.first(where: { $0.id == (message?.accountID ?? thread.latest.accountID) }) else { return }
+            let original = message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+            guard let raw = try? await rawMessage(original) else { return }
+            let draft = Self.draft(kind, replyingTo: MIMEParser.parse(raw), raw: raw, account: account)
+            inlineConversions[thread.threadID] = InlineConversion(kind: kind, message: draft.message, body: draft.body,
+                                                                  originalLocalID: original.id)
+        }
+        return true
+    }
+
+    /// Mac: replies opened and left without a change (and not minimized) on conversations you've
+    /// moved away from aren't kept for when you come back. Suggested ones stay suggestions.
+    func dropUntouchedReplies() {
+        for (threadID, id) in inlineDrafts where threadID != selectedThreadID
+            && !minimizedReplies.contains(threadID) && !editedDrafts.contains(id) {
+            inlineDrafts[threadID] = nil
+            if !autoDrafts.contains(where: { $0.outboxID == id }) { try? store.deleteOutboxItem(id: id) }
+        }
+    }
+
+    /// Mac: folds the inline reply down to a bar, or opens it again.
+    func toggleMinimizedReply(threadID: String) {
+        if minimizedReplies.contains(threadID) { minimizedReplies.remove(threadID) } else { minimizedReplies.insert(threadID) }
+    }
+
+    /// Mac: closes the inline reply. What you wrote stays in Drafts; an untouched one is dropped
+    /// (one Tidings suggested stays a suggestion).
+    func closeInlineReply(threadID: String) {
+        guard let id = inlineDrafts.removeValue(forKey: threadID) else { return }
+        minimizedReplies.remove(threadID)
+        if !editedDrafts.contains(id), !autoDrafts.contains(where: { $0.outboxID == id }) {
+            try? store.deleteOutboxItem(id: id)
+        }
+        reloadOutbox()
     }
 
     /// Reply, reply all or forward one particular message of a conversation (the reader's ribbon).
@@ -92,7 +133,7 @@ extension AppModel {
         guard let threadID = message.threadID, let id = message.id,
               let thread = targetThreads.first(where: { $0.threadID == threadID })
                 ?? (try? store.threads(representedBy: [id], ownAddresses: ownAddresses).first) else { return }
-        if Platform.isMac, let open = inlineDrafts[threadID], (try? store.outboxItem(id: open))?.state == .draft { return }
+        if reuseInlineDraft(kind, thread: thread, message: message) { return }
         Task {
             guard let draft = await prepareDraft(kind, thread: thread, message: message) else { return }
             openDraftInPlace(draft, threadID: threadID)
@@ -237,13 +278,12 @@ extension AppModel {
         let header = kind == .forward
             ? String(localized: "---------- Forwarded message ----------\nFrom: \(parsed.from.map(\.description).joined(separator: ", "))\nDate: \(when)\nSubject: \(parsed.subject)\nTo: \(parsed.to.map(\.description).joined(separator: ", "))\n\n")
             : String(localized: "On \(when), \(who) wrote:\n")
-        // A reply's header and quote fold away in the editor (ComposeModel); a forward's stay.
+        // The quoted (or forwarded) part is marked: a reply's folds away in the editor
+        // (ComposeModel); a forward's stays, and switching kinds swaps it.
         var headerAttributes = RichTextEditor.baseAttributes
         var quoteAttributes = kind == .forward ? RichTextEditor.baseAttributes : RichTextEditor.quoteAttributes
-        if kind != .forward {
-            headerAttributes[.tidingsQuotedReply] = true
-            quoteAttributes[.tidingsQuotedReply] = true
-        }
+        headerAttributes[.tidingsQuotedReply] = true
+        quoteAttributes[.tidingsQuotedReply] = true
         body.append(NSAttributedString(string: header, attributes: headerAttributes))
         let quotedText = parsed.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
         body.append(NSAttributedString(string: quotedText, attributes: quoteAttributes))

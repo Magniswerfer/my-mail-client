@@ -93,6 +93,10 @@ extension AppModel {
                        isEnabled: undoManager?.canUndo == true) { self.undoManager?.undo() },
             AppCommand(id: "pinnedOnly", title: pinnedOnly ? String(localized: "Show All Conversations") : String(localized: "Show Only Pinned"),
                        symbol: "pin.circle", keys: "G P") { self.pinnedOnly.toggle() },
+            AppCommand(id: "minimizeReply", title: String(localized: "Minimize or Show Reply"), symbol: "chevron.down", keys: nil) {
+                if let id = self.readerThreadID, self.inlineDrafts[id] != nil { self.toggleMinimizedReply(threadID: id) }
+            },
+            AppCommand(id: "like", title: String(localized: "Like"), symbol: "hand.thumbsup", keys: nil) { self.likeSelected() },
             AppCommand(id: "unreadOnly", title: unreadOnly ? String(localized: "Show All Conversations") : String(localized: "Show Only Unread"),
                        symbol: "line.3.horizontal.decrease.circle", keys: "G U") { self.unreadOnly.toggle() },
             AppCommand(id: "next", title: String(localized: "Next Conversation"), symbol: "chevron.down", keys: "J") { self.moveSelection(1) },

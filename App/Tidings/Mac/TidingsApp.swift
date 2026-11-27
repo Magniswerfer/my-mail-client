@@ -275,16 +275,23 @@ struct RootView: View {
                     // Reply / Reply All / Forward open here, under the conversation: about half the
                     // reader at first, then as tall as you drag it (remembered).
                     if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
-                        let height = InlineComposerHeight.clamped(inlineComposerHeight, in: geometry.size.height)
-                        ComposerResizeHandle(height: height, available: geometry.size.height) { inlineComposerHeight = $0 }
-                        InlineComposer(threadID: threadID, draftID: draftID)
-                            .id(draftID)
-                            .frame(height: height)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        if model.minimizedReplies.contains(threadID) {
+                            Divider()
+                            MinimizedReplyBar(threadID: threadID, draftID: draftID)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        } else {
+                            let height = InlineComposerHeight.clamped(inlineComposerHeight, in: geometry.size.height)
+                            ComposerResizeHandle(height: height, available: geometry.size.height) { inlineComposerHeight = $0 }
+                            InlineComposer(threadID: threadID, draftID: draftID)
+                                .id(draftID)
+                                .frame(height: height)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
                     }
                 }
             }
             .animation(.snappy, value: model.inlineDrafts)
+            .animation(.snappy, value: model.minimizedReplies)
             // A real minimum (the column width alone isn't enforced when the list's divider is
             // dragged): mail is laid out for about 600pt, and below ~460 headers start to wrap.
             .frame(minWidth: 460)
@@ -616,6 +623,38 @@ struct ComposerResizeHandle: View {
             .onTapGesture(count: 2) { set(0) }
             .accessibilityLabel("Resize reply")
             .help("Drag to resize the reply; double-click for the default size")
+    }
+}
+
+/// A minimized inline reply: one line with its subject; click to open it again.
+struct MinimizedReplyBar: View {
+    @Environment(AppModel.self) private var model
+    let threadID: String
+    let draftID: Int64
+
+    var body: some View {
+        let item = try? model.store.outboxItem(id: draftID)
+        HStack(spacing: 10) {
+            Button { model.toggleMinimizedReply(threadID: threadID) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: item?.kind == .forward ? "arrowshape.turn.up.right" : "arrowshape.turn.up.left")
+                        .foregroundStyle(.secondary)
+                    Text(item?.message?.subject ?? "")
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.up").foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Show the reply")
+            Button { model.closeInlineReply(threadID: threadID) } label: { Label("Close", systemImage: "xmark") }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Close (what you wrote stays in Drafts)")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 38)
     }
 }
 

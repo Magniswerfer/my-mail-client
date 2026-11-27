@@ -67,6 +67,7 @@ final class AppModel {
             // A click, J/K or a removal moves the focus out of a ⌘A block: back to one row.
             if !multiSelection.isEmpty, !(selectedThreadID.map(multiSelection.contains) ?? false) { multiSelection = [] }
             scheduleMarkRead()
+            dropUntouchedReplies()
             updateReader(debounced: isKeyboardNavigating)
             if let id = selectedThreadID, !isSearching, let index = visibleThreadIDs.firstIndex(of: id) {
                 selectionIndexHint = index
@@ -154,6 +155,12 @@ final class AppModel {
     /// Gmail and Outlook), one per conversation: conversation id → its draft. Moving to another
     /// conversation keeps the draft here, so coming back shows it again; Pop Out moves it to a window.
     var inlineDrafts: [String: Int64] = [:]
+    /// Mac: inline replies folded down to a bar (by thread).
+    var minimizedReplies: Set<String> = []
+    /// Drafts you've changed since they opened (an untouched one is dropped when closed).
+    @ObservationIgnored var editedDrafts: Set<Int64> = []
+    /// Mac: an open inline reply to turn into another kind (Forward after Reply), by thread.
+    var inlineConversions: [String: InlineConversion] = [:]
     var outboxItems: [OutboxItem] = []
     var draftItems: [OutboxItem] = []
     /// Follow-ups Tidings drafted for conversations still waiting on someone (Auto Drafts).
@@ -239,6 +246,9 @@ final class AppModel {
     var aiCategories: [AICategory] = []
     /// threadID → AI category ids (one read per reload).
     var aiMembership: [String: Set<String>] = [:]
+    /// Reactions you sent this session, by the reacted-to Message-ID ("" = taken back): shown at
+    /// once, before they sync back from Sent.
+    var sentReactions: [String: String] = [:]
     var editingAICategory: AICategoryEditing?
     @ObservationIgnored var aiCategoryTask: Task<Void, Never>?
 
