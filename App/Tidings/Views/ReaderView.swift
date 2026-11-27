@@ -176,14 +176,33 @@ struct MessageCard: View {
         HStack(alignment: .top, spacing: 10) {
             avatar(size: 34)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(message.senderDisplay).font(.headline)
-                    if expanded {
-                        Text(message.fromAddress).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                        unsubscribeButton
+                // One line when the reader is wide enough; else name and date, then the address
+                // under them (never squeezed into a column).
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(message.senderDisplay).font(.headline)
+                        if expanded {
+                            Text(message.fromAddress).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            unsubscribeButton
+                        }
+                        Spacer(minLength: 12)
+                        Text(MailDate.long(message.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Text(MailDate.long(message.date)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(message.senderDisplay).font(.headline).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(expanded ? MailDate.long(message.date) : MailDate.short(message.date))
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+                        }
+                        if expanded {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(message.fromAddress).font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                                unsubscribeButton
+                            }
+                        }
+                    }
                 }
                 if expanded, let to = body_?.to, !to.isEmpty {
                     Text("To: \(to)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -304,7 +323,15 @@ struct PrivacyBar: View {
     var body: some View {
         let hidden = imagesShown ? 0 : prepared.remoteImages
         if prepared.trackersRemoved > 0 || hidden > 0 || prepared.linksCleaned > 0 {
-            if Platform.isPhone { phone(hidden: hidden) } else { regular(hidden: hidden) }
+            if Platform.isPhone {
+                phone(hidden: hidden)
+            } else {
+                // The one-line capsule when it fits; in a narrow reader, the iPhone's compact form.
+                ViewThatFits(in: .horizontal) {
+                    regular(hidden: hidden)
+                    phone(hidden: hidden)
+                }
+            }
         }
     }
 

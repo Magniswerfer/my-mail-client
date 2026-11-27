@@ -27,7 +27,8 @@ struct TidingsApp: App {
         WindowGroup(id: "main") {
             RootView()
                 .environment(model)
-                .frame(minWidth: 900, minHeight: 560)
+                // Sidebar 190 + list 320 + reader 460, so the reader's minimum always holds.
+                .frame(minWidth: 980, minHeight: 560)
                 .task { model.start() }
         }
         .commands {
@@ -277,7 +278,10 @@ struct RootView: View {
                 }
             }
             .animation(.snappy, value: model.inlineDrafts)
-            .navigationSplitViewColumnWidth(min: 380, ideal: 640)
+            // A real minimum (the column width alone isn't enforced when the list's divider is
+            // dragged): mail is laid out for about 600pt, and below ~460 headers start to wrap.
+            .frame(minWidth: 460)
+            .navigationSplitViewColumnWidth(min: 460, ideal: 680)
             .toolbar { readerToolbar }
                 .inspector(isPresented: $model.isContactPanelShown) {
                     ContactPanel()
