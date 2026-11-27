@@ -36,7 +36,14 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
-      - run: xcodebuild -version && swift --version
+      # The newest Xcode on the image: the app icon is an Icon Composer file from Xcode 27, which
+      # older actools can't read.
+      - name: Newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          newest=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$newest/Contents/Developer"
+          xcodebuild -version && swift --version
 
       - name: Engine tests
         id: engine

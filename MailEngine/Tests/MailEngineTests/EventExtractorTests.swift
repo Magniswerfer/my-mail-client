@@ -27,7 +27,19 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
 }
 
 /// `NSDataDetector` is Apple-only: on Linux (ADR 0007) the text layer finds nothing.
-@Suite(.enabled(if: DataDetection.isAvailable)) struct EventTextTests {
+extension DataDetection {
+    /// Whether this system's date detector reads a Danish day and time ("fredag kl. 19"). macOS 27
+    /// does; the macOS 26 on CI's runners and Linux (no detector) don't, and there these tests
+    /// would only test Apple's detector, not our code.
+    static let readsDanishTimes: Bool = {
+        guard isAvailable else { return false }
+        return dates(in: "Middag hos os fredag kl. 19").contains { found in
+            found.date.map { Calendar.current.component(.hour, from: $0) == 19 } ?? false
+        }
+    }()
+}
+
+@Suite(.enabled(if: DataDetection.readsDanishTimes, "this OS's date detector doesn't read Danish times")) struct EventTextTests {
     @Test func danishDinnerOnFriday() throws {
         let found = extract("Hej Magnus,\n\nVil I komme til middag hos os fredag kl. 19?\n\nKh Anna", subject: "Fredag")
         let s = try #require(found.first)
@@ -290,7 +302,7 @@ private func extract(_ text: String, subject: String = "Hej", html: String? = ni
         #expect(market.end == utcDay(2026, 12, 7), "schema.org end dates are inclusive")
     }
 
-    @Test(.enabled(if: DataDetection.isAvailable)) func calendarInviteForTheBridge() throws {
+    @Test(.enabled(if: DataDetection.readsDanishTimes, "this OS's date detector doesn't read Danish times")) func calendarInviteForTheBridge() throws {
         let s = try #require(extract("Middag hos os fredag kl. 19").first)
         let invite = s.calendarInvite(uid: "u1", notes: "n")
         #expect(invite.method == .publish)
@@ -324,7 +336,7 @@ private struct FakeJudge: EventJudge {
         return m
     }
 
-    @Test(.enabled(if: DataDetection.isAvailable)) func scanStoreDismissAndMove() async throws {
+    @Test(.enabled(if: DataDetection.readsDanishTimes, "this OS's date detector doesn't read Danish times")) func scanStoreDismissAndMove() async throws {
         let s = try store()
         var invite = message(3, "Meeting Friday at 10:00")
         invite.invite = CalendarInvite.parse("""
@@ -372,7 +384,7 @@ private struct FakeJudge: EventJudge {
         #expect(try s.messagesNeedingEventScan(since: .distantPast, limit: 10).allSatisfy { $0.uid != 99 })
     }
 
-    @Test(.enabled(if: DataDetection.isAvailable)) func theModelConfirmsAndTitlesUncertainOnes() async throws {
+    @Test(.enabled(if: DataDetection.readsDanishTimes, "this OS's date detector doesn't read Danish times")) func theModelConfirmsAndTitlesUncertainOnes() async throws {
         let s = try store()
         let messages = [
             message(1, "Kan du i morgen kl. 16?", category: .updates),
@@ -397,7 +409,7 @@ private struct FakeJudge: EventJudge {
         #expect(try s.eventSuggestions(for: messages[2])?.visible().first?.title == "Frokost", "kept as is")
     }
 
-    @Test(.enabled(if: DataDetection.isAvailable)) func withoutAModelUncertainOnesNeedPersonalMail() async throws {
+    @Test(.enabled(if: DataDetection.readsDanishTimes, "this OS's date detector doesn't read Danish times")) func withoutAModelUncertainOnesNeedPersonalMail() async throws {
         let s = try store()
         let messages = [
             message(1, "Kan du i morgen kl. 16?", category: .primary),
