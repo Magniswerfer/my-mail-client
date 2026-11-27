@@ -61,6 +61,36 @@ struct ReaderView: View {
     }
 }
 
+/// Mac: the small capsule of actions on a hovered message, as in Mail. Each acts on this message.
+struct MessageRibbon: View {
+    @Environment(AppModel.self) private var model
+    let message: StoredMessage
+
+    var body: some View {
+        HStack(spacing: 2) {
+            button("Reply", "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
+            button("Reply All", "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
+            button("Forward", "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .glassEffect(.regular.interactive(), in: .capsule)
+    }
+
+    private func button(_ title: LocalizedStringKey, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .frame(width: 30, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help(Text(title))
+        .accessibilityLabel(Text(title))
+    }
+}
+
 struct MessageCard: View {
     @Environment(AppModel.self) private var model
     let message: StoredMessage
@@ -71,6 +101,7 @@ struct MessageCard: View {
     /// Dark mode: show this message's own colours instead of recolouring it.
     @State private var originalColors = false
     @State private var readerMode = false
+    @State private var isHovered = false
     @Environment(\.colorScheme) private var colorScheme
 
     init(message: StoredMessage, startsExpanded: Bool) {
@@ -96,6 +127,15 @@ struct MessageCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
             if expanded {
+                // Mac, as in Mail: a line under the header, and on hover a ribbon on it to
+                // answer this message (not just the conversation's newest).
+                if !Platform.isPhone {
+                    Divider()
+                        .overlay {
+                            if isHovered { MessageRibbon(message: message).transition(.opacity) }
+                        }
+                        .zIndex(1)
+                }
                 content
             }
         }
@@ -104,6 +144,14 @@ struct MessageCard: View {
         .background {
             if !Platform.isPhone { RoundedRectangle(cornerRadius: 14).fill(.background.secondary) }
         }
+        .overlay(alignment: .bottom) {
+            // A folded message has no line: the ribbon sits on its bottom edge.
+            if !Platform.isPhone, !expanded, isHovered {
+                MessageRibbon(message: message).offset(y: 14).transition(.opacity)
+            }
+        }
+        .zIndex(isHovered ? 1 : 0)
+        .onHover { inside in withAnimation(.easeOut(duration: 0.12)) { isHovered = inside } }
         .task(id: expanded) {
             guard expanded, body_ == nil else { return }
             await load()

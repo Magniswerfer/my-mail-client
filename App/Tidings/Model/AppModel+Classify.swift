@@ -47,12 +47,14 @@ extension AppModel {
         guard !threads.isEmpty,
               let result = try? store.moveConversations(threads.map(\.threadID), to: category, ownAddresses: ownAddresses)
         else { return }
-        // Moved on purpose: these leave the bundle or category they're held in.
+        // Moved on purpose: these leave the bundle or category they're held in, and your categories.
         releaseHolds(threads.map(\.threadID))
+        let left = leaveCustomCategories(threads.map(\.threadID), sender: result.promotedSender)
         // A moved ⌘A block is done with; back to one row.
         multiSelection = []
         let undo: @MainActor () -> Void = { [weak self] in
             self?.releaseHolds(threads.map(\.threadID))
+            self?.restore(left)
             try? self?.store.restoreCategories(result.previous)
             if let sender = result.promotedSender { try? self?.store.forgetSenderRule(sender) }
             self?.toast = nil
@@ -89,8 +91,10 @@ extension AppModel {
             self?.threads.filter { $0.latest.fromAddress.lowercased() == sender.lowercased() }.map(\.threadID) ?? []
         }
         releaseHolds(fromSender())
+        let left = leaveCustomCategories((try? store.threadIDs(fromSender: sender.lowercased())) ?? [], sender: sender)
         let undo: @MainActor () -> Void = { [weak self] in
             self?.releaseHolds(fromSender())
+            self?.restore(left)
             try? self?.store.forgetSenderRule(sender)
             try? self?.store.restoreCategories(previous)
             self?.toast = nil

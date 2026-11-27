@@ -13,6 +13,27 @@ extension NSAttributedString.Key {
     /// "ul"/"ol" on list paragraphs typed on iPhone, where the markers are plain text (the Mac
     /// uses NSTextList, which NSTextView manages itself).
     static let tidingsList = NSAttributedString.Key("TidingsList")
+    /// A reply's "On … wrote:" and the quote under it: folded away behind "•••" while you write
+    /// (as in Gmail), and sent either way.
+    static let tidingsQuotedReply = NSAttributedString.Key("TidingsQuotedReply")
+}
+
+/// How the editor's text is saved in a draft. A keyed archive keeps Tidings' own attributes
+/// (quote, signature, lists, the folded reply); RTFD, used before, dropped them.
+enum EditorArchive {
+    static func data(_ text: NSAttributedString) -> Data? {
+        try? NSKeyedArchiver.archivedData(withRootObject: text, requiringSecureCoding: true)
+    }
+
+    static func restore(_ data: Data) -> NSAttributedString? {
+        var classes: [AnyClass] = [NSAttributedString.self, NSMutableAttributedString.self, NSString.self, NSNumber.self,
+                                   NSURL.self, NSDictionary.self, NSArray.self, NSParagraphStyle.self,
+                                   NSMutableParagraphStyle.self, NSTextTab.self, PlatformFont.self, PlatformColor.self]
+        classes.append(NSTextList.self)
+        if let text = try? NSKeyedUnarchiver.unarchivedObject(ofClasses: classes, from: data) as? NSAttributedString { return text }
+        // Drafts saved before: RTFD.
+        return try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtfd], documentAttributes: nil)
+    }
 }
 
 /// Text to put at the caret (e.g. Share Availability). The id makes each insertion happen once.
@@ -21,14 +42,91 @@ struct TextInsertion: Equatable {
     let text: String
 }
 
+// MARK: - Quote bars
+
+/// Draws the 2pt grey bar beside quoted paragraphs, as the sent mail's <blockquote> shows it.
+enum QuoteBars {
+    static let width: CGFloat = 2
+
+    /// The bars' rects in the text view's coordinates (`origin`: where the text container starts).
+    static func rects(storage: NSAttributedString, layout: NSTextLayoutManager, origin: CGPoint) -> [CGRect] {
+        guard let content = layout.textContentManager, storage.length > 0 else { return [] }
+        var rects: [CGRect] = []
+        storage.enumerateAttribute(.tidingsQuote, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard value != nil,
+                  let start = content.location(content.documentRange.location, offsetBy: range.location),
+                  let end = content.location(start, offsetBy: range.length),
+                  let textRange = NSTextRange(location: start, end: end) else { return }
+            var block = CGRect.null
+            layout.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, _, _ in
+                block = block.union(frame)
+                return true
+            }
+            guard !block.isNull else { return }
+            rects.append(CGRect(x: origin.x, y: origin.y + block.minY, width: width, height: block.height))
+        }
+        return rects
+    }
+}
+
+#if os(macOS)
+final class QuoteBarTextView: NSTextView {
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        NSColor.tertiaryLabelColor.setFill()
+        for bar in quoteBars() where bar.intersects(dirtyRect) {
+            NSBezierPath(roundedRect: bar, xRadius: 1, yRadius: 1).fill()
+        }
+    }
+
+    override func didChangeText() {
+        super.didChangeText()
+        needsDisplay = true
+    }
+
+    private func quoteBars() -> [CGRect] {
+        guard let storage = textStorage else { return [] }
+        if let layout = textLayoutManager {
+            return QuoteBars.rects(storage: storage, layout: layout, origin: textContainerOrigin)
+        }
+        // Fell back to TextKit 1 (lists can do that); asking for `layoutManager` before that
+        // would itself force the fallback.
+        guard let layout = layoutManager, let container = textContainer else { return [] }
+        var bars: [CGRect] = []
+        storage.enumerateAttribute(.tidingsQuote, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard value != nil else { return }
+            let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let block = layout.boundingRect(forGlyphRange: glyphs, in: container)
+            bars.append(CGRect(x: textContainerOrigin.x, y: textContainerOrigin.y + block.minY, width: QuoteBars.width, height: block.height))
+        }
+        return bars
+    }
+}
+#else
+final class QuoteBarTextView: UITextView {
+    override func draw(_ rect: CGRect) {
+        super.draw(rect)
+        guard let layout = textLayoutManager else { return }
+        UIColor.tertiaryLabel.setFill()
+        let origin = CGPoint(x: textContainerInset.left, y: textContainerInset.top)
+        for bar in QuoteBars.rects(storage: textStorage, layout: layout, origin: origin) where bar.intersects(rect) {
+            UIBezierPath(roundedRect: bar, cornerRadius: 1).fill()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        setNeedsDisplay()
+    }
+}
+#endif
+
 // MARK: - Shared styling
 
 extension RichTextEditor {
-    #if os(macOS)
+    /// 14pt on both, the size the sent mail is set in (`MailBodyConverter.html`) and shown at in
+    /// Tidings: what you write looks like what they get.
     static let baseFont = PlatformFont.systemFont(ofSize: 14)
-    #else
-    static let baseFont = PlatformFont.preferredFont(forTextStyle: .body)
-    #endif
 
     static var baseAttributes: [NSAttributedString.Key: Any] {
         [.font: baseFont, .foregroundColor: PlatformColor.tidingsLabel]
@@ -160,8 +258,17 @@ struct RichTextEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
-        let view = scroll.documentView as! NSTextView
+        // As NSTextView.scrollableTextView() sets it up, with our subclass (quote bars).
+        let view = QuoteBarTextView(usingTextLayoutManager: true)
+        view.isVerticallyResizable = true
+        view.isHorizontallyResizable = false
+        view.autoresizingMask = [.width]
+        view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        view.textContainer?.widthTracksTextView = true
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .noBorder
+        scroll.documentView = view
         view.delegate = context.coordinator
         view.isRichText = true
         view.allowsUndo = true
@@ -301,10 +408,10 @@ struct RichTextEditor: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
+        let view = QuoteBarTextView()
+        view.contentMode = .redraw
         view.delegate = context.coordinator
         view.allowsEditingTextAttributes = true
-        view.adjustsFontForContentSizeCategory = true
         view.font = Self.baseFont
         view.typingAttributes = Self.baseAttributes
         view.attributedText = text
@@ -514,8 +621,10 @@ enum MailBodyConverter {
             let list = style?.textLists.first.map { $0.markerFormat == .decimal ? "ol" : "ul" } ?? (attrs[.tidingsList] as? String)
             let quote = attrs[.tidingsQuote] != nil
             closeBlocks(list: list, quote: quote)
-            if quote, !inQuote { html += "<blockquote style=\"margin:0 0 0 .8ex;border-left:2px solid #ccc;padding-left:1ex;color:#555\">"; inQuote = true }
-            if let list, openList == nil { html += "<\(list)>"; openList = list }
+            // As the editor shows them: a 2pt bar and grey text 14pt in; lists 24pt in; no gaps
+            // between paragraphs but the blank lines you typed.
+            if quote, !inQuote { html += "<blockquote style=\"margin:0;border-left:2px solid #c7c7cc;padding-left:12px;color:#6e6e73\">"; inQuote = true }
+            if let list, openList == nil { html += "<\(list) style=\"margin:0;padding-left:24px\">"; openList = list }
 
             var content = text.attributedSubstring(from: range)
             // Drop the visible list marker we inserted ("\t•\t", "\t1.\t").
@@ -527,7 +636,7 @@ enum MailBodyConverter {
             if list != nil {
                 html += "<li>\(inner)</li>"
             } else {
-                html += inner.isEmpty ? "<p><br></p>" : "<p style=\"margin:0\">\(inner)</p>"
+                html += "<p style=\"margin:0\">\(inner.isEmpty ? "<br>" : inner)</p>"
             }
             location = NSMaxRange(range)
         }

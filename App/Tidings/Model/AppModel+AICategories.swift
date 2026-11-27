@@ -72,6 +72,19 @@ extension AppModel {
 
     func aiCategory(id: String) -> AICategory? { aiCategories.first { $0.id == id } }
 
+    /// Whether a conversation shows under a built-in tab. One that's in one of your categories
+    /// shows there instead (moving it there takes it out of Primary); one held on screen stays put.
+    func shows(_ thread: ThreadSummary, under category: MailCategory) -> Bool {
+        if let held = heldCategories[thread.threadID] { return held == category }
+        return thread.latest.category == category && !isInCustomCategory(thread)
+    }
+
+    /// In one of your categories (one that still exists).
+    func isInCustomCategory(_ thread: ThreadSummary) -> Bool {
+        guard let ids = aiMembership[thread.threadID], !ids.isEmpty else { return false }
+        return aiCategories.contains { ids.contains($0.id) }
+    }
+
     /// Unread conversations per tab, from the Inbox already loaded for the stream.
     func unreadCount(for tab: CategoryTab, inbox: [ThreadSummary]) -> Int {
         let unread = inbox.filter { $0.unreadCount > 0 && !$0.isReplyLater }
@@ -79,7 +92,7 @@ extension AppModel {
         // Only what the All list shows: mail a scheduled bundle holds until its delivery isn't
         // there yet (its own tab still counts it).
         case .all: return unread.filter { !isHeldForDelivery($0) }.count
-        case .builtIn(let c): return unread.filter { displayCategory($0) == c }.count
+        case .builtIn(let c): return unread.filter { shows($0, under: c) }.count
         case .ai(let id): return unread.filter { aiMembership[$0.threadID]?.contains(id) == true }.count
         }
     }
@@ -164,11 +177,14 @@ extension AppModel {
         !threads.isEmpty && threads.allSatisfy { aiMembership[$0.threadID]?.contains(id) == true }
     }
 
-    /// "Move to Investors" for these conversations: they show under its tab (their built-in
-    /// category stays) and become examples for the model. Undoable.
+    /// "Move to Investors" for these conversations: they show under its tab instead of their
+    /// built-in one (and leave your other categories), and become examples for the model. Undoable.
     func moveConversations(_ threads: [ThreadSummary], toAICategory id: String) {
         isCategoryPickerShown = false
         guard var category = aiCategory(id: id), !threads.isEmpty else { return }
+        // Out of the tab you're looking at, as with a built-in category.
+        releaseHolds(threads.map(\.threadID))
+        let left = leaveCustomCategories(threads.map(\.threadID), keeping: id)
         let previous = threads.map { ($0.threadID, try? store.membershipSource(threadID: $0.threadID, categoryID: id)) }
         for thread in threads {
             try? store.setMembership(threadID: thread.threadID, categoryID: id, isMember: true)
@@ -184,7 +200,7 @@ extension AppModel {
             for (thread, source) in previous {
                 try? self.store.restoreMembership(threadID: thread, categoryID: id, source: source)
             }
-            self.aiMembership = (try? self.store.aiCategoryMembership()) ?? [:]
+            self.restore(left)
             self.toast = nil
             self.reload()
         }
@@ -205,6 +221,8 @@ extension AppModel {
         if !hadSender { category.senders.append(address) }
         replace(aiCategory: category)
         let threads = (try? store.threadIDs(fromSender: address)) ?? []
+        releaseHolds(threads)
+        let left = leaveCustomCategories(threads, sender: address, keeping: id)
         let previous = threads.map { ($0, try? store.membershipSource(threadID: $0, categoryID: id)) }
         for t in threads { try? store.setMembership(threadID: t, categoryID: id, isMember: true) }
         let undoToken = offerUndo(named: String(localized: "Move")) { [weak self] in
@@ -216,7 +234,7 @@ extension AppModel {
             for (t, source) in previous {
                 try? self.store.restoreMembership(threadID: t, categoryID: id, source: source)
             }
-            self.aiMembership = (try? self.store.aiCategoryMembership()) ?? [:]
+            self.restore(left)
             self.toast = nil
             self.reload()
         }
@@ -229,6 +247,41 @@ extension AppModel {
     private func replace(aiCategory category: AICategory) {
         if let i = aiCategories.firstIndex(where: { $0.id == category.id }) { aiCategories[i] = category }
         try? store.saveAICategories(aiCategories)
+    }
+
+    /// What a move took these conversations out of: your categories, as they were.
+    struct CustomCategoryUndo {
+        var memberships: [(thread: String, category: String, source: Int?)] = []
+        var categories: [AICategory] = []
+    }
+
+    /// A move is to one place: takes these conversations out of your categories (all of them, or
+    /// all but `keeping`), and, for "always for this sender", the sender out of their lists.
+    func leaveCustomCategories(_ threadIDs: [String], sender: String? = nil, keeping: String? = nil) -> CustomCategoryUndo {
+        var undo = CustomCategoryUndo()
+        for thread in threadIDs {
+            for id in aiMembership[thread] ?? [] where id != keeping && aiCategory(id: id) != nil {
+                undo.memberships.append((thread, id, try? store.membershipSource(threadID: thread, categoryID: id)))
+                try? store.setMembership(threadID: thread, categoryID: id, isMember: false)
+            }
+        }
+        if let sender = sender?.lowercased() {
+            for var category in aiCategories where category.id != keeping && category.includesSender(sender) {
+                undo.categories.append(category)
+                category.senders.removeAll { $0 == sender }
+                replace(aiCategory: category)
+            }
+        }
+        aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
+        return undo
+    }
+
+    func restore(_ undo: CustomCategoryUndo) {
+        for (thread, category, source) in undo.memberships {
+            try? store.restoreMembership(threadID: thread, categoryID: category, source: source)
+        }
+        for category in undo.categories { replace(aiCategory: category) }
+        aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
     }
 
     // MARK: Corrections

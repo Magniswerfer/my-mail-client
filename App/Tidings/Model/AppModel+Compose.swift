@@ -87,6 +87,18 @@ extension AppModel {
         }
     }
 
+    /// Reply, reply all or forward one particular message of a conversation (the reader's ribbon).
+    func compose(_ kind: ComposeKind, replyingTo message: StoredMessage) {
+        guard let threadID = message.threadID, let id = message.id,
+              let thread = targetThreads.first(where: { $0.threadID == threadID })
+                ?? (try? store.threads(representedBy: [id], ownAddresses: ownAddresses).first) else { return }
+        if Platform.isMac, let open = inlineDrafts[threadID], (try? store.outboxItem(id: open))?.state == .draft { return }
+        Task {
+            guard let draft = await prepareDraft(kind, thread: thread, message: message) else { return }
+            openDraftInPlace(draft, threadID: threadID)
+        }
+    }
+
     /// A reply or forward: in the reading pane under its conversation on the Mac, a window or
     /// sheet elsewhere.
     func openDraftInPlace(_ id: Int64, threadID: String) {
@@ -118,9 +130,10 @@ extension AppModel {
     }
 
     /// Builds and stores a reply/forward draft for a conversation without opening it.
-    func prepareDraft(_ kind: ComposeKind, thread: ThreadSummary, account: AccountConfig? = nil) async -> Int64? {
-        guard let account = account ?? accounts.first(where: { $0.id == thread.latest.accountID }) else { return nil }
-        let original = messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+    /// `message`: reply to that one (the reader's ribbon), not the conversation's newest.
+    func prepareDraft(_ kind: ComposeKind, thread: ThreadSummary, account: AccountConfig? = nil, message: StoredMessage? = nil) async -> Int64? {
+        guard let account = account ?? accounts.first(where: { $0.id == (message?.accountID ?? thread.latest.accountID) }) else { return nil }
+        let original = message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
         do {
             let raw = try await rawMessage(original)
             let parsed = MIMEParser.parse(raw)
@@ -141,8 +154,7 @@ extension AppModel {
     /// Stores a draft (with the editor's rich text) without opening it. Returns its outbox id.
     func saveDraft(_ message: OutgoingMessage, body: NSAttributedString, accountID: String, kind: ComposeKind, originalLocalID: Int64?) -> Int64? {
         var message = message
-        message.editorState = try? body.data(from: NSRange(location: 0, length: body.length),
-                                             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd])
+        message.editorState = EditorArchive.data(body)
         message.text = MailBodyConverter.plainText(body)
         do {
             let item = try store.save(OutboxItem(accountID: accountID, message: message, state: .draft,
@@ -225,10 +237,16 @@ extension AppModel {
         let header = kind == .forward
             ? String(localized: "---------- Forwarded message ----------\nFrom: \(parsed.from.map(\.description).joined(separator: ", "))\nDate: \(when)\nSubject: \(parsed.subject)\nTo: \(parsed.to.map(\.description).joined(separator: ", "))\n\n")
             : String(localized: "On \(when), \(who) wrote:\n")
-        body.append(NSAttributedString(string: header, attributes: RichTextEditor.baseAttributes))
+        // A reply's header and quote fold away in the editor (ComposeModel); a forward's stay.
+        var headerAttributes = RichTextEditor.baseAttributes
+        var quoteAttributes = kind == .forward ? RichTextEditor.baseAttributes : RichTextEditor.quoteAttributes
+        if kind != .forward {
+            headerAttributes[.tidingsQuotedReply] = true
+            quoteAttributes[.tidingsQuotedReply] = true
+        }
+        body.append(NSAttributedString(string: header, attributes: headerAttributes))
         let quotedText = parsed.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-        body.append(NSAttributedString(string: quotedText,
-                                       attributes: kind == .forward ? RichTextEditor.baseAttributes : RichTextEditor.quoteAttributes))
+        body.append(NSAttributedString(string: quotedText, attributes: quoteAttributes))
 
         let message = OutgoingMessage(
             from: identity.mailAddress, to: to, cc: cc, subject: subject, text: "",

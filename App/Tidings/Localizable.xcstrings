@@ -1,6 +1,36 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Show the quoted mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis den citerede mail"
+          }
+        }
+      }
+    },
+    "Resize reply" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilpas svarets højde"
+          }
+        }
+      }
+    },
+    "Drag to resize the reply; double-click for the default size" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Træk for at ændre svarets højde; dobbeltklik for standardhøjden"
+          }
+        }
+      }
+    },
     "A change couldn't be applied" : {
       "localizations" : {
         "da" : {

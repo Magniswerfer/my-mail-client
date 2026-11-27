@@ -83,8 +83,11 @@ extension AppModel {
             let selected = visibleThreadIDs.filter(multiSelection.contains).compactMap { byID[$0] }
             if !selected.isEmpty { return selected }
         }
-        guard let id = selectedThreadID, let thread = threads.first(where: { $0.threadID == id }) else { return [] }
-        return [thread]
+        guard let id = selectedThreadID else { return [] }
+        if let thread = threads.first(where: { $0.threadID == id }) { return [thread] }
+        // Opened from search: not in the list, but just as much yours to act on.
+        if isSearching, let thread = selectedHitThread, thread.threadID == id { return [thread] }
+        return []
     }
 
     // MARK: Selecting several

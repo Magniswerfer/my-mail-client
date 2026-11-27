@@ -234,6 +234,8 @@ struct RootView: View {
     /// Set after "g" for two-key navigation (G I, G S, G A, G P).
     @State private var pendingG: Date?
     @State private var commandAMonitor: Any?
+    /// The inline reply's height; 0 until you drag it (then about half the reader).
+    @AppStorage("inlineComposerHeight") private var inlineComposerHeight: Double = 0
 
     var body: some View {
         @Bindable var model = model
@@ -266,15 +268,20 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.toast)
         } detail: {
-            VStack(spacing: 0) {
-                ReaderView(threadID: model.readerThreadID)
-                    .frame(maxHeight: .infinity)
-                // Reply / Reply All / Forward open here, under the conversation.
-                if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
-                    Divider()
-                    InlineComposer(threadID: threadID, draftID: draftID)
-                        .id(draftID)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    ReaderView(threadID: model.readerThreadID)
+                        .frame(maxHeight: .infinity)
+                    // Reply / Reply All / Forward open here, under the conversation: about half the
+                    // reader at first, then as tall as you drag it (remembered).
+                    if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
+                        let height = InlineComposerHeight.clamped(inlineComposerHeight, in: geometry.size.height)
+                        ComposerResizeHandle(height: height, available: geometry.size.height) { inlineComposerHeight = $0 }
+                        InlineComposer(threadID: threadID, draftID: draftID)
+                            .id(draftID)
+                            .frame(height: height)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.snappy, value: model.inlineDrafts)
@@ -567,3 +574,48 @@ extension NSView {
     }
 }
 #endif
+
+/// How tall the inline reply is: what you dragged it to, else 55% of the reader, always leaving
+/// room for the conversation above and the composer's own fields.
+enum InlineComposerHeight {
+    static let minimum: CGFloat = 260
+    static let conversationRoom: CGFloat = 140
+
+    static func clamped(_ stored: Double, in available: CGFloat) -> CGFloat {
+        let wanted = stored > 0 ? CGFloat(stored) : available * 0.55
+        let ceiling = max(minimum, available - conversationRoom)
+        return min(max(wanted, minimum), ceiling)
+    }
+}
+
+/// The line between the conversation and the inline reply: drag it to resize the reply,
+/// double-click it to go back to the default.
+struct ComposerResizeHandle: View {
+    let height: CGFloat
+    let available: CGFloat
+    let set: (Double) -> Void
+    @State private var start: CGFloat?
+
+    var body: some View {
+        Divider()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { drag in
+                        let from = start ?? height
+                        start = from
+                        set(Double(InlineComposerHeight.clamped(Double(from - drag.translation.height), in: available)))
+                    }
+                    .onEnded { _ in start = nil }
+            )
+            .onTapGesture(count: 2) { set(0) }
+            .accessibilityLabel("Resize reply")
+            .help("Drag to resize the reply; double-click for the default size")
+    }
+}
+

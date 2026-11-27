@@ -321,8 +321,17 @@ final class AppModel {
     }
     /// The highlighted search result; selecting one opens its conversation.
     var selectedHitID: Int64? {
-        didSet { if let id = selectedHitID { selectedThreadID = threadID(forMessage: id) } }
+        didSet {
+            guard let id = selectedHitID else { return }
+            // Its conversation isn't in the list (`threads`), so actions (Reply, Done, Move)
+            // find it here.
+            selectedHitThread = try? store.threads(representedBy: [id], ownAddresses: ownAddresses).first
+            selectedThreadID = threadID(forMessage: id)
+        }
     }
+    /// The selected search result's conversation, for actions (`targetThreads`).
+    @ObservationIgnored var selectedHitThread: ThreadSummary?
+    @ObservationIgnored var searchTask: Task<Void, Never>?
     private(set) var searchHits: [SearchHit] = []
     private(set) var facets: SearchFacets?
     private(set) var searchMilliseconds: Double = 0
@@ -763,7 +772,7 @@ final class AppModel {
                 threads = try inbox().filter(\.isReplyLater)
             case .category(let category):
                 // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
-                threads = try inbox().filter { !$0.isReplyLater && displayCategory($0) == category }
+                threads = try inbox().filter { !$0.isReplyLater && shows($0, under: category) }
                 for thread in threads where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
             case .mailbox(let accountID, let path):
                 threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
@@ -999,8 +1008,11 @@ final class AppModel {
         }
     }
 
+    /// As you type: the search runs off the main thread a moment after the last key, so typing
+    /// never waits on it; a newer search replaces one still running.
     private func runSearch() {
         relatedTask?.cancel()
+        searchTask?.cancel()
         let typed = SearchQuery(parsing: searchText)
         guard !typed.isEmpty else {
             searchHits = []
@@ -1011,19 +1023,26 @@ final class AppModel {
         }
         let query = SearchQuery(parsing: scopedSearchText).resolvingAccounts(accounts)
         let engine = SearchEngine(store: store)
-        do {
-            let hits = try engine.hits(query)
-            searchHits = hits.hits
-            searchMilliseconds = Double(hits.duration.components.attoseconds) / 1e15
-            facets = query.wantsFacets ? try engine.facets(query) : nil
-        } catch {
-            searchHits = []
-            facets = nil
+        let own = ownAddresses
+        let firstKey = searchHits.isEmpty
+        searchTask = Task { [weak self] in
+            // The first letters show results at once; later ones wait for a pause in typing.
+            if !firstKey { try? await Task.sleep(for: .milliseconds(120)) }
+            guard !Task.isCancelled else { return }
+            let result = await Task.detached(priority: .userInitiated) { () -> (SearchHits?, SearchFacets?, ContactHit?) in
+                let hits = try? engine.hits(query)
+                let facets = query.wantsFacets ? try? engine.facets(query) : nil
+                let contact = (try? engine.contact(for: typed)).flatMap { own.contains($0.address.lowercased()) ? nil : $0 }
+                return (hits, facets, contact)
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.searchHits = result.0?.hits ?? []
+            if let hits = result.0 { self.searchMilliseconds = Double(hits.duration.components.attoseconds) / 1e15 }
+            self.facets = result.1
+            // The person card: never yourself.
+            self.searchContact = result.2
+            self.scheduleRelated(for: typed, excluding: Set(self.searchHits.map(\.id)))
         }
-        // The person card: never yourself.
-        let contact = try? engine.contact(for: typed)
-        searchContact = contact.flatMap { ownAddresses.contains($0.address.lowercased()) ? nil : $0 }
-        scheduleRelated(for: typed, excluding: Set(searchHits.map(\.id)))
     }
 
     /// Semantic second tier: a moment after typing stops, off the main thread.

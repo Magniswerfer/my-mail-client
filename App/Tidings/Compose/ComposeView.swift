@@ -41,7 +41,6 @@ struct InlineComposer: View {
                 Color.clear
             }
         }
-        .frame(height: 340)
         .onAppear {
             model = model ?? ComposeModel(draftID: draftID, app: app)
             // Sent or discarded somewhere else in the meantime.
@@ -127,6 +126,23 @@ struct ComposeView: View {
                            focusOnAppear: model.kind != .new && model.kind != .forward,
                            insertion: model.insertion)
                 .padding(.horizontal, 12)
+            if model.foldedQuote != nil {
+                // Gmail's "•••": the quoted mail is there, out of the way.
+                Button { withAnimation(.snappy) { model.unfoldQuote() } } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 30, height: 14)
+                        .background(.quaternary, in: .capsule)
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Show the quoted mail")
+                .accessibilityLabel(Text("Show the quoted mail"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
             if !model.attachments.isEmpty { attachmentStrip }
             if let error = model.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")

@@ -23,6 +23,8 @@ final class ComposeModel {
     var showCcBcc = false
     var subject = ""
     var body = NSAttributedString()
+    /// A reply's quoted mail, out of the editor until you click "•••" (it's sent either way).
+    var foldedQuote: NSAttributedString?
     var attachments: [OutgoingAttachment] = []
     var kind: ComposeKind = .new
     var originalLocalID: Int64?
@@ -57,12 +59,12 @@ final class ComposeModel {
         originalLocalID = item.originalLocalID
         inReplyTo = message.inReplyTo
         references = message.references
-        if let rtf = message.editorState,
-           let restored = try? NSAttributedString(data: rtf, options: [.documentType: NSAttributedString.DocumentType.rtfd], documentAttributes: nil) {
+        if let saved = message.editorState, let restored = EditorArchive.restore(saved) {
             body = restored
         } else {
             body = NSAttributedString(string: message.text, attributes: RichTextEditor.baseAttributes)
         }
+        foldQuotedReply()
     }
 
     /// Every address of every account (this draft's account first).
@@ -96,12 +98,39 @@ final class ComposeModel {
     func buildMessage() -> OutgoingMessage {
         var message = OutgoingMessage(
             from: identity.mailAddress, to: recipients(to), cc: recipients(cc), bcc: recipients(bcc),
-            subject: subject, text: MailBodyConverter.plainText(body), html: MailBodyConverter.html(body),
+            subject: subject, text: MailBodyConverter.plainText(fullBody), html: MailBodyConverter.html(fullBody),
             attachments: attachments, inReplyTo: inReplyTo, references: references
         )
-        message.editorState = try? body.data(from: NSRange(location: 0, length: body.length),
-                                             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtfd])
+        message.editorState = EditorArchive.data(fullBody)
         return message
+    }
+
+    /// What goes out: what you wrote, and the folded quote under it.
+    var fullBody: NSAttributedString {
+        guard let foldedQuote else { return body }
+        let full = NSMutableAttributedString(attributedString: body)
+        full.append(foldedQuote)
+        return full
+    }
+
+    /// Takes a reply's quote out of the editor (it ends the text); "•••" brings it back.
+    private func foldQuotedReply() {
+        guard kind == .reply || kind == .replyAll, body.length > 0 else { return }
+        var start: Int?
+        body.enumerateAttribute(.tidingsQuotedReply, in: NSRange(location: 0, length: body.length)) { value, range, stop in
+            if value != nil { start = range.location; stop.pointee = true }
+        }
+        guard let start else { return }
+        foldedQuote = body.attributedSubstring(from: NSRange(location: start, length: body.length - start))
+        body = body.attributedSubstring(from: NSRange(location: 0, length: start))
+    }
+
+    /// "•••": the quoted mail back in the editor, to edit or trim.
+    func unfoldQuote() {
+        guard foldedQuote != nil else { return }
+        body = fullBody
+        foldedQuote = nil
+        changed()
     }
 
     /// Problems that block sending, in plain words.
