@@ -58,9 +58,9 @@ extension AppModel {
     func composeNew(to recipients: [MailAddress] = []) {
         guard let account = defaultAccount, let identity = account.sendingIdentities.first else { return }
         let body = NSMutableAttributedString(string: "", attributes: RichTextEditor.baseAttributes)
-        if !identity.signature.isEmpty {
+        if let signature = chooseSignature(from: identity, kind: .new, recipients: recipients) {
             body.append(NSAttributedString(string: "\n", attributes: RichTextEditor.baseAttributes))
-            body.append(ComposeModel.signatureBlock(identity.signature))
+            body.append(ComposeModel.signatureBlock(signature, dark: false))
         }
         openDraft(OutgoingMessage(from: identity.mailAddress, to: recipients, subject: "", text: ""), body: body,
                   accountID: account.id, kind: .new, originalLocalID: nil)
@@ -95,7 +95,7 @@ extension AppModel {
             guard let account = accounts.first(where: { $0.id == (message?.accountID ?? thread.latest.accountID) }) else { return }
             let original = message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
             guard let raw = try? await rawMessage(original) else { return }
-            let draft = Self.draft(kind, replyingTo: MIMEParser.parse(raw), raw: raw, account: account)
+            let draft = self.draft(kind, replyingTo: MIMEParser.parse(raw), raw: raw, account: account)
             inlineConversions[thread.threadID] = InlineConversion(kind: kind, message: draft.message, body: draft.body,
                                                                   originalLocalID: original.id)
         }
@@ -178,7 +178,7 @@ extension AppModel {
         do {
             let raw = try await rawMessage(original)
             let parsed = MIMEParser.parse(raw)
-            let draft = Self.draft(kind, replyingTo: parsed, raw: raw, account: account)
+            let draft = self.draft(kind, replyingTo: parsed, raw: raw, account: account)
             return saveDraft(draft.message, body: draft.body, accountID: account.id, kind: kind, originalLocalID: original.id)
         } catch {
             lastError = String(localized: "Couldn't open the original message: \(String(describing: error))")
@@ -196,7 +196,7 @@ extension AppModel {
     func saveDraft(_ message: OutgoingMessage, body: NSAttributedString, accountID: String, kind: ComposeKind, originalLocalID: Int64?) -> Int64? {
         var message = message
         message.editorState = EditorArchive.data(body)
-        message.text = MailBodyConverter.plainText(body)
+        message.text = MailBodyConverter.plainText(body, signatures: signaturesByID)
         do {
             let item = try store.save(OutboxItem(accountID: accountID, message: message, state: .draft,
                                                  kind: kind, originalLocalID: originalLocalID))
@@ -222,7 +222,7 @@ extension AppModel {
                     show(Toast(message: String(localized: "There's nobody besides the sender to reply to."), symbol: "person.2.slash"))
                     return
                 }
-                var draft = Self.draft(.replyAll, replyingTo: parsed, raw: raw, account: account)
+                var draft = self.draft(.replyAll, replyingTo: parsed, raw: raw, account: account)
                 draft.message.to = plan.to
                 draft.message.cc = plan.cc
                 draft.message.bcc = plan.bcc
@@ -238,7 +238,7 @@ extension AppModel {
     }
 
     /// Builds recipients, subject, threading headers and the quoted body.
-    static func draft(_ kind: ComposeKind, replyingTo parsed: ParsedMessage, raw: Data, account: AccountConfig)
+    func draft(_ kind: ComposeKind, replyingTo parsed: ParsedMessage, raw: Data, account: AccountConfig)
         -> (message: OutgoingMessage, body: NSAttributedString) {
         let identity = account.identity(replyingTo: parsed)
         let mine = Set(account.sendingIdentities.map { $0.address.lowercased() } + account.addresses.map { $0.lowercased() })
@@ -263,14 +263,14 @@ extension AppModel {
         to = unique(to)
         cc = unique(cc)
 
-        let subject = kind == .forward ? prefixed(parsed.subject, "Fwd:", existing: ["fwd:", "fw:", "vs:", "wg:"])
-                                       : prefixed(parsed.subject, "Re:", existing: ["re:", "sv:", "aw:"])
+        let subject = kind == .forward ? Self.prefixed(parsed.subject, "Fwd:", existing: ["fwd:", "fw:", "vs:", "wg:"])
+                                       : Self.prefixed(parsed.subject, "Re:", existing: ["re:", "sv:", "aw:"])
         var references = parsed.references
         if let id = parsed.messageID, !references.contains(id) { references.append(id) }
 
         let body = NSMutableAttributedString(string: "\n\n", attributes: RichTextEditor.baseAttributes)
-        if !identity.signature.isEmpty {
-            body.append(ComposeModel.signatureBlock(identity.signature))
+        if let signature = chooseSignature(from: identity, kind: kind, recipients: to + cc) {
+            body.append(ComposeModel.signatureBlock(signature, dark: false))
             body.append(NSAttributedString(string: "\n\n", attributes: RichTextEditor.baseAttributes))
         }
         let who = parsed.from.first.map { $0.name ?? $0.address } ?? ""

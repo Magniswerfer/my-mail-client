@@ -281,7 +281,7 @@ extension AppModel {
         guard let account = accounts.first(where: { $0.id == message.accountID }),
               let raw = try? await rawMessage(message) else { return }
         let parsed = MIMEParser.parse(raw)
-        var draft = Self.draft(kind, replyingTo: parsed, raw: raw, account: account)
+        var draft = self.draft(kind, replyingTo: parsed, raw: raw, account: account)
         if let to { draft.message.to = to }
         let body = NSMutableAttributedString(string: text.map { $0 + "\n" } ?? "", attributes: RichTextEditor.baseAttributes)
         body.append(draft.body)

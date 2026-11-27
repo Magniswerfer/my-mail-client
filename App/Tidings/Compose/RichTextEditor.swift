@@ -1,3 +1,4 @@
+import MailEngine
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -8,7 +9,8 @@ import UIKit
 extension NSAttributedString.Key {
     /// Marks quoted text (reply quotes, "> " paragraphs). Rendered as <blockquote>.
     static let tidingsQuote = NSAttributedString.Key("TidingsQuote")
-    /// Marks the signature block so switching identity can replace it.
+    /// Marks the signature so switching identity can replace it: on the one character that
+    /// shows an HTML signature, its id (a String); on drafts from before, a plain-text block (true).
     static let tidingsSignature = NSAttributedString.Key("TidingsSignature")
     /// "ul"/"ol" on list paragraphs typed on iPhone, where the markers are plain text (the Mac
     /// uses NSTextList, which NSTextView manages itself).
@@ -22,7 +24,12 @@ extension NSAttributedString.Key {
 /// (quote, signature, lists, the folded reply); RTFD, used before, dropped them.
 enum EditorArchive {
     static func data(_ text: NSAttributedString) -> Data? {
-        try? NSKeyedArchiver.archivedData(withRootObject: text, requiringSecureCoding: true)
+        // A signature is kept as its id; its picture is drawn again when the draft opens.
+        let stripped = NSMutableAttributedString(attributedString: text)
+        stripped.enumerateAttribute(.tidingsSignature, in: NSRange(location: 0, length: stripped.length)) { value, range, _ in
+            if value is String { stripped.removeAttribute(.attachment, range: range) }
+        }
+        return try? NSKeyedArchiver.archivedData(withRootObject: stripped, requiringSecureCoding: true)
     }
 
     static func restore(_ data: Data) -> NSAttributedString? {
@@ -585,13 +592,31 @@ struct RichTextEditor: UIViewRepresentable {
 
 /// Turns the editor's attributed text into the two bodies a mail needs.
 enum MailBodyConverter {
-    static func plainText(_ text: NSAttributedString) -> String {
+    /// The signature (its id) a paragraph holds, if any.
+    static func signatureID(in text: NSAttributedString, paragraph range: NSRange) -> String? {
+        var id: String?
+        text.enumerateAttribute(.tidingsSignature, in: range) { value, _, stop in
+            if let value = value as? String { id = value; stop.pointee = true }
+        }
+        return id
+    }
+
+    /// `signatures`: by id, for the signature in the text (its text version goes there).
+    static func plainText(_ text: NSAttributedString, signatures: [String: Signature] = [:]) -> String {
         var lines: [String] = []
         let string = text.string as NSString
         var location = 0
         while location < string.length {
             let range = string.paragraphRange(for: NSRange(location: location, length: 0))
-            var line = string.substring(with: range).trimmingCharacters(in: .newlines)
+            if let id = signatureID(in: text, paragraph: range) {
+                // The signature's own line; anything typed beside it stays.
+                let rest = string.substring(with: range).replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !rest.isEmpty { lines.append(rest) }
+                if let signature = signatures[id] { lines.append(signature.textBlock) }
+                location = NSMaxRange(range)
+                continue
+            }
+            var line = string.substring(with: range).trimmingCharacters(in: .newlines).replacingOccurrences(of: "\u{FFFC}", with: "")
             let attrs = text.attributes(at: range.location, effectiveRange: nil)
             line = line.replacingOccurrences(of: "\t•\t", with: "• ").replacingOccurrences(of: "\t", with: " ")
             if attrs[.tidingsQuote] != nil { line = "> " + line }
@@ -602,7 +627,8 @@ enum MailBodyConverter {
     }
 
     /// Clean, inline-styled HTML: <p>, <ul>/<ol>, <blockquote>, <b>/<i>/<u>/<s>, links.
-    static func html(_ text: NSAttributedString) -> String {
+    /// `signatures`: by id, for the signature in the text (its HTML goes there, as a block).
+    static func html(_ text: NSAttributedString, signatures: [String: Signature] = [:]) -> String {
         var html = ""
         var openList: String?
         var inQuote = false
@@ -616,6 +642,14 @@ enum MailBodyConverter {
 
         while location < string.length {
             let range = string.paragraphRange(for: NSRange(location: location, length: 0))
+            if let id = signatureID(in: text, paragraph: range) {
+                closeBlocks(list: nil, quote: false)
+                let rest = inlineHTML(text.attributedSubstring(from: range))
+                if !rest.isEmpty { html += "<p style=\"margin:0\">\(rest)</p>" }
+                if let signature = signatures[id] { html += signature.htmlBlock }
+                location = NSMaxRange(range)
+                continue
+            }
             let attrs = text.attributes(at: range.location, effectiveRange: nil)
             let style = attrs[.paragraphStyle] as? NSParagraphStyle
             let list = style?.textLists.first.map { $0.markerFormat == .decimal ? "ol" : "ul" } ?? (attrs[.tidingsList] as? String)
@@ -647,7 +681,9 @@ enum MailBodyConverter {
     static func inlineHTML(_ text: NSAttributedString) -> String {
         var out = ""
         text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attrs, range, _ in
-            var piece = escape((text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines))
+            // U+FFFC: a picture (the signature's) that isn't text.
+            var piece = escape((text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines)
+                .replacingOccurrences(of: "\u{FFFC}", with: ""))
             guard !piece.isEmpty else { return }
             if let font = attrs[.font] as? PlatformFont {
                 if FontTraits.isBold(font) { piece = "<b>\(piece)</b>" }

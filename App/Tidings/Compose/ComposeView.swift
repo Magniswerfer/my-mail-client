@@ -119,6 +119,7 @@ private struct ComposeTitle: ViewModifier {
 
 struct ComposeView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.colorScheme) private var colorScheme
     @Bindable var model: ComposeModel
     let close: () -> Void
     /// Set when the composer sits inside another view (the Reply Later session): its actions go
@@ -153,7 +154,11 @@ struct ComposeView: View {
         VStack(spacing: 0) {
             if foldsHeader { foldedHeader } else { header }
             Divider()
-            RichTextEditor(text: Binding(get: { model.body }, set: { model.body = $0; model.changed() }),
+            RichTextEditor(text: Binding(get: { model.body }, set: {
+                               model.body = $0
+                               model.changed()
+                               app.activeComposer = model
+                           }),
                            focusOnAppear: model.kind != .new && model.kind != .forward,
                            insertion: model.insertion)
                 .padding(.horizontal, 12)
@@ -214,10 +219,14 @@ struct ComposeView: View {
             return true
         }
         .onAppear {
+            model.isDark = colorScheme == .dark
+            app.activeComposer = model
             if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
             app.setSnippetContext(to: model.recipients(model.to), from: model.identity)
         }
         .onChange(of: model.to) { app.setSnippetContext(to: model.recipients(model.to), from: model.identity) }
+        .onChange(of: colorScheme) { _, scheme in model.isDark = scheme == .dark }
+        .onDisappear { if app.activeComposer === model { app.activeComposer = nil } }
         .sheet(isPresented: $isSendLaterShown) { sendLaterSheet }
         .confirmationDialog(String(localized: "Send anyway?"), isPresented: Binding(
             get: { pendingSend != nil }, set: { if !$0 { pendingSend = nil } }
@@ -376,6 +385,7 @@ struct ComposeView: View {
                 Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
                     .keyboardShortcut("a", modifiers: [.command, .option])
                     .help("Insert free times from your calendar (⌥⌘A)")
+                signatureMenu
             }
             .labelStyle(.iconOnly)
             Spacer(minLength: 12)
@@ -428,6 +438,7 @@ struct ComposeView: View {
             Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
                 .keyboardShortcut("a", modifiers: [.command, .option])
                 .help("Insert free times from your calendar (⌥⌘A)")
+            signatureMenu
             Button(role: .destructive) {
                 model.discard()
                 close()
@@ -435,6 +446,23 @@ struct ComposeView: View {
                 .help("Discard draft")
             sendButton
         }
+    }
+
+    /// The signature of this message: the rules' pick, or another one (also in ⌘K).
+    private var signatureMenu: some View {
+        Menu {
+            Toggle("No Signature", isOn: Binding(get: { model.signatureID == nil }, set: { _ in model.useSignature(nil) }))
+            if !model.availableSignatures.isEmpty { Divider() }
+            ForEach(model.availableSignatures) { signature in
+                Toggle(signature.name, isOn: Binding(get: { model.signatureID == signature.id },
+                                                     set: { _ in model.useSignature(signature.id) }))
+            }
+            Divider()
+            Button("Edit Signatures…") { app.showSignatures(editing: model.signatureID) }
+        } label: {
+            Label("Signature", systemImage: "signature")
+        }
+        .help(String(localized: "Signature: \(model.signatureMenuTitle)"))
     }
 
     /// Send (⌘↩), with Send Later and the other Send-and-Done choice in its menu.

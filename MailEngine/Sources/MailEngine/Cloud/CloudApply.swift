@@ -163,6 +163,13 @@ extension MailStore {
             try useFolder(try CloudJSON.value(FolderRolePayload.self, record.payload).path, for: role, accountID: accountID)
         case .account:
             report.accounts[key] = record.payload
+        case .signature:
+            let p = try CloudJSON.value(SignaturePayload.self, record.payload)
+            var list = try signatures().filter { $0.id != p.signature.id }
+            list.insert(p.signature, at: min(max(0, p.position), list.count))
+            try saveSignatures(list)
+        case .signatureSettings:
+            try saveSignatureSettings(try CloudJSON.value(SignatureSettings.self, record.payload))
         }
         return .applied
     }
@@ -201,6 +208,10 @@ extension MailStore {
             if let (login, name) = Self.split(key), let role = MailboxRole(rawValue: name), let accountID = accounts.idByLogin[login] {
                 try useFolder(nil, for: role, accountID: accountID)
             }
+        case .signature:
+            try saveSignatures(try signatures().filter { $0.id != key })
+        case .signatureSettings:
+            try saveSignatureSettings(SignatureSettings())
         case .setting, .account:
             break
         }

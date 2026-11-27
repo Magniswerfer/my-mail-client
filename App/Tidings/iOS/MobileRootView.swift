@@ -183,6 +183,7 @@ struct MobileRootView: View {
                 Button("Rules…", systemImage: "line.3.horizontal.decrease.circle") { model.isRulesShown = true }
                 Button("Senders…", systemImage: "person.2") { model.isSendersShown = true }
                 Button("Attachments…", systemImage: "paperclip") { model.isAttachmentsShown = true }
+                Button("Signatures…", systemImage: "signature") { model.showSignatures() }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
@@ -330,6 +331,7 @@ private struct MobileToolSheets: ViewModifier {
             .sheet(isPresented: $model.isRulesShown) { RulesView().environment(model) }
             .sheet(isPresented: $model.isSendersShown) { SendersView().environment(model) }
             .sheet(isPresented: $model.isAttachmentsShown) { AttachmentBrowser().environment(model) }
+            .sheet(isPresented: $model.isSignaturesShown) { SignaturesView().environment(model) }
             .quickLookPreview($model.quickLookURL)
             .modifier(UnsubscribeConfirmation(isActive: !model.isSendersShown))
             .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }
