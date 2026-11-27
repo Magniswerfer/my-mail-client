@@ -122,6 +122,8 @@ extension AppModel {
                        isEnabled: hasSelection) { self.addToReminders() },
             AppCommand(id: "copyLink", title: String(localized: "Copy Link to Message"), symbol: "link", keys: nil,
                        isEnabled: hasSelection) { self.copyLink() },
+            AppCommand(id: "showSource", title: String(localized: "Show Source"), symbol: "chevron.left.forwardslash.chevron.right",
+                       keys: Platform.isMac ? "⌥⌘U" : nil, isEnabled: hasSelection) { self.showSourceOfSelected() },
             AppCommand(id: "shortcuts", title: String(localized: "Keyboard Shortcuts"), symbol: "keyboard", keys: "?") {
                 self.isShortcutsShown = true
             },

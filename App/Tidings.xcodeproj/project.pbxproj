@@ -27,6 +27,7 @@
 		2C2D7B77A2C8A1B594CB2A08 /* SendersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C863A5E8187EAFEB176353 /* SendersView.swift */; };
 		2CFC392AEFEFEE6C9B25C236 /* AppModel+Folders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */; };
 		31A3993AE884CF62A515E079 /* AccountSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E01F14A42B91DEB1F82CEA68 /* AccountSetupView.swift */; };
+		32AB7371BD2C107019102037 /* MessageSourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C36819799F84D40F2AF3EBF /* MessageSourceView.swift */; };
 		35383B4FCF5D678A9D5CBC90 /* AppModel+SmartFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857C48DD525B9B2CA6AB496B /* AppModel+SmartFolders.swift */; };
 		3551F661B8D4C6977D27C0D4 /* TextFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1C3A2D4A25225C76D52B6C /* TextFormatting.swift */; };
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
@@ -42,6 +43,7 @@
 		4C11E35FE59B713DEFD400E0 /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
 		4D2D0AF13558B84A382B4F35 /* HighlightViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */; };
 		4D89A4106575722EC1469CD3 /* AppModel+Assist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90EBBCAD725FDA62BAC181FE /* AppModel+Assist.swift */; };
+		4F5BC1E3E10066992EB6CB2E /* MessageSourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C36819799F84D40F2AF3EBF /* MessageSourceView.swift */; };
 		4FFA5C295D8DE43A5703557E /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8E681997413622DF1A1C6A4 /* StreamView.swift */; };
 		50ACDB3D6952507F7873FBF7 /* AttachmentBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0840B3CA4E7A33EA1F7DF65D /* AttachmentBrowser.swift */; };
 		5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
@@ -141,6 +143,7 @@
 		069D57868E822292B8119DF2 /* AppModel+Invites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Invites.swift"; sourceTree = "<group>"; };
 		0840B3CA4E7A33EA1F7DF65D /* AttachmentBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentBrowser.swift; sourceTree = "<group>"; };
 		0ACC86ABC03818BEDC665920 /* Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Support.swift; sourceTree = "<group>"; };
+		0C36819799F84D40F2AF3EBF /* MessageSourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSourceView.swift; sourceTree = "<group>"; };
 		0C92B100BA7E19C5133536F1 /* WakeReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeReminders.swift; sourceTree = "<group>"; };
 		0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		11CC3F3316BF8FC8367BE4BA /* AppModel+Rules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Rules.swift"; sourceTree = "<group>"; };
@@ -240,6 +243,7 @@
 				EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */,
 				2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */,
 				49CA46E43F4FD8B3B4E4B712 /* JunkBanner.swift */,
+				0C36819799F84D40F2AF3EBF /* MessageSourceView.swift */,
 				EA7F045393AAD8ADDCFB0CF1 /* NotificationSettingsView.swift */,
 				DC071C4AD23AAA3E808F1AED /* OtherAccountForm.swift */,
 				63030F07C861FCE27114C038 /* PushServerViews.swift */,
@@ -526,6 +530,7 @@
 				FD2B1FF93F57CFCE965EC8DB /* Intents.swift in Sources */,
 				555940370E8B5E3FB27DA3B7 /* InviteCard.swift in Sources */,
 				F73D3D785290956869D35AF2 /* JunkBanner.swift in Sources */,
+				32AB7371BD2C107019102037 /* MessageSourceView.swift in Sources */,
 				C334A309965749C58A2F9A1C /* NotificationSettingsView.swift in Sources */,
 				640B72B052853B4227F6F779 /* Notifications.swift in Sources */,
 				03548C05D01EDDC13F5E234B /* OtherAccountForm.swift in Sources */,
@@ -591,6 +596,7 @@
 				FCF098BEC741D04F7C80838A /* Intents.swift in Sources */,
 				98741CDC0CC2211F1BDAF909 /* InviteCard.swift in Sources */,
 				B0B46C86BC9B3F35AC6D9D69 /* JunkBanner.swift in Sources */,
+				4F5BC1E3E10066992EB6CB2E /* MessageSourceView.swift in Sources */,
 				43F9F08320090F9103B0B2A9 /* MobileRootView.swift in Sources */,
 				DCF313F9E8BFC12F57376C5A /* NotificationSettingsView.swift in Sources */,
 				E48ED2E9CC1723425FF336C3 /* Notifications.swift in Sources */,

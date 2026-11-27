@@ -95,6 +95,9 @@ struct TidingsApp: App {
                 Button("Add to Reminders") { model.addToReminders() }
                     .keyboardShortcut("r", modifiers: [.command, .control])
                 Button("Copy Link to Message") { model.copyLink() }
+                Button("Show Source") { model.showSourceOfSelected() }
+                    .keyboardShortcut("u", modifiers: [.command, .option])
+                    .disabled(model.targetThreads.isEmpty)
                 Button("Copy Latest Login Code") { model.copyLatestCode() }
                 Divider()
                 Button("Next Category") { model.cycleCategory(1) }

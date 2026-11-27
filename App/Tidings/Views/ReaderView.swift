@@ -56,6 +56,9 @@ struct ReaderView: View {
             }
             .id(threadID)
             .dateSuggestions(threadID: threadID, model: model)
+            .sheet(item: Binding(get: { model.sourceRequest }, set: { model.sourceRequest = $0 })) { request in
+                MessageSourceView(message: request.message).environment(model)
+            }
         } else {
             ContentUnavailableView("No conversation selected", systemImage: "envelope.open",
                                    description: Text("Use j and k to move through your mail."))
@@ -241,6 +244,15 @@ struct MessageCard: View {
         }
         .zIndex(isHovered ? 1 : 0)
         .onHover { inside in withAnimation(.easeOut(duration: 0.12)) { isHovered = inside } }
+        .contextMenu {
+            Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
+            Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
+            Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
+            Divider()
+            Button("Show Source", systemImage: "chevron.left.forwardslash.chevron.right") {
+                model.sourceRequest = SourceRequest(message: message)
+            }
+        }
         .task(id: expanded) {
             guard expanded, body_ == nil else { return }
             await load()
@@ -603,9 +615,14 @@ final class PassthroughScrollWebView: WKWebView {
           \(Platform.isPhone ? "html { padding: 0; }" : "")
           img { max-width: 100%; height: auto; }
           table { max-width: 100% !important; }
-        </style></head><body>\(html)\(dark ? "<style>\(HTMLDarkMode.darkCSS)</style>" : "")</body></html>
+        </style></head><body>\(html)\(dark ? "<style>\(HTMLDarkMode.darkCSS)</style>" : "")\(heightReset)</body></html>
         """
     }
+
+    /// After the mail's own styles: newsletter templates often pin `html, body` to 100% of the
+    /// window, which here is the web view's first, small height, so all but the first lines
+    /// were cut off.
+    static let heightReset = "<style>html, body { height: auto !important; min-height: 0 !important; max-height: none !important; }</style>"
 
     /// Serves `cid:` URLs from the message's own parts.
     final class CIDSchemeHandler: NSObject, WKURLSchemeHandler {
@@ -683,7 +700,11 @@ final class PassthroughScrollWebView: WKWebView {
                 root.style.overflowX = 'hidden';
             }
             const below = parseFloat(getComputedStyle(root).paddingBottom) || 0;
-            return Math.ceil(body.getBoundingClientRect().bottom + below);
+            // The lowest of the body and what's in it: content can overflow a body whose height
+            // the mail pinned.
+            let bottom = body.getBoundingClientRect().bottom;
+            for (const child of body.children) bottom = Math.max(bottom, child.getBoundingClientRect().bottom);
+            return Math.ceil(bottom + below);
             """
     }
 }

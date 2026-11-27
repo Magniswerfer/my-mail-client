@@ -249,6 +249,8 @@ final class AppModel {
     /// Reactions you sent this session, by the reacted-to Message-ID ("" = taken back): shown at
     /// once, before they sync back from Sent.
     var sentReactions: [String: String] = [:]
+    /// Show Source: the message whose raw source is on screen.
+    var sourceRequest: SourceRequest?
     var editingAICategory: AICategoryEditing?
     @ObservationIgnored var aiCategoryTask: Task<Void, Never>?
 

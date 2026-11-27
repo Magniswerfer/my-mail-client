@@ -1,6 +1,56 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Show Source" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis kilde"
+          }
+        }
+      }
+    },
+    "Couldn't load the source" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke hente kilden"
+          }
+        }
+      }
+    },
+    "Source: %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kilde: %@"
+          }
+        }
+      }
+    },
+    "Copy the whole source" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiér hele kilden"
+          }
+        }
+      }
+    },
+    "Save as an .eml file" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gem som .eml-fil"
+          }
+        }
+      }
+    },
     "Like" : {
       "localizations" : {
         "da" : {
