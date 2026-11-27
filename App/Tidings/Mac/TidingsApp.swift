@@ -297,7 +297,7 @@ struct RootView: View {
             GeometryReader { geometry in
                 VStack(spacing: 0) {
                     ReaderView(threadID: model.readerThreadID)
-                        .frame(maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // Reply / Reply All / Forward open here, under the conversation: about half the
                     // reader at first, then as tall as you drag it (remembered).
                     if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
@@ -315,6 +315,9 @@ struct RootView: View {
                         }
                     }
                 }
+                // The whole column (a GeometryReader puts its content top-left otherwise, which
+                // left "No conversation selected" off centre).
+                .frame(width: geometry.size.width, height: geometry.size.height)
             }
             .animation(.snappy, value: model.inlineDrafts)
             .animation(.snappy, value: model.minimizedReplies)
