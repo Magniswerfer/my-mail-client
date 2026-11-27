@@ -121,7 +121,7 @@ extension MailStore {
                 SELECT m.* FROM message m JOIN (
                     SELECT threadID, max(date) AS d FROM message WHERE accountID = ? AND threadID IS NOT NULL GROUP BY threadID
                 ) t ON m.threadID = t.threadID AND m.date = t.d
-                WHERE m.accountID = ?
+                WHERE m.accountID = ? AND m.reactionTo IS NULL
                   AND lower(m.fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
                   AND m.date BETWEEN ? AND ?
                   AND m.threadID NOT IN (SELECT threadID FROM autoDraft)
@@ -153,7 +153,7 @@ extension MailStore {
                 SELECT m.* FROM message m JOIN (
                     SELECT threadID, max(date) AS d FROM message WHERE accountID = ? AND threadID IS NOT NULL GROUP BY threadID
                 ) t ON m.threadID = t.threadID AND m.date = t.d
-                WHERE m.accountID = ? AND m.mailbox = 'INBOX' AND m.category = 'primary' AND m.date >= ?
+                WHERE m.accountID = ? AND m.mailbox = 'INBOX' AND m.category = 'primary' AND m.date >= ? AND m.reactionTo IS NULL
                   AND lower(m.fromAddress) NOT IN (\(own.map { _ in "?" }.joined(separator: ",")))
                   AND m.threadID NOT IN (SELECT threadID FROM autoDraft)
                 ORDER BY m.date DESC LIMIT ?

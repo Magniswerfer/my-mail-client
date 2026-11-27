@@ -49,7 +49,7 @@ public struct NotificationPolicy: Codable, Sendable, Hashable {
         var ruleNames: [Int64: String] = [:]
         for run in ruleRuns { ruleNames[run.messageID] = run.ruleNames.first ?? "" }
         return arrived.compactMap { m in
-            guard let id = m.id, let threadID = m.threadID,
+            guard let id = m.id, let threadID = m.threadID, !m.isReaction,
                   !own.contains(m.fromAddress.lowercased()),
                   !m.flags.contains("\\Seen"),
                   now.timeIntervalSince(m.date) <= maxAge,
@@ -86,7 +86,7 @@ extension MailStore {
     func wasWaiting(threadID: String, before date: Date) throws -> Bool {
         try db.read { db in
             guard let mailbox = try String.fetchOne(db, sql: """
-                SELECT mailbox FROM message WHERE threadID = ? AND date < ? ORDER BY date DESC LIMIT 1
+                SELECT mailbox FROM message WHERE threadID = ? AND date < ? AND reactionTo IS NULL ORDER BY date DESC LIMIT 1
                 """, arguments: [threadID, date]) else { return false }
             return try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM mailboxState WHERE path = ? AND role = 'sent')",
                                      arguments: [mailbox]) ?? false

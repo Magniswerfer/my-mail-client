@@ -520,6 +520,11 @@ public actor AccountSync {
             category: category
         )
         message.inReplyTo = parsed.inReplyTo.first
+        if let reaction = parsed.reaction {
+            message.reactionTo = reaction.target
+            message.reactionEmoji = reaction.emoji
+        }
+        message.reactionsDisallowed = parsed.reactionsDisallowed
         message.attachmentList = parsed.attachments.filter { !$0.isInline }
         let highlights = HighlightExtractor.extract(parsed)
         message.highlights = highlights.isEmpty ? nil : highlights

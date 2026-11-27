@@ -180,7 +180,7 @@ extension MailStore {
         try db.read { db in
             try StoredMessage.fetchAll(db, sql: """
                 SELECT * FROM message WHERE id IN (
-                    SELECT max(id) FROM message WHERE isSnoozed = 1 AND snoozedUntil > ? GROUP BY threadID
+                    SELECT max(id) FROM message WHERE isSnoozed = 1 AND snoozedUntil > ? AND reactionTo IS NULL GROUP BY threadID
                 ) ORDER BY snoozedUntil LIMIT ?
                 """, arguments: [now, limit])
         }

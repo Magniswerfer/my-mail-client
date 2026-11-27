@@ -108,13 +108,13 @@ extension MailStore {
                 // Newest per conversation in the Inbox, most recent first, then oldest-first for processing.
                 return try StoredMessage.fetchAll(db, sql: """
                     SELECT * FROM message WHERE id IN (
-                        SELECT max(id) FROM message WHERE mailbox = 'INBOX' AND lower(fromAddress) NOT IN (\(ownSQL))
+                        SELECT max(id) FROM message WHERE mailbox = 'INBOX' AND reactionTo IS NULL AND lower(fromAddress) NOT IN (\(ownSQL))
                         GROUP BY threadID ORDER BY max(date) DESC LIMIT ?
                     ) ORDER BY id
                     """, arguments: StatementArguments(own + [backfill] as [any DatabaseValueConvertible]))
             }
             return try StoredMessage.fetchAll(db, sql: """
-                SELECT * FROM message WHERE id > ? AND mailbox = 'INBOX' AND lower(fromAddress) NOT IN (\(ownSQL))
+                SELECT * FROM message WHERE id > ? AND mailbox = 'INBOX' AND reactionTo IS NULL AND lower(fromAddress) NOT IN (\(ownSQL))
                 ORDER BY id LIMIT ?
                 """, arguments: StatementArguments([upTo] + own + [limit] as [any DatabaseValueConvertible]))
         }

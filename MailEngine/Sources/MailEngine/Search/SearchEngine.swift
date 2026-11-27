@@ -212,6 +212,8 @@ public struct SearchEngine: Sendable {
     static func plan(_ q: SearchQuery) -> Plan {
         var p = Plan()
         p.match = q.ftsExpression
+        // Reactions ("👍") aren't mail to find.
+        p.messageClauses.append("m.reactionTo IS NULL")
         if !q.categories.isEmpty {
             let codes = q.categories.compactMap { SortKey.categoryCodes[$0] }
             p.rowidClauses.append("\(SortKey.categorySQL("$K")) IN (\(codes.map(String.init).joined(separator: ",")))")
