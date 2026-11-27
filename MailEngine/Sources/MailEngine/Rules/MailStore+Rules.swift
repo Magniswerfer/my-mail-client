@@ -77,11 +77,13 @@ extension MailStore {
     // MARK: Which mail rules see
 
     /// New Inbox mail no rule pass has seen, oldest first, and the highest id looked at.
+    /// Reactions aren't mail: no rules, junk screening or notifications for them.
     func ruleCandidates(accountID: String) throws -> (messages: [StoredMessage], upTo: Int64) {
         try db.read { db in
             let upTo = try Int64.fetchOne(db, sql: "SELECT max(id) FROM message WHERE rulesChecked = 0") ?? 0
             let messages = try StoredMessage.fetchAll(db, sql: """
                 SELECT * FROM message WHERE rulesChecked = 0 AND id <= ? AND accountID = ? AND mailbox = 'INBOX'
+                  AND reactionTo IS NULL
                 ORDER BY date
                 """, arguments: [upTo, accountID])
             return (messages, upTo)
@@ -109,10 +111,10 @@ extension MailStore {
     public func inboxMessages(accountID: String? = nil, limit: Int = 2000) throws -> [StoredMessage] {
         try db.read { db in
             if let accountID {
-                return try StoredMessage.fetchAll(db, sql: "SELECT * FROM message WHERE mailbox = 'INBOX' AND accountID = ? ORDER BY date DESC LIMIT ?",
+                return try StoredMessage.fetchAll(db, sql: "SELECT * FROM message WHERE mailbox = 'INBOX' AND accountID = ? AND reactionTo IS NULL ORDER BY date DESC LIMIT ?",
                                                   arguments: [accountID, limit])
             }
-            return try StoredMessage.fetchAll(db, sql: "SELECT * FROM message WHERE mailbox = 'INBOX' ORDER BY date DESC LIMIT ?",
+            return try StoredMessage.fetchAll(db, sql: "SELECT * FROM message WHERE mailbox = 'INBOX' AND reactionTo IS NULL ORDER BY date DESC LIMIT ?",
                                               arguments: [limit])
         }
     }

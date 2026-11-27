@@ -43,6 +43,10 @@ public struct ParsedMessage: Sendable {
     public var attachments: [AttachmentInfo]
     /// Decoded iCalendar documents (`text/calendar`, `application/ics`, `.ics` files).
     public var calendarParts: [String] = []
+    /// What the message's reaction parts say, before any checks (see `reaction`): the body of an
+    /// RFC 9078 `Content-Disposition: reaction` part, and the emoji of a Gmail
+    /// `text/vnd.google.email-reaction+json` part.
+    public var reactionParts = ReactionParts()
 
     /// The meeting invite, update, cancellation or reply this message carries, if any.
     public var invite: CalendarInvite? {
@@ -68,7 +72,8 @@ public enum MIMEParser {
         var html: String?
         var attachments: [AttachmentInfo] = []
         var calendars: [String] = []
-        collect(entity, text: &text, html: &html, attachments: &attachments, calendars: &calendars)
+        var reactions = ReactionParts()
+        collect(entity, text: &text, html: &html, attachments: &attachments, calendars: &calendars, reactions: &reactions)
 
         let plain = text ?? html.map(HTMLText.toPlainText) ?? ""
         let h = entity.headers
@@ -89,14 +94,15 @@ public enum MIMEParser {
             plainText: plain.trimmingCharacters(in: .whitespacesAndNewlines),
             html: html,
             attachments: attachments,
-            calendarParts: calendars
+            calendarParts: calendars,
+            reactionParts: reactions
         )
     }
 
     /// Picks the readable text/html bodies and lists attachments, preferring text/plain inside
     /// multipart/alternative and the first text part elsewhere.
     static func collect(_ entity: Entity, text: inout String?, html: inout String?, attachments: inout [AttachmentInfo],
-                        calendars: inout [String]) {
+                        calendars: inout [String], reactions: inout ReactionParts) {
         let type = entity.contentType
         if type.type == "multipart" {
             if entity.children.isEmpty {
@@ -105,7 +111,7 @@ public enum MIMEParser {
                 return
             }
             for child in entity.children {
-                collect(child, text: &text, html: &html, attachments: &attachments, calendars: &calendars)
+                collect(child, text: &text, html: &html, attachments: &attachments, calendars: &calendars, reactions: &reactions)
             }
             return
         }
@@ -117,6 +123,15 @@ public enum MIMEParser {
             return
         }
         let isAttachment = entity.disposition == "attachment" || entity.filename != nil
+        if !isAttachment, type.full == ReactionParts.gmailType {
+            // Gmail's machine-readable reaction: not something to show or list as a file.
+            if reactions.gmail == nil { reactions.gmail = ReactionParts.gmailEmoji(entity.decodedText) }
+            return
+        }
+        if !isAttachment, entity.disposition == "reaction", type.type == "text", reactions.rfc9078 == nil {
+            // RFC 9078: the body is the emoji. It stays the readable text too.
+            reactions.rfc9078 = entity.decodedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         let isCalendar = type.full == "text/calendar" || type.full == "application/ics"
             || entity.filename?.lowercased().hasSuffix(".ics") == true
         if isCalendar {

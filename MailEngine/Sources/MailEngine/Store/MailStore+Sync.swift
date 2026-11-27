@@ -205,7 +205,8 @@ extension MailStore {
         return parsed.messageID ?? fallback
     }
 
-    /// The stream: newest-first threads that have a message in `mailbox`.
+    /// The stream: newest-first threads that have a message in `mailbox`. Reactions aren't mail:
+    /// they never make a thread, its newest message or its counts.
     /// `ownAddresses` are left out of `participants`, so a thread reads "Anna", not "Anna, Magnus".
     public func threads(mailbox: String, accountID: String? = nil, ownAddresses: Set<String> = [], limit: Int = 500) throws -> [ThreadSummary] {
         try db.read { db in
@@ -216,7 +217,7 @@ extension MailStore {
             let latestRows = try Row.fetchAll(db, sql: """
                 SELECT m.*, t.arrived AS arrived FROM message m JOIN (
                     SELECT threadID, max(sortKey) AS k, max(coalesce(surfacedAt, date)) AS arrived FROM message
-                    WHERE mailbox = ? \(accountFilter) GROUP BY threadID
+                    WHERE mailbox = ? \(accountFilter) AND reactionTo IS NULL GROUP BY threadID
                 ) t ON m.sortKey = t.k
                 ORDER BY t.arrived DESC LIMIT \(limit)
                 """, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? }))
@@ -253,7 +254,7 @@ extension MailStore {
                        max(instr(flags, '\(replyLaterKeyword)') > 0) AS replyLater,
                        group_concat(DISTINCT CASE WHEN lower(fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
                                                   THEN NULL ELSE coalesce(fromName, fromAddress) END) AS people
-                FROM message WHERE threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ",")))
+                FROM message WHERE threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ","))) AND reactionTo IS NULL
                 GROUP BY threadID
                 """, arguments: StatementArguments(own + threadIDs))
             for row in rows {
@@ -272,10 +273,12 @@ extension MailStore {
         }
     }
 
-    /// All messages of a thread across mailboxes (incl. Sent), oldest first.
+    /// All messages of a thread across mailboxes (incl. Sent), oldest first. Reactions are left
+    /// out (`reactions(toMessageIDs:)` has them).
     public func messages(inThread threadID: String) throws -> [StoredMessage] {
         try db.read {
-            try StoredMessage.fetchAll($0, sql: "SELECT * FROM message WHERE threadID = ? ORDER BY date", arguments: [threadID])
+            try StoredMessage.fetchAll($0, sql: "SELECT * FROM message WHERE threadID = ? AND reactionTo IS NULL ORDER BY date",
+                                       arguments: [threadID])
         }
     }
 

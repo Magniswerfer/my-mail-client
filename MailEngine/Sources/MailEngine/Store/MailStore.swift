@@ -51,6 +51,15 @@ public struct StoredMessage: Sendable, Codable, Hashable, FetchableRecord, Mutab
     public var attachmentList: [AttachmentInfo]?
     /// The junk filter's score, when it moved this to Junk or warned about it; 0 after "It's fine".
     public var junkScore: Double?
+    /// Set when this message is a reaction: the Message-ID it reacts to, and the emoji ("" when
+    /// the sender took their reaction back). Reactions never show as mail (see `reactions(toMessageIDs:)`).
+    public var reactionTo: String?
+    public var reactionEmoji: String?
+    /// The sender asked not to be reacted to (`x-ms-reactions: disallow`).
+    public var reactionsDisallowed: Bool = false
+
+    /// A reaction ("👍"), not mail to show.
+    public var isReaction: Bool { reactionTo != nil }
 
     public init(
         id: Int64? = nil, accountID: String, mailbox: String, uid: UInt32, messageID: String? = nil,
@@ -145,6 +154,7 @@ public final class MailStore: Sendable {
         registerEventSuggestionMigrations(&m)
         registerCloudMigrations(&m)
         registerJunkMigrations(&m)
+        registerReactionMigrations(&m)
         return m
     }
 

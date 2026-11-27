@@ -155,7 +155,7 @@ extension MailStore {
                        (SELECT category FROM message l WHERE lower(l.fromAddress) = lower(message.fromAddress) ORDER BY date DESC LIMIT 1) AS category,
                        (SELECT at FROM unsubscribed u WHERE u.address = lower(message.fromAddress)) AS unsubscribed
                 FROM message
-                WHERE lower(fromAddress) NOT IN (\(ownList))
+                WHERE lower(fromAddress) NOT IN (\(ownList)) AND reactionTo IS NULL
                   AND mailbox NOT IN (SELECT path FROM mailboxState WHERE role IN ('sent', 'drafts'))
                   \(dateClause)
                 GROUP BY lower(fromAddress) ORDER BY n DESC LIMIT ?

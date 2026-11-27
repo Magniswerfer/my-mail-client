@@ -35,6 +35,8 @@ public struct OutgoingMessage: Codable, Sendable, Hashable {
     public var editorState: Data?
     /// An iCalendar part (e.g. an invite reply), sent as `text/calendar` alongside the text.
     public var calendar: OutgoingCalendar?
+    /// Set when this message is a reaction ("👍"): the body is then the reaction parts only.
+    public var reaction: OutgoingReaction?
 
     public init(
         from: MailAddress, to: [MailAddress], cc: [MailAddress] = [], bcc: [MailAddress] = [],
@@ -90,6 +92,7 @@ public enum MIMEBuilder {
     }
 
     static func bodyPart(_ m: OutgoingMessage) -> Part {
+        if let reaction = m.reaction { return reactionPart(reaction) }
         let textPart = Part(headers: ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
                             content: quotedPrintable(m.text))
         var main = textPart
