@@ -34,10 +34,11 @@ jobs:
     name: Engine tests, Mac app, iPhone app
     runs-on: macos-26
     timeout-minutes: 90
+    env:
+      APPS_WITHOUT_ICON: EXCLUDED_SOURCE_FILE_NAMES=AppIcon.icon ASSETCATALOG_COMPILER_APPICON_NAME=
     steps:
       - uses: actions/checkout@v5
-      # The newest Xcode on the image: the app icon is an Icon Composer file from Xcode 27, which
-      # older actools can't read.
+      # The newest Xcode on the image (and the list, to see when Xcode 27 arrives).
       - name: Newest Xcode
         run: |
           ls -d /Applications/Xcode*.app
@@ -52,13 +53,15 @@ jobs:
           set -o pipefail
           swift test --package-path MailEngine 2>&1 | tee test.log
 
+      # The app icon is an Icon Composer file from Xcode 27; the Xcode 26 actool on these runners
+      # crashes on it. CI builds the apps without it (APPS_WITHOUT_ICON) until runners have 27.
       - name: Mac app
         id: mac
         continue-on-error: true
         run: |
           set -o pipefail
           xcodebuild build -project App/Tidings.xcodeproj -scheme Tidings -destination "platform=macOS" \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee mac.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO $APPS_WITHOUT_ICON 2>&1 | tee mac.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" mac.log
 
       - name: iPhone app
@@ -67,7 +70,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build -project App/Tidings.xcodeproj -scheme TidingsMobile -destination "generic/platform=iOS Simulator" \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO $APPS_WITHOUT_ICON 2>&1 | tee ios.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" ios.log
 
       - name: Report
