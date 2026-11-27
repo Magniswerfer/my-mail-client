@@ -49,6 +49,7 @@
 		50ACDB3D6952507F7873FBF7 /* AttachmentBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0840B3CA4E7A33EA1F7DF65D /* AttachmentBrowser.swift */; };
 		5335DC7ADA0F899683C6FA66 /* AppModel+Triage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067E9A7E23C131F6A9A2B8FB /* AppModel+Triage.swift */; };
 		5458939D9B7F433403B6FD87 /* SignatureRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C563D278ACD9A96715E315 /* SignatureRendering.swift */; };
+		54FB53C70FDA921AF3533FBD /* AppModel+HighlightTraining.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2458849E824D91BD3C6487DC /* AppModel+HighlightTraining.swift */; };
 		555940370E8B5E3FB27DA3B7 /* InviteCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */; };
 		557C465CEAD2DD57F2D7AFC7 /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07FA70D74524437B7FC3417 /* SearchResultsView.swift */; };
 		59AF472E4DDECA24298BF00F /* AppModel+Classify.swift in Sources */ = {isa = PBXBuildFile; fileRef = E93F71585A647D78C1A3AAF4 /* AppModel+Classify.swift */; };
@@ -125,6 +126,7 @@
 		EA062B45B2904C78076CE6E4 /* RulesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40D6E9799E037A8B47DD70D /* RulesViews.swift */; };
 		EACFD6E6D7042BC8047F0A5D /* DateSuggestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B48F3A3B6FCDC4ADBB91162A /* DateSuggestionCard.swift */; };
 		EB30016FB8194D8B34AC3F38 /* HighlightViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE79D3B4B7843CDD0782505 /* HighlightViews.swift */; };
+		EC137F33CD1E76CBF3921139 /* AppModel+HighlightTraining.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2458849E824D91BD3C6487DC /* AppModel+HighlightTraining.swift */; };
 		EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */; };
 		F05C5839A35FC0FBB354AE3D /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
 		F186A0EAB2D03F2294D60C8A /* AppModel+Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B57D395F4663DCB00D5E5B /* AppModel+Cloud.swift */; };
@@ -160,6 +162,7 @@
 		2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Folders.swift"; sourceTree = "<group>"; };
 		21A0203070BD655088A92656 /* CloudSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSync.swift; sourceTree = "<group>"; };
 		224ABE94EA64F0EB4460D8C8 /* SmartFolderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderViews.swift; sourceTree = "<group>"; };
+		2458849E824D91BD3C6487DC /* AppModel+HighlightTraining.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+HighlightTraining.swift"; sourceTree = "<group>"; };
 		2A0C6DDD127F1671ECA51CB0 /* InviteCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCard.swift; sourceTree = "<group>"; };
 		2E6FE5C63F7F196349B28623 /* AppModel+Senders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Senders.swift"; sourceTree = "<group>"; };
 		3093CCE2E8C8B894ABAB5365 /* TidingsMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TidingsMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -283,6 +286,7 @@
 				14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */,
 				74CCC1DD4A6C152C3D365C18 /* AppModel+DateSuggestions.swift */,
 				2030D9D3F2E3B252FE56BD41 /* AppModel+Folders.swift */,
+				2458849E824D91BD3C6487DC /* AppModel+HighlightTraining.swift */,
 				069D57868E822292B8119DF2 /* AppModel+Invites.swift */,
 				D7FB41D461FAB4CD2187791D /* AppModel+Junk.swift */,
 				778C9EB5F5CF02AA5FD94B1D /* AppModel+Links.swift */,
@@ -515,6 +519,7 @@
 				9CA4C3BF32EA2A53EB0B5FB8 /* AppModel+Compose.swift in Sources */,
 				951FB4B78B56C2FBBE51F143 /* AppModel+DateSuggestions.swift in Sources */,
 				A46921BD092F5D39239A36C9 /* AppModel+Folders.swift in Sources */,
+				54FB53C70FDA921AF3533FBD /* AppModel+HighlightTraining.swift in Sources */,
 				924B71DB69FF6FA9F729213E /* AppModel+Invites.swift in Sources */,
 				1C6AC12E069AA07B1A4E9799 /* AppModel+Junk.swift in Sources */,
 				E9C0BB88193E9E59D985DE08 /* AppModel+Links.swift in Sources */,
@@ -585,6 +590,7 @@
 				45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */,
 				C94105F197AA4E939C1E4FE7 /* AppModel+DateSuggestions.swift in Sources */,
 				2CFC392AEFEFEE6C9B25C236 /* AppModel+Folders.swift in Sources */,
+				EC137F33CD1E76CBF3921139 /* AppModel+HighlightTraining.swift in Sources */,
 				9AAE8EAFB26955B273E75EC9 /* AppModel+Invites.swift in Sources */,
 				A36F9F22C2C2CD83228E923E /* AppModel+Junk.swift in Sources */,
 				EEE0930B3306C9F5398A64D2 /* AppModel+Links.swift in Sources */,

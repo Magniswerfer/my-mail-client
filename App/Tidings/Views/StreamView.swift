@@ -256,7 +256,7 @@ struct ThreadRow: View {
                 Text(m.subject)
                     .font(.subheadline.weight(unread ? .medium : .regular))
                     .lineLimit(1)
-                if let highlight = m.highlights?.first {
+                if let highlight = model.visibleHighlights(of: m).first {
                     HighlightChip(highlight: highlight, message: m)
                 }
                 Text(m.preview)

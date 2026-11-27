@@ -1,6 +1,306 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Wrong Code…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forkert kode…"
+          }
+        }
+      }
+    },
+    "Wrong Amount…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forkert beløb…"
+          }
+        }
+      }
+    },
+    "Not Useful Here" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke nyttig her"
+          }
+        }
+      }
+    },
+    "Never Show Codes from %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis aldrig koder fra %@"
+          }
+        }
+      }
+    },
+    "Never Show Amounts from %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis aldrig beløb fra %@"
+          }
+        }
+      }
+    },
+    "Not right? Teach it" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke rigtigt? Lær den op"
+          }
+        }
+      }
+    },
+    "No codes in this message" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen koder i denne besked"
+          }
+        }
+      }
+    },
+    "No amounts in this message" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen beløb i denne besked"
+          }
+        }
+      }
+    },
+    "Which is the code?" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvilken er koden?"
+          }
+        }
+      }
+    },
+    "Which is the amount?" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvilket er beløbet?"
+          }
+        }
+      }
+    },
+    "Tidings remembers the words in front of the one you pick and looks there in %@'s next mail." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidings husker ordene foran den, du vælger, og kigger der i næste mail fra %@."
+          }
+        }
+      }
+    },
+    "Nothing yet." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intet endnu."
+          }
+        }
+      }
+    },
+    "Forget" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glem"
+          }
+        }
+      }
+    },
+    "Forget this" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glem dette"
+          }
+        }
+      }
+    },
+    "Codes and Amounts" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koder og beløb"
+          }
+        }
+      }
+    },
+    "What you've taught the code and amount cards. Use the … on a card, or right-click a message › Find Code… or Find Amount…." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det, du har lært kort med koder og beløb. Brug … på et kort, eller højreklik på en besked › Find kode… eller Find beløb…."
+          }
+        }
+      }
+    },
+    "Codes" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koder"
+          }
+        }
+      }
+    },
+    "Amounts" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beløb"
+          }
+        }
+      }
+    },
+    "%@: never shown" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: vises aldrig"
+          }
+        }
+      }
+    },
+    "%@: after “%@”" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: efter “%2$@”"
+          }
+        }
+      }
+    },
+    "Hidden on this message" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skjult på denne besked"
+          }
+        }
+      }
+    },
+    "Hide" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skjul"
+          }
+        }
+      }
+    },
+    "No more codes from %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke flere koder fra %@"
+          }
+        }
+      }
+    },
+    "No more amounts from %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke flere beløb fra %@"
+          }
+        }
+      }
+    },
+    "Use Value" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brug værdi"
+          }
+        }
+      }
+    },
+    "Using %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruger %@"
+          }
+        }
+      }
+    },
+    "Using %@; next time after “%@”" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruger %1$@; næste gang efter “%2$@”"
+          }
+        }
+      }
+    },
+    "Find Code…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find kode…"
+          }
+        }
+      }
+    },
+    "Find Amount…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find beløb…"
+          }
+        }
+      }
+    },
+    "Stop Codes and Amounts from This Sender" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop koder og beløb fra denne afsender"
+          }
+        }
+      }
+    },
     "%@ Copy" : {
       "localizations" : {
         "da" : {

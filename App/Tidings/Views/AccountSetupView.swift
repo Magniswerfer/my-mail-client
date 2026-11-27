@@ -312,6 +312,7 @@ struct GeneralSettings: View {
                     }
                 }
             }
+            HighlightTrainingSection()
             #if os(macOS)
             BackgroundSettingsSection()
             #endif

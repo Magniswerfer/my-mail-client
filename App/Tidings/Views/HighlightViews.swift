@@ -86,6 +86,7 @@ struct HighlightCard: View {
         .padding(12)
         .background(highlight.tint.opacity(0.07), in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .combine)
+        .contextMenu { HighlightTrainingMenu(highlight: highlight, message: message) }
     }
 
     private var headline: String {
@@ -111,6 +112,17 @@ struct HighlightCard: View {
 
     @ViewBuilder private var actions: some View {
         HStack(spacing: 6) {
+            Menu { HighlightTrainingMenu(highlight: highlight, message: message) } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(.secondary)
+            .help("Not right? Teach it")
             switch highlight.kind {
             case .code:
                 Button("Copy") { model.copyCode(highlight.value, from: message) }
@@ -213,5 +225,112 @@ extension AppModel {
                 show(Toast(message: Platform.remindersSettingsHint, symbol: "checklist"))
             }
         }
+    }
+}
+
+/// Teaching a highlight: not here, never from this sender, or the right value.
+struct HighlightTrainingMenu: View {
+    @Environment(AppModel.self) private var model
+    let highlight: Highlight
+    let message: StoredMessage
+
+    var body: some View {
+        if let field = highlight.kind.field {
+            Button(field == .code ? "Wrong Code…" : "Wrong Amount…", systemImage: "hand.point.up.left") {
+                model.highlightPick = HighlightPick(message: message, field: field)
+            }
+        }
+        Button("Not Useful Here", systemImage: "eye.slash") { model.hideHighlight(highlight, on: message) }
+        if let field = highlight.kind.field {
+            Button(field == .code ? "Never Show Codes from \(message.senderDisplay)" : "Never Show Amounts from \(message.senderDisplay)",
+                   systemImage: "nosign") {
+                model.neverShowHighlight(field, from: message)
+            }
+        }
+    }
+}
+
+/// "Wrong Code…" / "Find Amount…": the values in the message that could be it, each with the
+/// label in front of it. Picking one shows it, and next time this sender's value after that
+/// label is used.
+struct HighlightPickSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let pick: HighlightPick
+    @State private var candidates: [HighlightCandidate]?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let candidates, candidates.isEmpty {
+                    ContentUnavailableView(pick.field == .code ? "No codes in this message" : "No amounts in this message",
+                                           systemImage: "magnifyingglass")
+                } else if let candidates {
+                    List(candidates) { candidate in
+                        Button { model.useHighlightValue(candidate, field: pick.field, on: pick.message) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(candidate.value).font(.body.monospacedDigit().weight(.semibold))
+                                if !candidate.label.isEmpty {
+                                    Text(candidate.label).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    ProgressView()
+                }
+            }
+            .navigationTitle(pick.field == .code ? Text("Which is the code?") : Text("Which is the amount?"))
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .safeAreaInset(edge: .bottom) {
+                Text("Tidings remembers the words in front of the one you pick and looks there in \(pick.message.senderDisplay)'s next mail.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+        }
+        .frame(minWidth: 420, minHeight: 420)
+        .task { candidates = await model.highlightCandidates(pick.field, in: pick.message) }
+    }
+}
+
+/// Settings: what you've taught the highlights, to forget again.
+struct HighlightTrainingSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            if model.highlightTraining.rules.isEmpty {
+                Text("Nothing yet.").foregroundStyle(.secondary)
+            }
+            ForEach(model.highlightTraining.rules) { rule in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rule.sender)
+                        Text(description(rule)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Forget", systemImage: "minus.circle.fill") { model.forgetHighlightRule(rule) }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Forget this")
+                }
+            }
+        } header: {
+            Text("Codes and Amounts")
+        } footer: {
+            Text("What you've taught the code and amount cards. Use the … on a card, or right-click a message › Find Code… or Find Amount….")
+        }
+    }
+
+    private func description(_ rule: HighlightTraining.Rule) -> String {
+        let what = rule.field == .code ? String(localized: "Codes") : String(localized: "Amounts")
+        if rule.suppressed { return String(localized: "\(what): never shown") }
+        if let label = rule.label { return String(localized: "\(what): after “\(label)”") }
+        return what
     }
 }

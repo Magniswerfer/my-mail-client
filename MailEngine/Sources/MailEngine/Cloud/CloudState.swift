@@ -33,6 +33,8 @@ public enum StateRecordType: String, CaseIterable, Sendable {
     case signature
     /// Which signature is used when (one record, key "settings").
     case signatureSettings
+    /// What you taught the highlights per sender (one record, key "training").
+    case highlightTraining
 }
 
 /// A local change waiting to go to the cloud.
@@ -264,6 +266,8 @@ extension MailStore {
         }
         let signatureSettings = try signatureSettings()
         if signatureSettings != SignatureSettings() { put(.signatureSettings, "settings", try CloudJSON.data(signatureSettings)) }
+        let highlightTraining = try highlightTraining()
+        if !highlightTraining.rules.isEmpty { put(.highlightTraining, "training", try CloudJSON.data(highlightTraining)) }
         for (key, value) in settings { put(.setting, key, value) }
         return out
     }

@@ -170,6 +170,8 @@ extension MailStore {
             try saveSignatures(list)
         case .signatureSettings:
             try saveSignatureSettings(try CloudJSON.value(SignatureSettings.self, record.payload))
+        case .highlightTraining:
+            try saveHighlightTraining(try CloudJSON.value(HighlightTraining.self, record.payload))
         }
         return .applied
     }
@@ -212,6 +214,8 @@ extension MailStore {
             try saveSignatures(try signatures().filter { $0.id != key })
         case .signatureSettings:
             try saveSignatureSettings(SignatureSettings())
+        case .highlightTraining:
+            try saveHighlightTraining(HighlightTraining())
         case .setting, .account:
             break
         }

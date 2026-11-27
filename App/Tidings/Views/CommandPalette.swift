@@ -122,6 +122,12 @@ extension AppModel {
                        isEnabled: hasSelection) { self.addToReminders() },
             AppCommand(id: "copyLink", title: String(localized: "Copy Link to Message"), symbol: "link", keys: nil,
                        isEnabled: hasSelection) { self.copyLink() },
+            AppCommand(id: "findCode", title: String(localized: "Find Code…"), symbol: "key", keys: nil,
+                       isEnabled: hasSelection) { self.pickHighlight(.code) },
+            AppCommand(id: "findAmount", title: String(localized: "Find Amount…"), symbol: "receipt", keys: nil,
+                       isEnabled: hasSelection) { self.pickHighlight(.amount) },
+            AppCommand(id: "stopHighlights", title: String(localized: "Stop Codes and Amounts from This Sender"), symbol: "nosign",
+                       keys: nil, isEnabled: hasSelection) { self.neverShowHighlightsFromSelected() },
             AppCommand(id: "showSource", title: String(localized: "Show Source"), symbol: "chevron.left.forwardslash.chevron.right",
                        keys: Platform.isMac ? "⌥⌘U" : nil, isEnabled: hasSelection) { self.showSourceOfSelected() },
             AppCommand(id: "shortcuts", title: String(localized: "Keyboard Shortcuts"), symbol: "keyboard", keys: "?") {

@@ -27,6 +27,14 @@ public struct Highlight: Codable, Sendable, Hashable {
 
 public enum HighlightExtractor {
     /// schema.org JSON-LD first (airlines, shops and carriers embed it), then text patterns.
+    /// With what you've taught it for this sender (`HighlightTraining`).
+    public static func extract(_ message: ParsedMessage, training: HighlightTraining) -> [Highlight] {
+        let found = extract(message)
+        guard !training.rules.isEmpty, let sender = message.from.first else { return found }
+        return training.apply(to: found, sender: sender.address, senderName: sender.name ?? sender.address,
+                              text: message.subject + "\n" + MailStore.ownText(message.plainText))
+    }
+
     public static func extract(_ message: ParsedMessage) -> [Highlight] {
         var found = message.html.map(jsonLD) ?? []
         let text = MailStore.ownText(message.plainText)
@@ -207,26 +215,28 @@ public enum HighlightExtractor {
         return Highlight(kind: isBill ? .bill : .receipt, title: sender?.name ?? sender?.address ?? "", value: amount)
     }
 
+    /// Amounts in a piece of text: as shown ("1.234,50 kr."), their value, and where they are.
+    static func amounts(_ s: Substring) -> [(shown: String, value: Double, range: Range<Substring.Index>)] {
+        let money = /(?i)(?:(kr\.?|dkk|eur|€|usd|\$|sek|nok|£)\s?(\d[\d.,]*\d|\d))|(?:(\d[\d.,]*\d|\d)\s?(kr\.?|dkk|eur|€|usd|\$|sek|nok|£))/
+        return s.matches(of: money).compactMap { m in
+            let number = String(m.output.2 ?? m.output.3 ?? "")
+            let currency = String(m.output.1 ?? m.output.4 ?? "").uppercased().replacingOccurrences(of: ".", with: "")
+            guard let value = parse(number) else { return nil }
+            let shown = ["KR": "kr.", "€": "€", "$": "$", "£": "£"][currency] ?? currency
+            return (shown == "€" || shown == "$" || shown == "£" ? "\(shown)\(number)" : "\(number) \(shown)", value, m.range)
+        }
+    }
+
     /// The amount on a "total"/"i alt" line, else the largest amount mentioned.
     static func totalAmount(in text: String) -> String? {
-        let money = /(?i)(?:(kr\.?|dkk|eur|€|usd|\$|sek|nok|£)\s?(\d[\d.,]*\d|\d))|(?:(\d[\d.,]*\d|\d)\s?(kr\.?|dkk|eur|€|usd|\$|sek|nok|£))/
-        func amounts(_ s: Substring) -> [(String, Double)] {
-            s.matches(of: money).compactMap { m in
-                let number = String(m.output.2 ?? m.output.3 ?? "")
-                let currency = String(m.output.1 ?? m.output.4 ?? "").uppercased().replacingOccurrences(of: ".", with: "")
-                guard let value = parse(number) else { return nil }
-                let shown = ["KR": "kr.", "€": "€", "$": "$", "£": "£"][currency] ?? currency
-                return (shown == "€" || shown == "$" || shown == "£" ? "\(shown)\(number)" : "\(number) \(shown)", value)
-            }
-        }
         for line in text.split(separator: "\n") {
             let l = line.lowercased()
             if l.contains("total") || l.contains("i alt") || l.contains("at betale") || l.contains("amount due") || l.contains("beløb"),
                let first = amounts(line).first {
-                return first.0
+                return first.shown
             }
         }
-        return amounts(Substring(text)).max { $0.1 < $1.1 }?.0
+        return amounts(Substring(text)).max { $0.value < $1.value }?.shown
     }
 
     /// "1.234,50" (Danish) or "1,234.50" (English) → 1234.5

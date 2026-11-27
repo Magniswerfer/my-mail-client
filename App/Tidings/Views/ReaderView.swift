@@ -28,7 +28,7 @@ struct ReaderView: View {
                                     .buttonStyle(.borderless)
                             }
                         }
-                        if let latest = messages.last, let highlights = latest.highlights, !highlights.isEmpty {
+                        if let latest = messages.last, case let highlights = model.visibleHighlights(of: latest), !highlights.isEmpty {
                             HighlightCards(highlights: highlights, message: latest)
                         }
                         SummaryLine(threadID: threadID, messageCount: messages.count)
@@ -58,6 +58,9 @@ struct ReaderView: View {
             .dateSuggestions(threadID: threadID, model: model)
             .sheet(item: Binding(get: { model.sourceRequest }, set: { model.sourceRequest = $0 })) { request in
                 MessageSourceView(message: request.message).environment(model)
+            }
+            .sheet(item: Binding(get: { model.highlightPick }, set: { model.highlightPick = $0 })) { pick in
+                HighlightPickSheet(pick: pick).environment(model)
             }
         } else {
             ContentUnavailableView("No conversation selected", systemImage: "envelope.open",
@@ -248,6 +251,9 @@ struct MessageCard: View {
             Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
             Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
             Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
+            Divider()
+            Button("Find Code…", systemImage: "key") { model.highlightPick = HighlightPick(message: message, field: .code) }
+            Button("Find Amount…", systemImage: "receipt") { model.highlightPick = HighlightPick(message: message, field: .amount) }
             Divider()
             Button("Show Source", systemImage: "chevron.left.forwardslash.chevron.right") {
                 model.sourceRequest = SourceRequest(message: message)

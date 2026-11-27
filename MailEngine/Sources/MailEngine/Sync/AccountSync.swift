@@ -526,7 +526,7 @@ public actor AccountSync {
         }
         message.reactionsDisallowed = parsed.reactionsDisallowed
         message.attachmentList = parsed.attachments.filter { !$0.isInline }
-        let highlights = HighlightExtractor.extract(parsed)
+        let highlights = HighlightExtractor.extract(parsed, training: (try? store.highlightTraining()) ?? HighlightTraining())
         message.highlights = highlights.isEmpty ? nil : highlights
         if let invite = parsed.invite {
             message.invite = invite

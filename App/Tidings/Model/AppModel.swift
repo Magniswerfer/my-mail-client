@@ -260,6 +260,10 @@ final class AppModel {
     var sentReactions: [String: String] = [:]
     /// Show Source: the message whose raw source is on screen.
     var sourceRequest: SourceRequest?
+    /// What you taught the highlights per sender (codes, amounts).
+    var highlightTraining = HighlightTraining()
+    /// "Wrong value…" / "Find Code…": the message and what to pick in it.
+    var highlightPick: HighlightPick?
     var editingAICategory: AICategoryEditing?
     @ObservationIgnored var aiCategoryTask: Task<Void, Never>?
 
@@ -758,6 +762,7 @@ final class AppModel {
     func reload() {
         now = Date()
         revision &+= 1
+        highlightTraining = (try? store.highlightTraining()) ?? highlightTraining
         scheduleCloudPush()
         do {
             // One read of the Inbox serves the stream, a category and the unread count.
