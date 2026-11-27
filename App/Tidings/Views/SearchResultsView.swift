@@ -106,7 +106,7 @@ struct ContactCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Avatar(name: contact.name ?? contact.address, size: 40)
+            Avatar(name: contact.name ?? contact.address, address: contact.address, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(contact.name ?? contact.address).font(.headline)
                 Text(contact.address).font(.caption).foregroundStyle(.secondary)
@@ -190,7 +190,7 @@ struct SearchHitRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: hit.fromName ?? hit.fromAddress, size: 32)
+            Avatar(name: hit.fromName ?? hit.fromAddress, address: hit.fromAddress, size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(hit.fromName ?? hit.fromAddress).font(.headline.weight(.regular)).lineLimit(1)

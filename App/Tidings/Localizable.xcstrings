@@ -1,6 +1,26 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Show Website Icons" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis webstedsikoner"
+          }
+        }
+      }
+    },
+    "Reader Mode shows mail as clean text instead of its own layout; Read Later always opens this way. People show with their photo from Contacts; without one, mail from a company shows its website's icon, fetched once from that site and kept on this device." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Læsetilstand viser mail som ren tekst i stedet for dens eget layout; Læs senere åbner altid sådan. Personer vises med deres billede fra Kontakter; uden et billede vises mail fra en virksomhed med webstedets ikon, hentet én gang fra webstedet og gemt på denne enhed."
+          }
+        }
+      }
+    },
     "Wrong Code…" : {
       "localizations" : {
         "da" : {

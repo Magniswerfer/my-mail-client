@@ -295,10 +295,12 @@ struct GeneralSettings: View {
             Section {
                 Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
                                                                       set: { model.readerMode = $0 }))
+                Toggle("Show Website Icons", isOn: Binding(get: { AvatarImages.shared.showsWebsiteIcons },
+                                                           set: { AvatarImages.shared.showsWebsiteIcons = $0 }))
             } header: {
                 Text("Reading")
             } footer: {
-                Text("Shows mail as clean text instead of its own layout. Read Later always opens this way.")
+                Text("Reader Mode shows mail as clean text instead of its own layout; Read Later always opens this way. People show with their photo from Contacts; without one, mail from a company shows its website's icon, fetched once from that site and kept on this device.")
             }
             Section {
                 Toggle("Filter Junk", isOn: $filterJunk)

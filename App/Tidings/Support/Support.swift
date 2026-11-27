@@ -226,15 +226,41 @@ extension StoredMessage {
     var isFlagged: Bool { flags.contains("\\Flagged") }
 }
 
-/// A neutral monogram, like Contacts. Colour is reserved for categories and status.
-/// (Contacts photos and sender logos arrive in M6.)
+/// The person's photo from Apple Contacts, else their website's icon, else a neutral monogram
+/// like Contacts. Colour is reserved for categories and status.
 struct Avatar: View {
     let name: String
+    var address: String? = nil
     var size: CGFloat = 32
 
     var body: some View {
+        switch AvatarImages.shared.picture(address: address, name: name) {
+        case .photo(let image):
+            Image(platformImage: image)
+                .resizable().scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .accessibilityHidden(true)
+        case .icon(let image):
+            Circle()
+                .fill(.white)
+                .overlay { Circle().strokeBorder(.quaternary, lineWidth: 0.5) }
+                .overlay {
+                    Image(platformImage: image)
+                        .resizable().interpolation(.high).scaledToFit()
+                        .padding(size * 0.18)
+                        .clipShape(Circle())
+                }
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        case nil:
+            monogram
+        }
+    }
+
+    private var monogram: some View {
         let initials = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        Circle()
+        return Circle()
             .fill(LinearGradient(colors: [Color(white: 0.66), Color(white: 0.52)], startPoint: .top, endPoint: .bottom))
             .frame(width: size, height: size)
             .overlay {

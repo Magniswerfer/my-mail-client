@@ -228,7 +228,8 @@ struct ThreadRow: View {
         let unread = thread.unreadCount > 0
         let avatarSize: CGFloat = inBundle ? 26 : 32
         HStack(alignment: .top, spacing: 10) {
-            Avatar(name: senderLine, size: avatarSize)
+            // The newest sender's picture, unless that's you (then initials of who you wrote with).
+            Avatar(name: senderLine, address: model.ownAddresses.contains(m.fromAddress) ? nil : m.fromAddress, size: avatarSize)
                 .padding(.leading, inBundle ? 18 : 0)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {

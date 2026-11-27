@@ -90,7 +90,7 @@ struct ContactProfileView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Avatar(name: profile.name ?? profile.address, size: 56)
+            Avatar(name: profile.name ?? profile.address, address: profile.address, size: 56)
             Text(profile.name ?? profile.address).font(.title3.weight(.semibold)).textSelection(.enabled)
             if profile.name != nil {
                 Text(profile.address).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
@@ -197,7 +197,7 @@ struct ContactProfileView: View {
             ForEach(profile.colleagues, id: \.address) { person in
                 Button { model.contactAddress = person.address } label: {
                     HStack(spacing: 8) {
-                        Avatar(name: person.name ?? person.address, size: 22)
+                        Avatar(name: person.name ?? person.address, address: person.address, size: 22)
                         Text(person.name ?? person.address).lineLimit(1)
                     }
                 }

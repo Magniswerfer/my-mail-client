@@ -34,6 +34,7 @@
 		37374DEF7AC1BDD4E654B7BA /* Support.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC86ABC03818BEDC665920 /* Support.swift */; };
 		3BAAB9E216FEA2E41425DF56 /* ComposeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF8802ED3444B57EAECF71C /* ComposeModel.swift */; };
 		3D80CF0E4641EA84D51EFB8E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 0E458EA80D2FA4084A1E98CD /* Localizable.xcstrings */; };
+		41EF9F15EA7029E1A95E6CA7 /* AvatarImages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CA22FF803F242ED5C0359A /* AvatarImages.swift */; };
 		43F9F08320090F9103B0B2A9 /* MobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9D84A6766D82ADED898767E /* MobileRootView.swift */; };
 		45DEF2EDD06AAEFB5F9594C4 /* AppModel+Compose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14259081E5E50D7AB9C96417 /* AppModel+Compose.swift */; };
 		47707F6B11EB196B53CBB5C3 /* AppModel+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23B15724889F87A249F69F2 /* AppModel+Attachments.swift */; };
@@ -73,6 +74,7 @@
 		74F75ED9A5B3460906737EC4 /* AppModel+Senders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E6FE5C63F7F196349B28623 /* AppModel+Senders.swift */; };
 		761447D37C9048D2BF85BAB8 /* AppModel+Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CC3F3316BF8FC8367BE4BA /* AppModel+Rules.swift */; };
 		79238CEACA123AD02FD4AA69 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2DDBAC8C48AB94C3CF1EB36 /* SidebarView.swift */; };
+		7B911110B0F35B223BEDB51D /* AvatarImages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CA22FF803F242ED5C0359A /* AvatarImages.swift */; };
 		7C31F10A1AE4A8B32B218F2E /* Platform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A2F7CF09F07C275CE96257 /* Platform.swift */; };
 		8000A39FD3B21B19D6DDF2A6 /* SnippetsAndReaderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F01A2507DCD4CBA0277DD92 /* SnippetsAndReaderViews.swift */; };
 		826DCB1A2E718E64FE2E23C4 /* AppModel+Reactions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D208128F72EC824197D282A /* AppModel+Reactions.swift */; };
@@ -175,6 +177,7 @@
 		5F01A2507DCD4CBA0277DD92 /* SnippetsAndReaderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnippetsAndReaderViews.swift; sourceTree = "<group>"; };
 		6251D5B18B291B6AAE581F79 /* AppModel+Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Push.swift"; sourceTree = "<group>"; };
 		63030F07C861FCE27114C038 /* PushServerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushServerViews.swift; sourceTree = "<group>"; };
+		64CA22FF803F242ED5C0359A /* AvatarImages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarImages.swift; sourceTree = "<group>"; };
 		65D5ABDBB138D058BEC0C9E8 /* AICategoryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AICategoryViews.swift; sourceTree = "<group>"; };
 		68E240EFD4E2AE1397519653 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		6DB767A15EA74F768D716A48 /* TidingsMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidingsMobileApp.swift; sourceTree = "<group>"; };
@@ -316,6 +319,7 @@
 		3AB3C5F764B533664B394C12 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				64CA22FF803F242ED5C0359A /* AvatarImages.swift */,
 				BA0DB174A202248566399CE8 /* CalendarBridge.swift */,
 				21A0203070BD655088A92656 /* CloudSync.swift */,
 				AE87A3779EB9C67A90C913E7 /* Intents.swift */,
@@ -534,6 +538,7 @@
 				186630237B178EECA7307A27 /* AppModel.swift in Sources */,
 				F89FD41D7C64B5E4F269658C /* AssistViews.swift in Sources */,
 				50ACDB3D6952507F7873FBF7 /* AttachmentBrowser.swift in Sources */,
+				7B911110B0F35B223BEDB51D /* AvatarImages.swift in Sources */,
 				0636CE087F15BD3F64615D09 /* BackgroundMode.swift in Sources */,
 				A8626B6AEBB95CED84EC418A /* BundleSchedule.swift in Sources */,
 				1FA46CD6BE027C1964E59BDC /* CalendarBridge.swift in Sources */,
@@ -605,6 +610,7 @@
 				FB6B4F1223C73D387E481AE4 /* AppModel.swift in Sources */,
 				22FE7E63D38A4538A50529DC /* AssistViews.swift in Sources */,
 				68707389AD56CF88B5276561 /* AttachmentBrowser.swift in Sources */,
+				41EF9F15EA7029E1A95E6CA7 /* AvatarImages.swift in Sources */,
 				8457FC7736CB752FE8A55EAD /* BundleSchedule.swift in Sources */,
 				5B9DD7572A39D23B982D71BB /* CalendarBridge.swift in Sources */,
 				2AD987221D8BB062580DD83E /* CategorySwipeBar.swift in Sources */,

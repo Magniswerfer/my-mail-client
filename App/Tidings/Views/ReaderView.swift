@@ -288,7 +288,7 @@ struct MessageCard: View {
 
     private func avatar(size: CGFloat) -> some View {
         Button { model.showContact(message.fromAddress) } label: {
-            Avatar(name: message.senderDisplay, size: size)
+            Avatar(name: message.senderDisplay, address: message.fromAddress, size: size)
         }
         .buttonStyle(.plain)
         .help("About \(message.senderDisplay)")

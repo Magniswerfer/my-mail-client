@@ -99,7 +99,7 @@ struct SenderRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Avatar(name: sender.name ?? sender.address, size: 30)
+            Avatar(name: sender.name ?? sender.address, address: sender.address, size: 30)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(sender.name ?? sender.address).font(.headline).lineLimit(1)
