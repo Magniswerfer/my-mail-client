@@ -489,6 +489,8 @@ struct RootView: View {
             }
             .help("Who this is (⌃⌘I)")
         }
+        // Its own button, not inside the search field's capsule.
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItem(placement: .primaryAction) {
             ToolbarSearchField(focus: $searchFocused)
         }
