@@ -3,10 +3,12 @@ import SwiftUI
 import AppKit
 typealias PlatformColor = NSColor
 typealias PlatformFont = NSFont
+typealias PlatformImage = NSImage
 #else
 import UIKit
 typealias PlatformColor = UIColor
 typealias PlatformFont = UIFont
+typealias PlatformImage = UIImage
 #endif
 
 /// The few things that differ between the Mac and iPhone apps, in one place, so shared views and

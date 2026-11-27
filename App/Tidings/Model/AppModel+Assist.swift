@@ -79,7 +79,7 @@ extension AppModel {
                 do {
                     let raw = try await rawMessage(mine)
                     let parsed = MIMEParser.parse(raw)
-                    let draft = Self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
+                    let draft = self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
                     let recipient = parsed.to.first
                     let waited = max(days, Int(Date().timeIntervalSince(mine.date) / 86_400))
                     let request = FollowUpRequest(subject: parsed.subject, lastMessage: parsed.plainText,
@@ -109,7 +109,7 @@ extension AppModel {
                 do {
                     let raw = try await rawMessage(incoming)
                     let parsed = MIMEParser.parse(raw)
-                    let draft = Self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
+                    let draft = self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
                     let digest = ThreadDigest(subject: incoming.subject, messages: messages(inThread: threadID),
                                               ownAddresses: Set(account.addresses))
                     let sender = parsed.from.first.map(IntroReply.firstName)

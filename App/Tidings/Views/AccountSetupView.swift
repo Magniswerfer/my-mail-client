@@ -196,12 +196,13 @@ struct SettingsView: View {
 
     /// Every pane, in order: the Mac's tabs and the iPhone's list are the same panes.
     enum Pane: String, CaseIterable, Identifiable {
-        case identities, bundles, rules, assistant, notifications, snippets, general
+        case identities, signatures, bundles, rules, assistant, notifications, snippets, general
         var id: Self { self }
 
         var title: LocalizedStringKey {
             switch self {
             case .identities: "Identities"
+            case .signatures: "Signatures"
             case .bundles: "Bundles"
             case .rules: "Rules"
             case .assistant: "Assistant"
@@ -214,6 +215,7 @@ struct SettingsView: View {
         var symbol: String {
             switch self {
             case .identities: "person.crop.rectangle.stack"
+            case .signatures: "signature"
             case .bundles: "square.stack.3d.up"
             case .rules: "line.3.horizontal.decrease.circle"
             case .assistant: "sparkles"
@@ -250,6 +252,7 @@ struct SettingsView: View {
     @ViewBuilder private func content(_ pane: Pane) -> some View {
         switch pane {
         case .identities: IdentitiesSettings()
+        case .signatures: SignatureSettingsPane()
         case .bundles: BundleSettings()
         case .rules: RulesView(inSettings: true)
         case .assistant: AssistantSettings()
@@ -530,8 +533,10 @@ struct IdentityEditor: View {
                     .disabled(model.identities(for: accountID).count <= 1)
             }
             TextField("Name", text: $identity.name)
-            TextField("Signature", text: $identity.signature, axis: .vertical)
-                .lineLimit(2...5)
+            LabeledContent("Signature") {
+                Text(model.signature(id: model.signatureSettings.defaults(for: identity.address).newMail?.signatureID)?.name
+                     ?? String(localized: "None"))
+            }
         }
         .padding(.vertical, 4)
         .onChange(of: identity) { model.updateIdentity(identity, accountID: accountID) }

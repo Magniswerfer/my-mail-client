@@ -49,6 +49,16 @@ struct TidingsApp: App {
                     .keyboardShortcut("7", modifiers: [.command, .shift])
                 Button("Numbered List") { TextFormatting.send(.numberedList) }
                     .keyboardShortcut("9", modifiers: [.command, .shift])
+                Divider()
+                // The message you're writing: its signature (also in ⌘K).
+                Menu("Signature") {
+                    Button("No Signature") { model.activeComposer?.useSignature(nil) }
+                    ForEach(model.signatures) { signature in
+                        Button(signature.name) { model.activeComposer?.useSignature(signature.id) }
+                    }
+                    Divider()
+                    Button("Edit Signatures…") { model.showSignatures(editing: model.activeComposer?.signatureID) }
+                }
             }
             CommandGroup(after: .sidebar) {
                 Button("Go to Inbox") { model.goToInbox() }
@@ -209,6 +219,13 @@ struct TidingsApp: App {
         .windowToolbarStyle(.unifiedCompact)
         .defaultSize(width: 760, height: 560)
 
+        Window("Signatures", id: "signatures") {
+            SignaturesView().environment(model)
+        }
+        .windowToolbarStyle(.unifiedCompact)
+        .defaultSize(width: 860, height: 620)
+        .windowResizability(.contentMinSize)
+
         Window("Attachments", id: "attachments") {
             AttachmentBrowser().environment(model)
         }
@@ -340,6 +357,7 @@ struct RootView: View {
         .onChange(of: model.isRulesShown) { _, show in if show { openWindow(id: "rules"); model.isRulesShown = false } }
         .onChange(of: model.isSendersShown) { _, show in if show { openWindow(id: "senders"); model.isSendersShown = false } }
         .onChange(of: model.isAttachmentsShown) { _, show in if show { openWindow(id: "attachments"); model.isAttachmentsShown = false } }
+        .onChange(of: model.isSignaturesShown) { _, show in if show { openWindow(id: "signatures"); model.isSignaturesShown = false } }
         .quickLookPreview($model.quickLookURL)
         .modifier(UnsubscribeConfirmation(isActive: !model.isSendersWindowOpen))
         .sheet(item: $model.editingSmartFolder) { folder in SmartFolderEditor(folder: folder).environment(model) }

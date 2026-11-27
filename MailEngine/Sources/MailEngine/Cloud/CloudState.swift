@@ -29,6 +29,10 @@ public enum StateRecordType: String, CaseIterable, Sendable {
     /// An account's settings (servers, addresses, identities), keyed by login. Never a password:
     /// that travels in iCloud Keychain.
     case account
+    /// A signature (with its embedded images), keyed by its id.
+    case signature
+    /// Which signature is used when (one record, key "settings").
+    case signatureSettings
 }
 
 /// A local change waiting to go to the cloud.
@@ -255,6 +259,11 @@ extension MailStore {
                 put(.folderRole, "\(login)|\(role)", try CloudJSON.data(FolderRolePayload(path: row["value"])))
             }
         }
+        for (i, signature) in try signatures().enumerated() {
+            put(.signature, signature.id, try CloudJSON.data(SignaturePayload(position: i, signature: signature)))
+        }
+        let signatureSettings = try signatureSettings()
+        if signatureSettings != SignatureSettings() { put(.signatureSettings, "settings", try CloudJSON.data(signatureSettings)) }
         for (key, value) in settings { put(.setting, key, value) }
         return out
     }

@@ -127,6 +127,8 @@ extension MailStore {
             }
             guard !ownAddresses.isEmpty else { return false }
             let mine = ownAddresses.map { $0.lowercased() }
+            // Mail you sent (your signature's pictures among them): nothing to protect you from.
+            if mine.contains(sender) { return true }
             // A message from me with this person among the recipients.
             return try Int.fetchOne(db, sql: """
                 SELECT count(*) FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))

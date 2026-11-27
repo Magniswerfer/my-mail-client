@@ -228,6 +228,15 @@ final class AppModel {
     var editingSmartFolder: SmartFolder?
     @ObservationIgnored var smartFolderCountTask: Task<Void, Never>?
 
+    // Signatures (HTML, with the rules that pick them)
+    var signatures: [Signature] = []
+    var signatureSettings = SignatureSettings()
+    var isSignaturesShown = false
+    /// The signature the Signatures window opens on (New Signature, Edit from a composer).
+    var signatureToEdit: String?
+    /// The composer you're writing in (⌘K and the menu's Signature commands act on it).
+    @ObservationIgnored weak var activeComposer: ComposeModel?
+
     // Rules (SPEC §6)
     var rules: [Rule] = []
     /// Conversations each rule acted on in the last 7 days.
@@ -408,6 +417,7 @@ final class AppModel {
         reload()
         reloadOutbox()
         loadRules()
+        loadSignatures()
         loadSmartFolders()
         loadAICategories()
         scheduleDeliveryRefresh()

@@ -35,6 +35,7 @@ import Testing
         let mine: Set<String> = ["me@x.dk"]
         #expect(try store.allowsRemoteImages(from: "Anna@Example.dk", ownAddresses: mine), "someone I've written to")
         #expect(try !store.allowsRemoteImages(from: "news@shop.dk", ownAddresses: mine))
+        #expect(try store.allowsRemoteImages(from: "Me@X.dk", ownAddresses: mine), "my own mail (my signature's pictures)")
         try store.trustImages(from: "@shop.dk")
         #expect(try store.allowsRemoteImages(from: "news@shop.dk", ownAddresses: mine), "domain approved")
     }

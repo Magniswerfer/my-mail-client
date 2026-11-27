@@ -1,6 +1,736 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ Copy" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (kopi)"
+          }
+        }
+      }
+    },
+    "A pasted picture couldn't be kept. Add it with the picture button instead." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Et indsat billede kunne ikke gemmes. Tilføj det med billedknappen i stedet."
+          }
+        }
+      }
+    },
+    "A web address, an email address or a phone number." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En webadresse, en e-mailadresse eller et telefonnummer."
+          }
+        }
+      }
+    },
+    "Add Link" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj link"
+          }
+        }
+      }
+    },
+    "Add Picture…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj billede…"
+          }
+        }
+      }
+    },
+    "Add Rule" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj regel"
+          }
+        }
+      }
+    },
+    "Add Signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilføj signatur"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse"
+          }
+        }
+      }
+    },
+    "All mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al post"
+          }
+        }
+      }
+    },
+    "Any address" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle adresser"
+          }
+        }
+      }
+    },
+    "Copy a signature from a web page, Mail or Notes and paste it here. The full editor is on the Mac; signatures sync through iCloud." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiér en signatur fra en webside, Mail eller Noter, og sæt den ind her. Den fulde editor er på Mac’en; signaturer synkroniseres via iCloud."
+          }
+        }
+      }
+    },
+    "Delete this signature?" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slet denne signatur?"
+          }
+        }
+      }
+    },
+    "Delete “%@”" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slet “%@”"
+          }
+        }
+      }
+    },
+    "Domains" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Domæner"
+          }
+        }
+      }
+    },
+    "Download pictures linked from the web and send them inside each message, so they show without loading remote content" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hent billeder, der er linket fra nettet, og send dem med i hver besked, så de vises uden at indlæse eksternt indhold"
+          }
+        }
+      }
+    },
+    "Duplicate" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dublér"
+          }
+        }
+      }
+    },
+    "Edit Signatures…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger signaturer…"
+          }
+        }
+      }
+    },
+    "Edit as" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger som"
+          }
+        }
+      }
+    },
+    "Embed Hosted Pictures" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indlejr billeder fra nettet"
+          }
+        }
+      }
+    },
+    "Everyone it goes to is at" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle modtagere er hos"
+          }
+        }
+      }
+    },
+    "For Each Address" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For hver adresse"
+          }
+        }
+      }
+    },
+    "HTML" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML"
+          }
+        }
+      }
+    },
+    "Import HTML File…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importér HTML-fil…"
+          }
+        }
+      }
+    },
+    "In" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I"
+          }
+        }
+      }
+    },
+    "It's removed from all your devices, and from the rules that use it. Messages you sent keep it." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den fjernes fra alle dine enheder og fra de regler, der bruger den. Beskeder, du har sendt, beholder den."
+          }
+        }
+      }
+    },
+    "Link…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link…"
+          }
+        }
+      }
+    },
+    "Make one, paste one you copied from Mail or a web page, or import an HTML file." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lav en, sæt en ind, du har kopieret fra Mail eller en webside, eller importér en HTML-fil."
+          }
+        }
+      }
+    },
+    "New Signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny signatur"
+          }
+        }
+      }
+    },
+    "New Signature…" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny signatur…"
+          }
+        }
+      }
+    },
+    "New mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nye beskeder"
+          }
+        }
+      }
+    },
+    "New signature (or paste one, or import an HTML file)" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny signatur (eller sæt en ind, eller importér en HTML-fil)"
+          }
+        }
+      }
+    },
+    "No Signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen signatur"
+          }
+        }
+      }
+    },
+    "No Signature Selected" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen signatur valgt"
+          }
+        }
+      }
+    },
+    "No signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen signatur"
+          }
+        }
+      }
+    },
+    "Paste Formatted" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sæt formateret ind"
+          }
+        }
+      }
+    },
+    "Paste as New Signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sæt ind som ny signatur"
+          }
+        }
+      }
+    },
+    "Pasted Signature" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indsat signatur"
+          }
+        }
+      }
+    },
+    "Pictures from the web show when the reader allows remote content." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Billeder fra nettet vises, når modtageren tillader eksternt indhold."
+          }
+        }
+      }
+    },
+    "Plain Text" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ren tekst"
+          }
+        }
+      }
+    },
+    "Plain text" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ren tekst"
+          }
+        }
+      }
+    },
+    "Plain-text version" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version i ren tekst"
+          }
+        }
+      }
+    },
+    "Replace the signature with formatted text or HTML you copied" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstat signaturen med formateret tekst eller HTML, du har kopieret"
+          }
+        }
+      }
+    },
+    "Replies and forwards" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svar og videresendelser"
+          }
+        }
+      }
+    },
+    "Rules by Recipient" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regler efter modtager"
+          }
+        }
+      }
+    },
+    "Same as New Mail" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som nye beskeder"
+          }
+        }
+      }
+    },
+    "Sending from" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sendes fra"
+          }
+        }
+      }
+    },
+    "Sent with the HTML for mail programs that show only text." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sendes med HTML’en til mailprogrammer, der kun viser tekst."
+          }
+        }
+      }
+    },
+    "Signature: %@" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signatur: %@"
+          }
+        }
+      }
+    },
+    "Signatures" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signaturer"
+          }
+        }
+      }
+    },
+    "Someone it goes to is at" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En af modtagerne er hos"
+          }
+        }
+      }
+    },
+    "Someone it goes to isn't at" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En af modtagerne er ikke hos"
+          }
+        }
+      }
+    },
+    "Switching From in a message switches its signature too." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når du skifter Fra i en besked, skifter signaturen med."
+          }
+        }
+      }
+    },
+    "The first rule that fits wins, before the address's own choice. They look at To, Cc and Bcc and change the signature as you add people, until you pick one yourself." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den første regel, der passer, går forud for adressens eget valg. Reglerne ser på Til, Cc og Bcc og skifter signatur, mens du tilføjer modtagere, indtil du selv vælger en."
+          }
+        }
+      }
+    },
+    "There's no formatted text on the clipboard." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der er ingen formateret tekst på udklipsholderen."
+          }
+        }
+      }
+    },
+    "Too large to sync (%@ of %@). Use smaller pictures, or ones from the web." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For stor til at synkronisere (%@ af %@). Brug mindre billeder eller billeder fra nettet."
+          }
+        }
+      }
+    },
+    "Use" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brug"
+          }
+        }
+      }
+    },
+    "Use Signature “%@”" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brug signaturen “%@”"
+          }
+        }
+      }
+    },
+    "Visual" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visuel"
+          }
+        }
+      }
+    },
+    "When to Use" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvornår den bruges"
+          }
+        }
+      }
+    },
+    "Write My Own Plain-Text Version" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv min egen version i ren tekst"
+          }
+        }
+      }
+    },
+    "Write my own" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv min egen"
+          }
+        }
+      }
+    },
+    "%lld pictures couldn't be downloaded and stay linked." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld picture couldn't be downloaded and stays linked."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pictures couldn't be downloaded and stay linked."
+                }
+              }
+            }
+          }
+        },
+        "da" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld billede kunne ikke hentes og forbliver et link."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld billeder kunne ikke hentes og forbliver links."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld pictures travel inside each message." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld picture travels inside each message."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pictures travel inside each message."
+                }
+              }
+            }
+          }
+        },
+        "da" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld billede sendes med i hver besked."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld billeder sendes med i hver besked."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld signatures" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld signature"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld signatures"
+                }
+              }
+            }
+          }
+        },
+        "da" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld signatur"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld signaturer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Show Source" : {
       "localizations" : {
         "da" : {

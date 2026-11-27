@@ -155,6 +155,7 @@ public final class MailStore: Sendable {
         registerCloudMigrations(&m)
         registerJunkMigrations(&m)
         registerReactionMigrations(&m)
+        registerSignatureMigrations(&m)
         return m
     }
 

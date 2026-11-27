@@ -179,6 +179,7 @@ extension AppModel {
                                        keys: format.keys) { TextFormatting.send(format) })
             }
         }
+        list += signatureCommands
         if canAddToThings {
             list.append(AppCommand(id: "addThings", title: String(localized: "Add to Things"), symbol: "checkmark.square",
                                    keys: nil, isEnabled: hasSelection) { self.addToThings() })
