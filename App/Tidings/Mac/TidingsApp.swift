@@ -27,8 +27,10 @@ struct TidingsApp: App {
         WindowGroup(id: "main") {
             RootView()
                 .environment(model)
-                // Sidebar 190 + list 320 + reader 460, so the reader's minimum always holds.
-                .frame(minWidth: 980, minHeight: 560)
+                // Sidebar 190 + list 320 + reader 460, so the reader's minimum always holds; the
+                // contact panel's 260 on top while it's open (the window grows instead of the
+                // other columns being cut off).
+                .frame(minWidth: model.isContactPanelShown ? 1240 : 980, minHeight: 560)
                 .task { model.start() }
         }
         .commands {
@@ -317,13 +319,18 @@ struct RootView: View {
             .frame(minWidth: 460)
             .navigationSplitViewColumnWidth(min: 460, ideal: 680)
             .toolbar { readerToolbar }
+            // Search belongs to the reader's part of the toolbar, with Contact Info beside it:
+            // on the window, it sat over the contact panel whenever that was open.
+            .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
+            .searchFocused($searchFocused)
                 .inspector(isPresented: $model.isContactPanelShown) {
                     ContactPanel()
-                        .inspectorColumnWidth(min: 240, ideal: 280, max: 380)
+                        .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
+                        // Open, the panel has Contact Info and search over it, side by side and
+                        // as wide as the panel, instead of search spilling over it from the reader.
+                        .toolbar { if model.isContactPanelShown { contactAndSearchItems } }
                 }
         }
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: Text("Search mail"))
-        .searchFocused($searchFocused)
         .overlay(alignment: .top) {
             if model.isPaletteShown {
                 ZStack(alignment: .top) {
@@ -475,12 +482,19 @@ struct RootView: View {
             .disabled(none)
         }
         ToolbarSpacer(.flexible, placement: .primaryAction)
+        // Closed, Contact Info and search sit at the reader's trailing edge (open, over the panel).
+        if !model.isContactPanelShown { contactAndSearchItems }
+    }
+
+    /// Contact Info with the search field right after it.
+    @ToolbarContentBuilder private var contactAndSearchItems: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Toggle(isOn: Binding(get: { model.isContactPanelShown }, set: { _ in model.toggleContactPanel() })) {
                 Label("Contact Info", systemImage: "person.crop.circle")
             }
             .help("Who this is (⌃⌘I)")
         }
+        DefaultToolbarItem(kind: .search, placement: .primaryAction)
     }
 
     /// A picker, the palette or a sheet over the window. The V picker and ⌘K palette take focus
