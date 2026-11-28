@@ -32,6 +32,16 @@ extension MailStore {
         }
     }
 
+    /// Reactions leave the full-text index (search no longer filters them with a join).
+    /// Registered last: it came after v26.
+    static func registerReactionIndexMigrations(_ m: inout DatabaseMigrator) {
+        m.registerMigration("v27-reactions-unindexed") { db in
+            try db.execute(sql: """
+                DELETE FROM message_fts WHERE rowid IN (SELECT sortKey FROM message WHERE reactionTo IS NOT NULL)
+                """)
+        }
+    }
+
     /// The reactions to these messages, keyed by the reacted-to Message-ID (as given, without
     /// angle brackets), oldest first. Each sender counts once: their latest reaction wins, and a
     /// removal takes theirs away. The same reaction filed in several mailboxes counts once.

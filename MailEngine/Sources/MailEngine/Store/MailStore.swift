@@ -157,6 +157,7 @@ public final class MailStore: Sendable {
         registerReactionMigrations(&m)
         registerSignatureMigrations(&m)
         registerHighlightTrainingMigrations(&m)
+        registerReactionIndexMigrations(&m)
         return m
     }
 
@@ -180,6 +181,9 @@ public final class MailStore: Sendable {
                     message.sortKey = try Self.freeSortKey(db, SortKey.make(for: message, id: try Self.nextID(db)), excluding: nil)
                     try message.insert(db)
                 }
+                // Reactions ("👍") are never search results: keeping them out of the index lets
+                // text search and facets read the index alone, without joining `message`.
+                guard message.reactionTo == nil else { continue }
                 try db.execute(sql: """
                     INSERT INTO message_fts(rowid, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?)
                     """, arguments: [

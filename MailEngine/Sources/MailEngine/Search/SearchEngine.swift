@@ -131,7 +131,19 @@ public struct SearchEngine: Sendable {
         let start = clock.now
         let plan = Self.plan(query)
         return try store.db.read { db in
-            // Rowid-only aggregation: no join unless the query has message-table filters.
+            var total = 0
+            var categoryCounts: [Int64: Int] = [:]
+            var yearCounts: [Int: Int] = [:]
+            var attachments = 0
+            // Days map to years through `YearIndex`, not a Calendar call each (slow on Linux).
+            var years = YearIndex(calendar: Calendar(identifier: .gregorian))
+            func count(category: Int64, attachment: Int64, day: Int64, _ n: Int) {
+                total += n
+                categoryCounts[category, default: 0] += n
+                if attachment == 1 { attachments += n }
+                yearCounts[years.year(ofDay: day), default: 0] += n
+            }
+
             let source: String
             let key: String
             var args: [any DatabaseValueConvertible] = []
@@ -148,25 +160,38 @@ public struct SearchEngine: Sendable {
             }
             let arguments = Self.arguments(args)
 
-            // One grouped pass over the rowids: (category, attachment, day) buckets.
-            let rows = try Row.fetchAll(db, sql: """
-                SELECT \(SortKey.categorySQL(key)) AS c, \(SortKey.attachmentSQL(key)) AS a,
-                       (\(key) >> \(SortKey.secondsShift)) / 86400 AS d, count(*) AS n
-                \(source) GROUP BY c, a, d
-                """, arguments: arguments)
-
-            var total = 0
-            var categoryCounts: [Int64: Int] = [:]
-            var yearCounts: [Int: Int] = [:]
-            var attachments = 0
-            let calendar = Calendar(identifier: .gregorian)
-            for row in rows {
-                let n: Int = row["n"]
-                total += n
-                categoryCounts[row["c"], default: 0] += n
-                if (row["a"] as Int64) == 1 { attachments += n }
-                let day: Int64 = row["d"]
-                yearCounts[calendar.component(.year, from: Date(timeIntervalSince1970: TimeInterval(day * 86_400))), default: 0] += n
+            if plan.isIndexOnly {
+                // Everything the facets need is in the sort key: stream the matching keys from an
+                // index (full-text, or the sort-key index for a search without text) and bucket them
+                // here, skipping the few in Junk or that are reactions. Filtering those with a join
+                // costs ~5× more on a broad prefix ("fa": 130k of 250k), and reading whole rows
+                // ~10× more on "category:advertising".
+                var skip = Set<Int64>()
+                if plan.excludesJunk { skip.formUnion(try Int64.fetchAll(db, sql: Plan.junkKeysSQL)) }
+                if plan.excludesReactions { skip.formUnion(try Int64.fetchAll(db, sql: Plan.reactionKeysSQL)) }
+                let keys = if let match = plan.match {
+                    try Int64.fetchCursor(db, sql: """
+                        SELECT f.rowid FROM message_fts f WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid"))
+                        """, arguments: Self.arguments([match] + plan.rowidArguments))
+                } else {
+                    try Int64.fetchCursor(db, sql: "SELECT sortKey FROM message WHERE 1 \(plan.rowidSQL("sortKey"))",
+                                          arguments: Self.arguments(plan.rowidArguments))
+                }
+                while let k = try keys.next() {
+                    if skip.contains(k) { continue }
+                    count(category: (k >> SortKey.categoryShift) & 7, attachment: (k >> SortKey.attachmentShift) & 1,
+                          day: (k >> SortKey.secondsShift) / 86_400, 1)
+                }
+            } else {
+                // One grouped pass: (category, attachment, day) buckets.
+                let rows = try Row.fetchCursor(db, sql: """
+                    SELECT \(SortKey.categorySQL(key)) AS c, \(SortKey.attachmentSQL(key)) AS a,
+                           (\(key) >> \(SortKey.secondsShift)) / 86400 AS d, count(*) AS n
+                    \(source) GROUP BY c, a, d
+                    """, arguments: arguments)
+                while let row = try rows.next() {
+                    count(category: row[0], attachment: row[1], day: row[2], row[3])
+                }
             }
 
             let senderRows = try Row.fetchAll(db, sql: """
@@ -202,18 +227,38 @@ public struct SearchEngine: Sendable {
         var rowidArguments: [any DatabaseValueConvertible] = []
         var messageClauses: [String] = []
         var messageArguments: [any DatabaseValueConvertible] = []
+        /// Leave out mail in each account's Junk folder (every search that doesn't name a mailbox).
+        var excludesJunk = false
+        /// Leave out reactions ("👍"). Only a search without text needs to: they aren't indexed.
+        var excludesReactions = false
+
+        static let junkClause = "m.mailbox NOT IN (SELECT path FROM mailboxState WHERE accountID = m.accountID AND role = 'junk')"
+        /// The sort keys (FTS rowids) of everything in a Junk folder: few, and found by index.
+        static let junkKeysSQL = """
+            SELECT m.sortKey FROM mailboxState s JOIN message m ON m.accountID = s.accountID AND m.mailbox = s.path
+            WHERE s.role = 'junk'
+            """
+        static let reactionKeysSQL = "SELECT sortKey FROM message WHERE reactionTo IS NOT NULL"
 
         func rowidSQL(_ column: String) -> String {
             rowidClauses.map { " AND " + $0.replacingOccurrences(of: "$K", with: column) }.joined()
         }
-        var messageSQL: String { messageClauses.map { " AND " + $0 }.joined() }
+        var messageSQL: String {
+            (messageClauses + (excludesReactions ? ["m.reactionTo IS NULL"] : []) + (excludesJunk ? [Self.junkClause] : []))
+                .map { " AND " + $0 }.joined()
+        }
+        /// Only filters the sort key answers (text, category, attachment, date), Junk and reactions
+        /// aside: the full-text index, or the sort-key index, answers it without reading rows.
+        var isIndexOnly: Bool { messageClauses.isEmpty }
     }
 
     static func plan(_ q: SearchQuery) -> Plan {
         var p = Plan()
         p.match = q.ftsExpression
-        // Reactions ("👍") aren't mail to find.
-        p.messageClauses.append("m.reactionTo IS NULL")
+        // Reactions ("👍") aren't mail to find. They are not in the full-text index, so only a
+        // query without text has to leave them out (a clause here would make every text query
+        // join `message`, and facets slow down tenfold).
+        p.excludesReactions = p.match == nil
         if !q.categories.isEmpty {
             let codes = q.categories.compactMap { SortKey.categoryCodes[$0] }
             p.rowidClauses.append("\(SortKey.categorySQL("$K")) IN (\(codes.map(String.init).joined(separator: ",")))")
@@ -233,7 +278,7 @@ public struct SearchEngine: Sendable {
             }
         } else {
             // Junk only turns up when you ask for it (in:Junk, or searching in the Junk folder).
-            p.messageClauses.append("m.mailbox NOT IN (SELECT path FROM mailboxState WHERE accountID = m.accountID AND role = 'junk')")
+            p.excludesJunk = true
         }
         if !q.accounts.isEmpty {
             p.messageClauses.append("m.accountID IN (\(q.accounts.map { _ in "?" }.joined(separator: ",")))")
@@ -276,5 +321,46 @@ public struct SearchEngine: Sendable {
             return (startOffset > 0 ? "…" : "") + window + (end < text.endIndex ? "…" : "")
         }
         return fallback
+    }
+}
+
+/// The calendar year of a day number (days since 1970 at 00:00 UTC, as the facet query groups
+/// them), the same as `calendar.component(.year, from: day * 86400)` but from a table of year
+/// starts built as needed: a couple of Calendar calls per year instead of one per day.
+struct YearIndex {
+    let calendar: Calendar
+    /// First day number of each year from `firstYear` on.
+    private var starts: [Int64] = []
+    private var firstYear = 0
+
+    init(calendar: Calendar) { self.calendar = calendar }
+
+    mutating func year(ofDay day: Int64) -> Int {
+        if starts.isEmpty || day < starts[0] || day >= starts[starts.count - 1] {
+            extend(toCover: day)
+        }
+        // Last year whose first day is ≤ day.
+        var lo = 0, hi = starts.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if starts[mid] <= day { lo = mid } else { hi = mid - 1 }
+        }
+        return firstYear + lo
+    }
+
+    /// Covers `day` with year starts, one year either side of it.
+    private mutating func extend(toCover day: Int64) {
+        let year = calendar.component(.year, from: Date(timeIntervalSince1970: TimeInterval(day * 86_400)))
+        let low = starts.isEmpty ? year - 1 : min(firstYear, year - 1)
+        let high = starts.isEmpty ? year + 2 : max(firstYear + starts.count - 1, year + 2)
+        firstYear = low
+        starts = (low...high).map(firstDay(of:))
+    }
+
+    /// The first day number d with year(d * 86400) == year: d * 86400 must reach the year's
+    /// first instant in the calendar's time zone.
+    private func firstDay(of year: Int) -> Int64 {
+        let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1))!.timeIntervalSince1970
+        return Int64((start / 86_400).rounded(.up))
     }
 }
