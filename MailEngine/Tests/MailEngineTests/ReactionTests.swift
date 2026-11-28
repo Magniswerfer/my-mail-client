@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import GRDB
 @testable import MailEngine
 
 /// Email reactions: detecting Gmail, RFC 9078 and Outlook reactions, keeping them out of lists,
@@ -393,6 +394,58 @@ import Testing
         let reaction = try #require(try store.message(messageID: "r1@x"))
         let quiet = NotificationPolicy().notifications(for: [reaction], ruleRuns: [], ownAddresses: [], store: store)
         #expect(quiet.isEmpty)
+    }
+
+    /// Reactions are kept out of the full-text index, so text search and its facets never see
+    /// them without a join; a search with no text filters them on the message table.
+    @Test func reactionsStayOutOfSearchAndFacets() throws {
+        let store = try Self.makeStore()
+        try store.upsert([
+            (Self.stored(uid: 1, from: "anna@example.com", messageID: "orig@x", minutesAgo: 60), "The plan for Friday"),
+            (Self.stored(uid: 2, from: "bo@example.com", messageID: "r1@x", minutesAgo: 10, reactionTo: "orig@x", emoji: "👍"),
+             "👍 Bo reacted to: The plan for Friday"),
+        ])
+        let engine = SearchEngine(store: store)
+        #expect(try engine.hits(SearchQuery(parsing: "plan")).hits.map(\.fromAddress) == ["anna@example.com"])
+        #expect(try engine.facets(SearchQuery(parsing: "plan")).total == 1)
+        #expect(try engine.facets(SearchQuery(parsing: "plan")).senders.map(\.count) == [1])
+        #expect(try engine.hits(SearchQuery(parsing: "from:bo")).hits.isEmpty, "no text: filtered on the table")
+        #expect(try engine.facets(SearchQuery(parsing: "from:bo")).total == 0)
+        #expect(try engine.facets(SearchQuery(parsing: "category:primary")).total == 1, "no text: skipped by sort key")
+        #expect(try engine.hits(SearchQuery(parsing: "category:primary")).hits.count == 1)
+
+        // Saving it again, re-sorting it and deleting it all work although it has no index entry.
+        try store.upsert([(Self.stored(uid: 2, from: "bo@example.com", messageID: "r1@x", minutesAgo: 10,
+                                       reactionTo: "orig@x", emoji: "❤️"), "❤️ Bo reacted to: The plan for Friday")])
+        let reaction = try #require(try store.message(messageID: "r1@x"))
+        try store.setCategory(.social, reason: .youMovedThisConversation(.social), ids: [try #require(reaction.id)])
+        #expect(try engine.facets(SearchQuery(parsing: "plan")).total == 1)
+        try store.delete(ids: [try #require(reaction.id)])
+        #expect(try engine.facets(SearchQuery(parsing: "plan")).total == 1)
+    }
+
+    /// Stores from before v27 indexed reactions; the migration takes them out.
+    @Test func migrationUnindexesExistingReactions() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tidings-reactions-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("mail.sqlite").path
+        let store = try MailStore(path: path)
+        try store.upsert([
+            (Self.stored(uid: 1, from: "anna@example.com", messageID: "orig@x", minutesAgo: 60), "The plan"),
+            (Self.stored(uid: 2, from: "bo@example.com", messageID: "r1@x", minutesAgo: 10, reactionTo: "orig@x", emoji: "👍"),
+             "👍 reacted to the plan"),
+        ])
+        // As an older version left it: the reaction indexed, v27 not yet applied.
+        try store.db.write { db in
+            let key = try #require(try Int64.fetchOne(db, sql: "SELECT sortKey FROM message WHERE messageID = 'r1@x'"))
+            try db.execute(sql: "INSERT INTO message_fts(rowid, subject, sender, recipients, body) VALUES (?, 'Plan', 'bo@example.com', '', 'reacted to the plan')",
+                           arguments: [key])
+            try db.execute(sql: "DELETE FROM grdb_migrations WHERE identifier = 'v27-reactions-unindexed'")
+        }
+        #expect(try SearchEngine(store: store).facets(SearchQuery(parsing: "plan")).total == 2)
+
+        let reopened = try MailStore(path: path)
+        #expect(try SearchEngine(store: reopened).facets(SearchQuery(parsing: "plan")).total == 1)
     }
 }
 

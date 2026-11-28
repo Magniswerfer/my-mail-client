@@ -1,7 +1,8 @@
 import MailEngine
 import SwiftUI
 
-/// As-you-type results with refinement facets (SPEC §7). Newest first; facets arrive with the hits.
+/// As-you-type results with refinement facets (SPEC §7). Newest first; the hits and the person
+/// card arrive together (phase 1), the facets just after (phase 2).
 struct SearchResultsView: View {
     @Environment(AppModel.self) private var model
 

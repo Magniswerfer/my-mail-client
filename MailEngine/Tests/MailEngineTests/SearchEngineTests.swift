@@ -54,6 +54,53 @@ import Testing
         #expect(try engine.facets(SearchQuery(parsing: "category:transactions")).total == 1)
     }
 
+    /// Text facets read the index alone and skip Junk by sort key; they must count exactly what
+    /// the joined query counts.
+    @Test func facetsLeaveOutJunkWithoutAJoin() throws {
+        let store = try makeStore()
+        func at(_ m: StoredMessage, account: String = "a", mailbox: String) -> StoredMessage {
+            var m = m; m.accountID = account; m.mailbox = mailbox; return m
+        }
+        try store.upsert([
+            (message(1, "Nye sko", from: "nike", category: .advertising), "sko tilbud"),
+            (message(2, "Din ordre: sko", from: "zalando", category: .transactions, daysAgo: 400, attachments: true), "sko ordre"),
+            (at(message(3, "SKO -90%", from: "spam", category: .advertising), mailbox: "Junk"), "sko billigt"),
+            // Another account's folder called Junk that the server doesn't mark as junk: searched.
+            (at(message(4, "Sko til festen?", from: "anna"), account: "b", mailbox: "Junk"), "skal vi købe sko"),
+        ])
+        try store.db.write { db in
+            try db.execute(sql: "INSERT INTO mailboxState(accountID, path, role, messageCount) VALUES ('a', 'Junk', 'junk', 1), ('b', 'Junk', NULL, 1)")
+        }
+        let engine = SearchEngine(store: store)
+        #expect(SearchEngine.plan(SearchQuery(parsing: "sko")).isIndexOnly)
+
+        let all = try engine.facets(SearchQuery(parsing: "sko"))
+        #expect(all.total == 3)
+        #expect(all.withAttachments == 1)
+        #expect(Dictionary(uniqueKeysWithValues: all.categories.map { ($0.value, $0.count) })
+                == ["advertising": 1, "transactions": 1, "primary": 1])
+        #expect(all.years.map(\.count).reduce(0, +) == 3)
+        #expect(Set(all.senders.map(\.value)) == ["Nike", "Zalando", "Anna"])
+        #expect(try engine.hits(SearchQuery(parsing: "sko")).hits.count == 3)
+
+        #expect(try engine.facets(SearchQuery(parsing: "sko category:advertising")).total == 1)
+        // Without text: the sort-key index, Junk still left out.
+        #expect(SearchEngine.plan(SearchQuery(parsing: "category:advertising")).isIndexOnly)
+        #expect(try engine.facets(SearchQuery(parsing: "category:advertising")).total == 1)
+        #expect(try engine.facets(SearchQuery(parsing: "has:attachment")).total == 1)
+        #expect(try engine.facets(SearchQuery(parsing: "sko has:attachment")).total == 1)
+        #expect(try engine.facets(SearchQuery(parsing: "sko after:\(Self.isoDay(daysAgo: 30))")).total == 2)
+        // Naming the mailbox takes the joined path and finds Junk.
+        #expect(try engine.facets(SearchQuery(parsing: "sko in:Junk")).total == 2)
+    }
+
+    static func isoDay(daysAgo: Double) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date().addingTimeInterval(-daysAgo * 86_400))
+    }
+
     @Test func snippetComesFromCompressedBody() throws {
         let store = try makeStore()
         let body = String(repeating: "fyld ", count: 50) + "betalingsfristen er den 15. december" + String(repeating: " fyld", count: 50)
@@ -96,5 +143,22 @@ import Testing
         let blob = try #require(stored?.bodyText)
         #expect(blob.count < text.utf8.count / 5)
         #expect(stored?.plainText == text)
+    }
+}
+
+/// The year facet maps day numbers to years with a table, not a Calendar call per bucket.
+@Suite struct YearIndexTests {
+    @Test(arguments: ["UTC", "Europe/Copenhagen", "Pacific/Kiritimati", "Pacific/Pago_Pago"])
+    func agreesWithCalendarEveryDay(zone: String) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: zone))
+        var index = YearIndex(calendar: calendar)
+        // 1995 to 2045, walked out of order so the table grows both ways.
+        let days = Array(Int64(9_131)...Int64(27_394))
+        for day in Array(days.suffix(400)) + Array(days.prefix(400)) + days {
+            let expected = calendar.component(.year, from: Date(timeIntervalSince1970: TimeInterval(day * 86_400)))
+            #expect(index.year(ofDay: day) == expected, "day \(day) in \(zone)")
+            if index.year(ofDay: day) != expected { return }
+        }
     }
 }

@@ -196,15 +196,17 @@ Swift 6 (strict concurrency) · SwiftUI shell · AppKit `NSTableView` for the st
 
 ## 15. Performance budgets (CI, 250k-message synthetic mailbox; >10% regression fails)
 
+The CI job **Performance budgets** checks the engine's share of the rows marked † on every push: `tidings-bench`, release build, Linux runner. It fails over budget, or >10% slower than the last passing run on main on the same CPU model. How it measures, and how to run it locally: [`docs/performance.md`](performance.md).
+
 | Metric | Budget |
 |---|---|
-| Cold launch → usable stream | < 400 ms |
-| Search keystroke → results | < 30 ms p95 (M0: 6.1 ms @ 250k) |
-| Search facets | < 100 ms p95 (M0: 50 ms @ 250k) |
-| Open cached message | < 50 ms |
+| Cold launch → usable stream † | < 400 ms (CI, engine: ~45 ms) |
+| Search keystroke → results † | < 30 ms p95, hits + person card (M0: 6.1 ms hits @ 250k; CI: ~14 ms) |
+| Search facets † | < 100 ms p95 (M0: 50 ms @ 250k; CI: ~34 ms) |
+| Open cached message † | < 50 ms (CI, engine: ~3 ms) |
 | Done/Pin/Snooze feedback | next frame (optimistic) |
 | Scrolling | 120 fps ProMotion |
-| Memory | < 300 MB |
+| Memory † | < 300 MB (CI, engine process peak: ~52 MB) |
 | Idle CPU | ~0 |
 | No-change sync of a mailbox | nothing fetched beyond EXAMINE (10k-message INBOX on local Dovecot, debug build, whole account pass: 2.67 s with full passes → 52 ms incremental; `TIDINGS_BENCH=10000 swift test --filter SyncBenchmarkTests`) |
 

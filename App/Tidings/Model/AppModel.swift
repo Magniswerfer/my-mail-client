@@ -1058,18 +1058,24 @@ final class AppModel {
             // The first letters show results at once; later ones wait for a pause in typing.
             if !firstKey { try? await Task.sleep(for: .milliseconds(120)) }
             guard !Task.isCancelled else { return }
-            let result = await Task.detached(priority: .userInitiated) { () -> (SearchHits?, SearchFacets?, ContactHit?) in
+            // Phase 1 (SPEC §7, < 30 ms): the hits and the person card above them go on screen
+            // together, as soon as they're found, so the list doesn't jump when the card arrives.
+            let first = await Task.detached(priority: .userInitiated) { () -> (SearchHits?, ContactHit?) in
                 let hits = try? engine.hits(query)
-                let facets = query.wantsFacets ? try? engine.facets(query) : nil
+                // The person card: never yourself.
                 let contact = (try? engine.contact(for: typed)).flatMap { own.contains($0.address.lowercased()) ? nil : $0 }
-                return (hits, facets, contact)
+                return (hits, contact)
             }.value
             guard !Task.isCancelled, let self else { return }
-            self.searchHits = result.0?.hits ?? []
-            if let hits = result.0 { self.searchMilliseconds = Double(hits.duration.components.attoseconds) / 1e15 }
-            self.facets = result.1
-            // The person card: never yourself.
-            self.searchContact = result.2
+            self.searchHits = first.0?.hits ?? []
+            if let hits = first.0 { self.searchMilliseconds = Double(hits.duration.components.attoseconds) / 1e15 }
+            self.searchContact = first.1
+            // Phase 2 (< 100 ms): the facets fill in after; until then the previous ones stay.
+            let facets = await Task.detached(priority: .userInitiated) {
+                query.wantsFacets ? try? engine.facets(query) : nil
+            }.value
+            guard !Task.isCancelled else { return }
+            self.facets = facets
             self.scheduleRelated(for: typed, excluding: Set(self.searchHits.map(\.id)))
         }
     }

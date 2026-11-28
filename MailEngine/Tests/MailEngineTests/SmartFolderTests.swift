@@ -112,6 +112,29 @@ import Testing
         #expect(try engine.contact(for: SearchQuery(parsing: "holm")) != nil)
         #expect(try engine.contact(for: SearchQuery(parsing: "anna has:attachment")) == nil)   // operators: no card
     }
+
+    /// The card weighs only the newest matches (it runs on every keystroke) but counts exactly,
+    /// one person however the address is capitalised.
+    @Test func contactWeighsRecentMailAndCountsEverything() throws {
+        let s = try MailStore(path: FileManager.default.temporaryDirectory.appendingPathComponent("tidings-contact-\(UUID()).sqlite").path)
+        func mail(_ uid: UInt32, _ address: String, _ name: String, daysAgo: Double) -> (message: StoredMessage, plainText: String) {
+            (StoredMessage(accountID: "a", mailbox: "INBOX", uid: uid, subject: "Hej \(uid)", fromName: name, fromAddress: address,
+                           date: Date().addingTimeInterval(-daysAgo * 86_400)), "tekst")
+        }
+        // Anders wrote a lot, years ago; Anna writes now, from two spellings of her address.
+        var all: [(message: StoredMessage, plainText: String)] = []
+        for uid: UInt32 in 1...30 { all.append(mail(uid, "anders@old.dk", "Anders", daysAgo: 1_000 + Double(uid))) }
+        for uid: UInt32 in 31...35 { all.append(mail(uid, "anna@firma.dk", "Anna Holm", daysAgo: Double(uid) - 30)) }
+        for uid: UInt32 in 36...37 { all.append(mail(uid, "Anna@Firma.dk", "Anna Holm", daysAgo: Double(uid) - 30)) }
+        try s.upsert(all)
+        var engine = SearchEngine(store: s)
+        engine.contactSampleSize = 10
+        let recent = try #require(try engine.contact(for: SearchQuery(parsing: "an")))
+        #expect(recent.address == "anna@firma.dk" && recent.messageCount == 7 && recent.name == "Anna Holm")
+        // Asked by name, Anders still comes up, with all 30 (only 10 were in the sample).
+        let anders = try #require(try engine.contact(for: SearchQuery(parsing: "anders")))
+        #expect(anders.address == "anders@old.dk" && anders.messageCount == 30)
+    }
 }
 
 @Suite(.serialized) struct AttachmentBrowserTests {

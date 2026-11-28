@@ -54,7 +54,10 @@ extension SearchEngine {
     // MARK: Entity
 
     /// The person the query most likely means: plain words that prefix-match a sender's name or
-    /// address, ranked by how much mail they've sent. nil for operator queries or long phrases.
+    /// address, ranked by how much mail they've sent lately (among the newest `contactSampleSize`
+    /// matches), with an exact count of everything from them. nil for operator queries or long
+    /// phrases. It runs with the hits on every keystroke, so it reads at most a sample of rows: a
+    /// broad prefix ("no" → every noreply@) would otherwise group tens of thousands (~250 ms at 250k).
     public func contact(for query: SearchQuery) throws -> ContactHit? {
         var bare = query
         bare.terms = []
@@ -62,13 +65,29 @@ extension SearchEngine {
               query.terms.allSatisfy({ $0.count >= 2 }) else { return nil }
         let match = query.terms.map { "sender:\"\(SearchQuery.ftsSafe($0))\"*" }.joined(separator: " ")
         return try store.db.read { db in
-            guard let row = try Row.fetchOne(db, sql: """
-                SELECT m.fromAddress AS address, max(m.fromName) AS name, count(*) AS n
-                FROM message_fts f JOIN message m ON m.sortKey = f.rowid
-                WHERE f.message_fts MATCH ?
-                GROUP BY lower(m.fromAddress) ORDER BY n DESC LIMIT 1
-                """, arguments: [match]) else { return nil }
-            return ContactHit(name: row["name"], address: row["address"], messageCount: row["n"])
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT m.fromAddress, max(m.fromName), count(*) FROM (
+                    SELECT rowid AS k FROM message_fts WHERE message_fts MATCH ? ORDER BY rowid DESC LIMIT \(contactSampleSize)
+                ) recent JOIN message m ON m.sortKey = recent.k
+                GROUP BY m.fromAddress
+                """, arguments: [match])
+            // One person per address, however its case is spelled.
+            var people: [String: (spellings: [String], name: String?, count: Int)] = [:]
+            for row in rows {
+                let address: String = row[0]
+                let name: String? = row[1]
+                let n: Int = row[2]
+                people[address.lowercased(), default: ([], nil, 0)].spellings.append(address)
+                people[address.lowercased()]!.count += n
+                if let name, name > (people[address.lowercased()]!.name ?? "") { people[address.lowercased()]!.name = name }
+            }
+            guard let top = people.max(by: { ($0.value.count, $1.key) < ($1.value.count, $0.key) })?.value else { return nil }
+            // Exact, from the fromAddress index alone (no row reads).
+            let total = try Int.fetchOne(db, sql: """
+                SELECT count(*) FROM message WHERE fromAddress IN (\(top.spellings.map { _ in "?" }.joined(separator: ",")))
+                """, arguments: StatementArguments(top.spellings)) ?? top.count
+            let address = top.spellings.first { $0 == $0.lowercased() } ?? top.spellings.sorted()[0]
+            return ContactHit(name: top.name, address: address, messageCount: total)
         }
     }
 }

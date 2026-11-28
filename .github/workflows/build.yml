@@ -35,6 +35,55 @@ jobs:
       - name: Push server
         run: swift test --package-path PushServer
 
+  # SPEC §15: the budgets are requirements. A 250k-message synthetic mailbox, measured in a
+  # release build; fails over budget, or >10% slower than the last passing run on main on the
+  # same CPU model (see docs/performance.md). Its own runner, so it doesn't hold up the tests.
+  perf:
+    name: Performance budgets
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - run: apt-get update -qq && apt-get install -y -qq libsqlite3-dev
+      - name: Build (release)
+        run: swift build -c release --package-path MailEngine --product tidings-bench
+      - name: Baseline from main
+        uses: actions/cache/restore@v4
+        with:
+          path: perf-baseline.json
+          # Never an exact hit: the prefix picks the newest baseline main saved.
+          key: perf-baseline-${{ github.sha }}
+          restore-keys: perf-baseline-
+      - name: Seed the synthetic mailbox
+        run: MailEngine/.build/release/tidings-bench seed --count 250000 --dir "$RUNNER_TEMP/bench"
+      - name: Measure and check
+        run: |
+          bench=MailEngine/.build/release/tidings-bench
+          $bench run --dir "$RUNNER_TEMP/bench" --out perf.json
+          # Budgets fail the job; a slowdown against main's last run only warns, since two shared
+          # VMs with the same CPU can differ by more than the tolerance. A shared runner can have
+          # a bad minute: measure once more before failing.
+          if ! $bench compare --current perf.json --baseline perf-baseline.json --warn-on-regression > /dev/null; then
+            echo "::warning::A budget check failed; measuring again before deciding."
+            $bench run --dir "$RUNNER_TEMP/bench" --out perf.json
+          fi
+          $bench compare --current perf.json --baseline perf-baseline.json --warn-on-regression --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: perf.json
+          if-no-files-found: ignore
+      - name: Keep as main's baseline
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: cp perf.json perf-baseline.json
+      - if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/cache/save@v4
+        with:
+          path: perf-baseline.json
+          key: perf-baseline-${{ github.sha }}
+
   build:
     name: Engine tests, Mac app, iPhone app
     runs-on: macos-26

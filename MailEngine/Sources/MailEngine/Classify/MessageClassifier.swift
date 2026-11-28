@@ -202,6 +202,7 @@ extension MailStore {
                 message.classificationReason = reason.encoded
                 message.sortKey = try Self.freeSortKey(db, SortKey.make(for: message, id: id), excluding: id)
                 try message.update(db)
+                guard message.reactionTo == nil else { continue }  // never indexed (see `upsert`)
                 try db.execute(sql: """
                     INSERT INTO message_fts(rowid, subject, sender, recipients, body) VALUES (?, ?, ?, ?, ?)
                     """, arguments: [message.sortKey, message.subject,
