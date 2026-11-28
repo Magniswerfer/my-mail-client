@@ -7,31 +7,34 @@ struct StreamView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-        list
-        .listStyle(.inset)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // iPhone has the swipe bar at the bottom instead (PhoneBottomBar).
-            if model.currentCategoryTab != nil, !model.isSearching, !Platform.isPhone { CategoryTabs() }
+            list
+                .listStyle(.inset)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    // iPhone has the swipe bar at the bottom instead (PhoneBottomBar).
+                    if model.currentCategoryTab != nil, !model.isSearching, !Platform.isPhone { CategoryTabs() }
+                }
+                .overlay {
+                    if model.threads.isEmpty { EmptyStream() }
+                }
+                .onChange(of: model.selectedThreadID) { _, id in
+                    if let id { keepInView(id, proxy: proxy) }
+                }
         }
-        .overlay {
-            if model.threads.isEmpty { EmptyStream() }
+    }
+
+    /// Keeps the selection in view as j/k move it: instantly (an animation per key press falls
+    /// behind fast typing), only as far as needed, with one row of lookahead in the direction
+    /// of travel so you see what's coming.
+    private func keepInView(_ id: String, proxy: ScrollViewProxy) {
+        let ids = model.visibleThreadIDs
+        var target = id
+        if model.lastMoveDirection != 0, let i = ids.firstIndex(of: id), ids.indices.contains(i + model.lastMoveDirection) {
+            target = ids[i + model.lastMoveDirection]
         }
-        // Keep the selection in view as j/k move it: instantly (an animation per key press falls
-        // behind fast typing), only as far as needed, with one row of lookahead in the direction
-        // of travel so you see what's coming.
-        .onChange(of: model.selectedThreadID) { _, id in
-            guard let id else { return }
-            let ids = model.visibleThreadIDs
-            var target = id
-            if model.lastMoveDirection != 0, let i = ids.firstIndex(of: id), ids.indices.contains(i + model.lastMoveDirection) {
-                target = ids[i + model.lastMoveDirection]
-            }
-            model.lastMoveDirection = 0
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { proxy.scrollTo(target) }
-        }
-        }
+        model.lastMoveDirection = 0
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { proxy.scrollTo(target) }
     }
 
     /// On the Mac the list takes several rows (⌘A, ⇧-click, ⌘-click) and shows them all
@@ -56,31 +59,38 @@ struct StreamView: View {
         ForEach(model.streamItems) { item in
             Group {
                 switch item {
-            case .thread(let thread):
-                row(thread)
-            case .replyLater(let pile):
-                ReplyLaterRow(threads: pile)
-                    .selectionDisabled()
-            case .bundle(let category, let members, let deliveredAt):
-                BundleRow(category: category, threads: members, expanded: model.expandedBundles.contains(category),
-                          deliveredAt: deliveredAt, waiting: model.waiting(category))
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
-                    .selectionDisabled()
-                    .contextMenu {
-                        Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
-                            model.requestSweep(bundle: category)
-                        }
-                    }
-                if model.expandedBundles.contains(category) {
-                    ForEach(members) { thread in row(thread, inBundle: true) }
+                case .thread(let thread):
+                    row(thread)
+                case .replyLater(let pile):
+                    ReplyLaterRow(threads: pile)
+                        .selectionDisabled()
+                case .bundle(let category, let members, let deliveredAt):
+                    bundle(category, members: members, deliveredAt: deliveredAt)
                 }
-            }
             }
             // No line above the first row, only between rows.
             .listRowSeparator(item.id == firstID ? .hidden : .automatic, edges: .top)
             // Room for the unread dot before the avatars, as in Mail (every row, so they line up).
             .padding(.leading, ThreadRow.dotGutter)
+        }
+    }
+
+    /// The bundle's row, then its conversations while it's open.
+    @ViewBuilder
+    private func bundle(_ category: MailCategory, members: [ThreadSummary], deliveredAt: Date?) -> some View {
+        let isExpanded = model.expandedBundles.contains(category)
+        BundleRow(category: category, threads: members, expanded: isExpanded,
+                  deliveredAt: deliveredAt, waiting: model.waiting(category))
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.snappy) { model.toggleBundle(category) } }
+            .selectionDisabled()
+            .contextMenu {
+                Button("Mark All \(category.title) Done", systemImage: "checkmark.circle") {
+                    model.requestSweep(bundle: category)
+                }
+            }
+        if isExpanded {
+            ForEach(members) { thread in row(thread, inBundle: true) }
         }
     }
 
@@ -223,14 +233,17 @@ struct ThreadRow: View {
     let thread: ThreadSummary
     var inBundle = false
 
+    /// A bundle's conversations sit indented under it.
+    private var bundleIndent: CGFloat { inBundle ? 18 : 0 }
+    private var avatarSize: CGFloat { inBundle ? 26 : 32 }
+
     var body: some View {
         let m = thread.latest
         let unread = thread.unreadCount > 0
-        let avatarSize: CGFloat = inBundle ? 26 : 32
         HStack(alignment: .top, spacing: 10) {
             // The newest sender's picture, unless that's you (then initials of who you wrote with).
             Avatar(name: senderLine, address: model.ownAddresses.contains(m.fromAddress) ? nil : m.fromAddress, size: avatarSize)
-                .padding(.leading, inBundle ? 18 : 0)
+                .padding(.leading, bundleIndent)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(senderLine)
@@ -243,16 +256,7 @@ struct ThreadRow: View {
                     }
                     Spacer(minLength: 6)
                     statusIcons(m)
-                    if let wake = thread.snoozedUntil {
-                        Label(MailDate.short(wake), systemImage: "clock")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .accessibilityLabel("Snoozed until \(MailDate.long(wake))")
-                    } else {
-                        Text(MailDate.short(thread.arrivedAt))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(unread ? .primary : .secondary)
-                    }
+                    dateOrSnoozeTime(unread: unread)
                 }
                 Text(m.subject)
                     .font(.subheadline.weight(unread ? .medium : .regular))
@@ -264,36 +268,57 @@ struct ThreadRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                // A reply or follow-up Tidings wrote waits under the mail it answers (there's
-                // no separate list for them); click to open it.
                 if let draft = model.autoDraft(forThread: thread.threadID) {
-                    Button { model.reviewFollowUp(threadID: thread.threadID) } label: {
-                        // Icon and text side by side (a Label in an iPhone list row gets an
-                        // icon column and a wide gap).
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
-                            Text(draft.kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you")
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.purple)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Open the draft. Nothing is sent without you.")
+                    autoDraftButton(draft)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Self.verticalPadding)
         .overlay(alignment: .topLeading) {
-            if unread {
-                // Level with the avatar's middle (as in Mail), not the middle of a tall row, in the
-                // gutter before it with a clear gap.
-                let dot: CGFloat = Platform.isPhone ? 9 : 7
-                let gap: CGFloat = Platform.isPhone ? 9 : 5
-                Circle().fill(Color.accentColor).frame(width: dot, height: dot)
-                    .offset(x: (inBundle ? 18 : 0) - gap - dot, y: 4 + avatarSize / 2 - dot / 2)
-                    .accessibilityLabel("Unread")
-            }
+            if unread { unreadDot }
         }
+    }
+
+    private static let verticalPadding: CGFloat = 4
+
+    @ViewBuilder private func dateOrSnoozeTime(unread: Bool) -> some View {
+        if let wake = thread.snoozedUntil {
+            Label(MailDate.short(wake), systemImage: "clock")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Snoozed until \(MailDate.long(wake))")
+        } else {
+            Text(MailDate.short(thread.arrivedAt))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(unread ? .primary : .secondary)
+        }
+    }
+
+    /// A reply or follow-up Tidings wrote waits under the mail it answers (there's no separate
+    /// list for them); click to open it.
+    private func autoDraftButton(_ draft: AutoDraft) -> some View {
+        Button { model.reviewFollowUp(threadID: thread.threadID) } label: {
+            // Icon and text side by side (a Label in an iPhone list row gets an icon column and
+            // a wide gap).
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                Text(draft.kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.purple)
+        }
+        .buttonStyle(.borderless)
+        .help("Open the draft. Nothing is sent without you.")
+    }
+
+    /// Level with the avatar's middle (as in Mail), not the middle of a tall row, in the gutter
+    /// before it with a clear gap.
+    private var unreadDot: some View {
+        let dot: CGFloat = Platform.isPhone ? 9 : 7
+        let gap: CGFloat = Platform.isPhone ? 9 : 5
+        return Circle().fill(Color.accentColor).frame(width: dot, height: dot)
+            .offset(x: bundleIndent - gap - dot, y: Self.verticalPadding + avatarSize / 2 - dot / 2)
+            .accessibilityLabel("Unread")
     }
 
     @ViewBuilder private func statusIcons(_ m: StoredMessage) -> some View {
@@ -383,11 +408,13 @@ struct BundleRow: View {
         .accessibilityHint(expanded ? "Collapse bundle" : "Expand bundle")
     }
 
+    private static let maxSendersShown = 4
+
     private var senders: String {
         var seen: [String] = []
         for t in threads where !seen.contains(t.latest.senderDisplay) {
             seen.append(t.latest.senderDisplay)
-            if seen.count == 4 { break }
+            if seen.count == Self.maxSendersShown { break }
         }
         return seen.joined(separator: ", ")
     }

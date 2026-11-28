@@ -14,11 +14,31 @@ struct AppCommand: Identifiable {
 }
 
 extension AppModel {
+    /// In palette order.
     var commands: [AppCommand] {
         let hasSelection = !targetThreads.isEmpty
         let thread = targetThreads.first
+        var list = conversationCommands(hasSelection: hasSelection, thread: thread)
+        list += threadCommands(hasSelection: hasSelection, thread: thread)
+        list += accountCommands
+        list += folderCommands
+        #if os(macOS)
+        list += backgroundCommands
+        #endif
+        list += connectionCommands
+        list += formattingCommands
+        list += signatureCommands
+        list += contactAndFollowUpCommands(hasSelection: hasSelection, thread: thread)
+        list += inviteCommands
+        list += dateSuggestionCommands
+        list += placeCommands(hasSelection: hasSelection)
+        return list
+    }
+
+    /// Answering, triage, search and getting around.
+    private func conversationCommands(hasSelection: Bool, thread: ThreadSummary?) -> [AppCommand] {
         let inSnoozedOrFolder = sourceMailbox != "INBOX"
-        var list: [AppCommand] = [
+        return [
             AppCommand(id: "compose", title: String(localized: "New Message"), symbol: "square.and.pencil", keys: "C") { self.composeNew() },
             AppCommand(id: "reply", title: String(localized: "Reply"), symbol: "arrowshape.turn.up.left", keys: "R",
                        isEnabled: hasSelection) { self.compose(.reply) },
@@ -109,8 +129,11 @@ extension AppModel {
                 self.selection = .replyLater
             },
         ]
-        let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
-        list += [
+    }
+
+    /// What to do with the selected conversation beyond triage.
+    private func threadCommands(hasSelection: Bool, thread: ThreadSummary?) -> [AppCommand] {
+        [
             AppCommand(id: "mute", title: thread.map { isMuted($0.threadID) } == true ? String(localized: "Unmute Conversation")
                                                                                    : String(localized: "Mute Conversation"),
                        symbol: "bell.slash", keys: "⇧M", isEnabled: hasSelection) { self.toggleMute() },
@@ -134,7 +157,11 @@ extension AppModel {
                 self.isShortcutsShown = true
             },
         ]
-        // Accounts: add one, open one account's Inbox (⌥⌘1 … on the Mac), remove one.
+    }
+
+    /// Add an account, open one account's Inbox (⌥⌘1 … on the Mac), remove one.
+    private var accountCommands: [AppCommand] {
+        var list: [AppCommand] = []
         list.append(AppCommand(id: "addAccount", title: String(localized: "Add Account…"), symbol: "person.crop.circle.badge.plus",
                                keys: nil) { self.isAddingAccount = true })
         if accounts.count > 1 {
@@ -149,9 +176,13 @@ extension AppModel {
             list.append(AppCommand(id: "removeAccount-\(account.id)", title: String(localized: "Remove Account \(account.displayName)…"),
                                    symbol: "person.crop.circle.badge.minus", keys: nil) { self.accountToRemove = account })
         }
-        list += folderCommands
-        #if os(macOS)
-        // Settings › General › In the Background, from the keyboard.
+        return list
+    }
+
+    #if os(macOS)
+    /// Settings › General › In the Background, from the keyboard.
+    private var backgroundCommands: [AppCommand] {
+        var list: [AppCommand] = []
         let opensAtLogin = BackgroundMode.opensAtLogin
         list.append(AppCommand(id: "openAtLogin", title: opensAtLogin ? String(localized: "Don't Open at Login") : String(localized: "Open at Login"),
                                symbol: "power", keys: nil) {
@@ -163,7 +194,13 @@ extension AppModel {
                                symbol: "menubar.rectangle", keys: nil) {
             UserDefaults.standard.set(!inMenuBar, forKey: BackgroundMode.menuBarKey)
         })
-        #endif
+        return list
+    }
+    #endif
+
+    /// Signing in, the push server and app updates.
+    private var connectionCommands: [AppCommand] {
+        var list: [AppCommand] = []
         for account in accountsAwaitingPassword {
             list.append(AppCommand(id: "signIn-\(account.login)", title: String(localized: "Sign In to \(account.displayName)…"),
                                    symbol: "key", keys: nil) { self.accountToSignIn = account })
@@ -178,14 +215,21 @@ extension AppModel {
             list.append(AppCommand(id: "checkForUpdates", title: String(localized: "Check for Updates…"),
                                    symbol: "arrow.down.circle", keys: nil) { checkForUpdates() })
         }
-        // Writing a message: its formatting.
-        if TextFormatting.active != nil {
-            for format in TextFormat.allCases {
-                list.append(AppCommand(id: "format-\(format.rawValue)", title: format.title, symbol: format.symbol,
-                                       keys: format.keys) { TextFormatting.send(format) })
-            }
+        return list
+    }
+
+    /// While writing a message: its formatting.
+    private var formattingCommands: [AppCommand] {
+        guard TextFormatting.active != nil else { return [] }
+        return TextFormat.allCases.map { format in
+            AppCommand(id: "format-\(format.rawValue)", title: format.title, symbol: format.symbol,
+                       keys: format.keys) { TextFormatting.send(format) }
         }
-        list += signatureCommands
+    }
+
+    private func contactAndFollowUpCommands(hasSelection: Bool, thread: ThreadSummary?) -> [AppCommand] {
+        var list: [AppCommand] = []
+        let followUp = thread.flatMap { autoDraft(forThread: $0.threadID) }
         if canAddToThings {
             list.append(AppCommand(id: "addThings", title: String(localized: "Add to Things"), symbol: "checkmark.square",
                                    keys: nil, isEnabled: hasSelection) { self.addToThings() })
@@ -200,8 +244,12 @@ extension AppModel {
             AppCommand(id: "discardFollowUp", title: String(localized: "Discard Follow-up Draft"), symbol: "xmark.circle",
                        keys: nil, isEnabled: followUp != nil) { if let t = thread { self.dismissFollowUp(threadID: t.threadID) } },
         ]
+        return list
+    }
+
+    private var inviteCommands: [AppCommand] {
         let canAnswer = answerableInvite != nil
-        list += [
+        return [
             AppCommand(id: "inviteAccept", title: String(localized: "Accept Invitation"), symbol: "checkmark.circle", keys: "⌃⌘Y",
                        isEnabled: canAnswer) { self.respondToSelectedInvite(.accepted) },
             AppCommand(id: "inviteMaybe", title: String(localized: "Answer Maybe to Invitation"), symbol: "questionmark.circle", keys: "⌃⌘M",
@@ -209,7 +257,11 @@ extension AppModel {
             AppCommand(id: "inviteDecline", title: String(localized: "Decline Invitation"), symbol: "xmark.circle", keys: "⌃⌘N",
                        isEnabled: canAnswer) { self.respondToSelectedInvite(.declined) },
         ]
-        list += dateSuggestionCommands
+    }
+
+    /// Going to (and moving to) archives, categories and smart folders.
+    private func placeCommands(hasSelection: Bool) -> [AppCommand] {
+        var list: [AppCommand] = []
         for account in accounts {
             for box in mailboxes where box.accountID == account.id && box.role == .archive {
                 list.append(AppCommand(id: "goArchive-\(account.id)", title: String(localized: "Go to Archive"), symbol: "archivebox",
@@ -253,32 +305,9 @@ struct CommandPalette: View {
     var body: some View {
         let matches = filtered
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "command").foregroundStyle(.secondary)
-                TextField("Type a command", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.title3)
-                    .focused($focused)
-                    .onSubmit { runHighlighted(matches) }
-            }
-            .padding(14)
+            searchField(matches)
             Divider()
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(Array(matches.enumerated()), id: \.element.id) { index, command in
-                            row(command, highlighted: index == highlighted)
-                                .id(command.id)
-                                .onTapGesture { run(command) }
-                        }
-                    }
-                    .padding(6)
-                }
-                .frame(maxHeight: 340)
-                .onChange(of: highlighted) { _, i in
-                    if matches.indices.contains(i) { proxy.scrollTo(matches[i].id) }
-                }
-            }
+            commandList(matches)
         }
         .macFrame(width: 520)
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
@@ -288,6 +317,37 @@ struct CommandPalette: View {
         .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, max(0, matches.count - 1)); return .handled }
         .onKeyPress(.upArrow) { highlighted = max(highlighted - 1, 0); return .handled }
         .onKeyPress(.escape) { model.isPaletteShown = false; return .handled }
+    }
+
+    private func searchField(_ matches: [AppCommand]) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "command").foregroundStyle(.secondary)
+            TextField("Type a command", text: $query)
+                .textFieldStyle(.plain)
+                .font(.title3)
+                .focused($focused)
+                .onSubmit { runHighlighted(matches) }
+        }
+        .padding(14)
+    }
+
+    private func commandList(_ matches: [AppCommand]) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array(matches.enumerated()), id: \.element.id) { index, command in
+                        row(command, highlighted: index == highlighted)
+                            .id(command.id)
+                            .onTapGesture { run(command) }
+                    }
+                }
+                .padding(6)
+            }
+            .frame(maxHeight: 340)
+            .onChange(of: highlighted) { _, i in
+                if matches.indices.contains(i) { proxy.scrollTo(matches[i].id) }
+            }
+        }
     }
 
     private var filtered: [AppCommand] {

@@ -7,51 +7,25 @@ struct ReaderView: View {
     @Environment(AppModel.self) private var model
     let threadID: String?
 
+    /// iPhone: Mail's own reading margins.
+    private static let horizontalMargin: CGFloat = Platform.isPhone ? 24 : 20
+    private static let verticalMargin: CGFloat = Platform.isPhone ? 16 : 20
+    private static let maxReadingWidth: CGFloat = 820
+
     var body: some View {
         if let threadID {
             let _ = model.revision   // redraw after moves, flag changes and syncs
             let messages = model.readerMessages(inThread: threadID)
-            let reactions = model.reactions(on: messages)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if let first = messages.last {
-                        Text(first.subject)
-                            .font(.title2.weight(.semibold))
-                            .textSelection(.enabled)
-                            .padding(.bottom, 4)
-                        CategoryLine(message: first)
-                        if model.isMuted(threadID) {
-                            HStack(spacing: 6) {
-                                Label("Muted: new replies skip the Inbox", systemImage: "bell.slash")
-                                    .font(.callout).foregroundStyle(.secondary)
-                                Button("Unmute") { model.unmute(threadID: threadID) }
-                                    .buttonStyle(.borderless)
-                            }
-                        }
-                        if let latest = messages.last, case let highlights = model.visibleHighlights(of: latest), !highlights.isEmpty {
-                            HighlightCards(highlights: highlights, message: latest)
-                        }
-                        SummaryLine(threadID: threadID, messageCount: messages.count)
-                        if let risky = messages.last(where: { $0.riskLevel > .none }) {
-                            RiskBanner(message: risky)
-                        }
-                        JunkBanner(threadID: threadID, messages: messages)
-                        if let found = model.invite(inThread: threadID) {
-                            InviteCard(message: found.message, invite: found.invite)
-                        }
-                        DateSuggestionSlot(threadID: threadID)
+                    if let latest = messages.last {
+                        conversationHeader(threadID: threadID, latest: latest, messages: messages)
                     }
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        // iPhone: no card round each message, just a line between them.
-                        if Platform.isPhone, index > 0 { Divider().padding(.vertical, 4) }
-                        MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread,
-                                    reactions: message.id.flatMap { reactions[$0] } ?? [])
-                    }
+                    messageCards(messages)
                 }
-                // iPhone: Mail's own reading margins.
-                .padding(.horizontal, Platform.isPhone ? 24 : 20)
-                .padding(.vertical, Platform.isPhone ? 16 : 20)
-                .frame(maxWidth: 820, alignment: .leading)
+                .padding(.horizontal, Self.horizontalMargin)
+                .padding(.vertical, Self.verticalMargin)
+                .frame(maxWidth: Self.maxReadingWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
             .id(threadID)
@@ -65,6 +39,53 @@ struct ReaderView: View {
         } else {
             ContentUnavailableView("No conversation selected", systemImage: "envelope.open",
                                    description: Text("Use j and k to move through your mail."))
+        }
+    }
+
+    /// The subject, then everything about the conversation as a whole, above its messages.
+    @ViewBuilder
+    private func conversationHeader(threadID: String, latest: StoredMessage, messages: [StoredMessage]) -> some View {
+        Text(latest.subject)
+            .font(.title2.weight(.semibold))
+            .textSelection(.enabled)
+            .padding(.bottom, 4)
+        CategoryLine(message: latest)
+        if model.isMuted(threadID) {
+            mutedNotice(threadID: threadID)
+        }
+        let highlights = model.visibleHighlights(of: latest)
+        if !highlights.isEmpty {
+            HighlightCards(highlights: highlights, message: latest)
+        }
+        SummaryLine(threadID: threadID, messageCount: messages.count)
+        if let risky = messages.last(where: { $0.riskLevel > .none }) {
+            RiskBanner(message: risky)
+        }
+        JunkBanner(threadID: threadID, messages: messages)
+        if let found = model.invite(inThread: threadID) {
+            InviteCard(message: found.message, invite: found.invite)
+        }
+        DateSuggestionSlot(threadID: threadID)
+    }
+
+    private func mutedNotice(threadID: String) -> some View {
+        HStack(spacing: 6) {
+            Label("Muted: new replies skip the Inbox", systemImage: "bell.slash")
+                .font(.callout).foregroundStyle(.secondary)
+            Button("Unmute") { model.unmute(threadID: threadID) }
+                .buttonStyle(.borderless)
+        }
+    }
+
+    /// Oldest to newest; the newest and any unread start expanded.
+    @ViewBuilder
+    private func messageCards(_ messages: [StoredMessage]) -> some View {
+        let reactions = model.reactions(on: messages)
+        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+            // iPhone: no card round each message, just a line between them.
+            if Platform.isPhone, index > 0 { Divider().padding(.vertical, 4) }
+            MessageCard(message: message, startsExpanded: index == messages.count - 1 || message.isUnread,
+                        reactions: message.id.flatMap { reactions[$0] } ?? [])
         }
     }
 }
@@ -85,13 +106,8 @@ struct MessageRibbon: View {
                 button(liked ? "Remove Like" : "Like", liked ? "hand.thumbsup.fill" : "hand.thumbsup") {
                     model.toggleReaction("👍", to: message)
                 }
-                ReactionMenu(message: message) {
-                    Image(systemName: "face.smiling")
-                        .font(.system(size: 13))
-                        .frame(width: 30, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .foregroundStyle(.secondary)
+                ReactionMenu(message: message) { icon("face.smiling") }
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 6)
@@ -99,13 +115,15 @@ struct MessageRibbon: View {
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 
+    private func icon(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13))
+            .frame(width: 30, height: 22)
+            .contentShape(Rectangle())
+    }
+
     private func button(_ title: LocalizedStringKey, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13))
-                .frame(width: 30, height: 22)
-                .contentShape(Rectangle())
-        }
+        Button(action: action) { icon(symbol) }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
         .help(Text(title))
@@ -126,6 +144,7 @@ struct ReactionRow: View {
         HStack(spacing: 6) {
             ForEach(groups, id: \.key) { emoji, people in
                 let mine = people.contains(where: \.isMine)
+                let names = people.map(\.fromName).joined(separator: ", ")
                 Button { model.toggleReaction(emoji, to: message) } label: {
                     HStack(spacing: 4) {
                         Text(emoji)
@@ -139,8 +158,8 @@ struct ReactionRow: View {
                 .buttonStyle(.plain)
                 // On your own mail the chips only show who reacted.
                 .allowsHitTesting(model.canReact(to: message))
-                .help(Text(people.map(\.fromName).joined(separator: ", ")))
-                .accessibilityLabel(Text("\(emoji) from \(people.map(\.fromName).joined(separator: ", "))"))
+                .help(Text(names))
+                .accessibilityLabel(Text("\(emoji) from \(names)"))
             }
             if Platform.isPhone, model.canReact(to: message) {
                 ReactionMenu(message: message) {
@@ -181,7 +200,7 @@ struct MessageCard: View {
     @Environment(AppModel.self) private var model
     let message: StoredMessage
     @State var expanded: Bool
-    @State private var body_: LoadedBody?
+    @State private var loadedBody: LoadedBody?
     @State private var loadError: String?
     @State private var showImages = false
     /// Dark mode: show this message's own colours instead of recolouring it.
@@ -198,6 +217,10 @@ struct MessageCard: View {
         self.reactions = reactions
         _expanded = State(initialValue: startsExpanded)
     }
+
+    /// Mac: the card's inset and corner radius; the ribbon on a folded card sits this far down,
+    /// on its bottom edge.
+    private static let macCardInset: CGFloat = 14
 
     struct LoadedBody {
         var html: PreparedHTML?
@@ -217,15 +240,7 @@ struct MessageCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
             if expanded {
-                // Mac, as in Mail: a line under the header, and on hover a ribbon on it to
-                // answer this message (not just the conversation's newest).
-                if !Platform.isPhone {
-                    Divider()
-                        .overlay {
-                            if isHovered { MessageRibbon(message: message).transition(.opacity) }
-                        }
-                        .zIndex(1)
-                }
+                if !Platform.isPhone { headerDividerWithRibbon }
                 content
             }
             // Likes under the message; on the iPhone also the button to add one (the Mac has
@@ -235,33 +250,45 @@ struct MessageCard: View {
             }
         }
         // On the Mac each message is a card; the iPhone has no room to spare for one.
-        .padding(Platform.isPhone ? 0 : 14)
+        .padding(Platform.isPhone ? 0 : Self.macCardInset)
         .background {
-            if !Platform.isPhone { RoundedRectangle(cornerRadius: 14).fill(.background.secondary) }
+            if !Platform.isPhone { RoundedRectangle(cornerRadius: Self.macCardInset).fill(.background.secondary) }
         }
         .overlay(alignment: .bottom) {
             // A folded message has no line: the ribbon sits on its bottom edge.
             if !Platform.isPhone, !expanded, isHovered {
-                MessageRibbon(message: message).offset(y: 14).transition(.opacity)
+                MessageRibbon(message: message).offset(y: Self.macCardInset).transition(.opacity)
             }
         }
         .zIndex(isHovered ? 1 : 0)
         .onHover { inside in withAnimation(.easeOut(duration: 0.12)) { isHovered = inside } }
-        .contextMenu {
-            Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
-            Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
-            Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
-            Divider()
-            Button("Find Code…", systemImage: "key") { model.highlightPick = HighlightPick(message: message, field: .code) }
-            Button("Find Amount…", systemImage: "receipt") { model.highlightPick = HighlightPick(message: message, field: .amount) }
-            Divider()
-            Button("Show Source", systemImage: "chevron.left.forwardslash.chevron.right") {
-                model.sourceRequest = SourceRequest(message: message)
-            }
-        }
+        .contextMenu { contextMenuActions }
         .task(id: expanded) {
-            guard expanded, body_ == nil else { return }
+            guard expanded, loadedBody == nil else { return }
             await load()
+        }
+    }
+
+    /// Mac, as in Mail: a line under the header, and on hover a ribbon on it to answer this
+    /// message (not just the conversation's newest).
+    private var headerDividerWithRibbon: some View {
+        Divider()
+            .overlay {
+                if isHovered { MessageRibbon(message: message).transition(.opacity) }
+            }
+            .zIndex(1)
+    }
+
+    @ViewBuilder private var contextMenuActions: some View {
+        Button("Reply", systemImage: "arrowshape.turn.up.left") { model.compose(.reply, replyingTo: message) }
+        Button("Reply All", systemImage: "arrowshape.turn.up.left.2") { model.compose(.replyAll, replyingTo: message) }
+        Button("Forward", systemImage: "arrowshape.turn.up.right") { model.compose(.forward, replyingTo: message) }
+        Divider()
+        Button("Find Code…", systemImage: "key") { model.highlightPick = HighlightPick(message: message, field: .code) }
+        Button("Find Amount…", systemImage: "receipt") { model.highlightPick = HighlightPick(message: message, field: .amount) }
+        Divider()
+        Button("Show Source", systemImage: "chevron.left.forwardslash.chevron.right") {
+            model.sourceRequest = SourceRequest(message: message)
         }
     }
 
@@ -272,7 +299,7 @@ struct MessageCard: View {
     /// "Unsubscribe" beside the sender when their mail says how (Gmail-style); "Unsubscribed"
     /// once you have. It still asks first.
     @ViewBuilder private var unsubscribeButton: some View {
-        if let method = body_?.unsubscribe {
+        if let method = loadedBody?.unsubscribe {
             if let when = try? model.store.unsubscribedAt(address: message.fromAddress) {
                 Text("Unsubscribed")
                     .font(.caption).foregroundStyle(.tertiary)
@@ -314,7 +341,7 @@ struct MessageCard: View {
                             .lineLimit(1).truncationMode(.middle)
                             .textSelection(.enabled)
                     }
-                    if let to = body_?.to, !to.isEmpty {
+                    if let to = loadedBody?.to, !to.isEmpty {
                         Text("To: \(to)").lineLimit(1)
                     }
                     unsubscribeButton
@@ -359,7 +386,7 @@ struct MessageCard: View {
                         }
                     }
                 }
-                if expanded, let to = body_?.to, !to.isEmpty {
+                if expanded, let to = loadedBody?.to, !to.isEmpty {
                     Text("To: \(to)").font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 } else if !expanded {
                     Text(message.preview).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -369,39 +396,18 @@ struct MessageCard: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let reply = message.invite ?? body_?.invite, reply.method == .reply {
+        if let reply = message.invite ?? loadedBody?.invite, reply.method == .reply {
             InviteReplyLine(invite: reply)
-        } else if message.invite == nil, let invite = body_?.invite {
+        } else if message.invite == nil, let invite = loadedBody?.invite {
             InviteCard(message: message, invite: invite)
         }
-        if let loaded = body_ {
+        if let loaded = loadedBody {
             if loaded.html != nil, readerMode || model.readerMode {
                 Button("Original Layout", systemImage: "doc.richtext") { readerMode = false }
-                    .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
+                    .quietCaptionButton()
                 ReaderModeText(text: loaded.text)
             } else if let html = loaded.html {
-                Button("Reader Mode", systemImage: "book") { readerMode = true }
-                    .buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
-                    .help("Clean text for reading")
-                PrivacyBar(prepared: html, imagesShown: showImages, sender: message.fromAddress,
-                           loadImages: { showImages = true },
-                           alwaysLoad: { scope in
-                               model.trustImages(from: scope)
-                               showImages = true
-                           })
-                let darken = colorScheme == .dark && !originalColors && HTMLDarkMode.canDarken(html.html)
-                MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline, dark: darken)
-                    .id("\(showImages)-\(darken)")   // rebuild with the new policy
-                    // iPhone: the page keeps a 12pt margin (for mail with its own background);
-                    // pulled out by as much, its text lines up with the screen's margin.
-                    .padding(.horizontal, Platform.isPhone ? -12 : 0)
-                if colorScheme == .dark, HTMLDarkMode.canDarken(html.html) {
-                    Button(originalColors ? "Match Dark Mode" : "Original Colours",
-                           systemImage: "circle.lefthalf.filled") { originalColors.toggle() }
-                        .buttonStyle(.borderless)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                htmlContent(html, inlineParts: loaded.inline)
             } else {
                 Text(loaded.text)
                     .font(.body)
@@ -411,28 +417,7 @@ struct MessageCard: View {
             let files = loaded.attachments.filter { !$0.isInline }
             if !files.isEmpty {
                 HStack {
-                    ForEach(files, id: \.self) { a in
-                        Button { model.preview(a, in: message) } label: {
-                            HStack(spacing: 6) {
-                                FileIcon(info: a).frame(width: 16, height: 16)
-                                Text(a.filename ?? a.mimeType).lineLimit(1)
-                                Text(ByteCountFormatter.string(fromByteCount: Int64(a.size), countStyle: .file))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.caption)
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .capsule)
-                        .help("Quick Look")
-                        .contextMenu {
-                            Button("Quick Look", systemImage: "eye") { model.preview(a, in: message) }
-                            Button("Open", systemImage: "arrow.up.forward.app") { model.openAttachment(a, in: message) }
-                            #if os(macOS)
-                            Button("Save…", systemImage: "square.and.arrow.down") { model.saveAttachment(a, in: message) }
-                            #endif
-                        }
-                    }
+                    ForEach(files, id: \.self) { attachmentChip($0) }
                 }
             }
         } else if let loadError {
@@ -441,6 +426,54 @@ struct MessageCard: View {
             Text(message.plainText ?? message.preview).textSelection(.enabled)
         } else {
             ProgressView().controlSize(.small)
+        }
+    }
+
+    @ViewBuilder
+    private func htmlContent(_ html: PreparedHTML, inlineParts: [String: (data: Data, mimeType: String)]) -> some View {
+        Button("Reader Mode", systemImage: "book") { readerMode = true }
+            .quietCaptionButton()
+            .help("Clean text for reading")
+        PrivacyBar(prepared: html, imagesShown: showImages, sender: message.fromAddress,
+                   loadImages: { showImages = true },
+                   alwaysLoad: { scope in
+                       model.trustImages(from: scope)
+                       showImages = true
+                   })
+        let canDarken = HTMLDarkMode.canDarken(html.html)
+        let darken = colorScheme == .dark && !originalColors && canDarken
+        MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: inlineParts, dark: darken)
+            .id("\(showImages)-\(darken)")   // rebuild with the new policy
+            // iPhone: the page keeps a 12pt margin (for mail with its own background);
+            // pulled out by as much, its text lines up with the screen's margin.
+            .padding(.horizontal, Platform.isPhone ? -12 : 0)
+        if colorScheme == .dark, canDarken {
+            Button(originalColors ? "Match Dark Mode" : "Original Colours",
+                   systemImage: "circle.lefthalf.filled") { originalColors.toggle() }
+                .quietCaptionButton()
+        }
+    }
+
+    private func attachmentChip(_ attachment: AttachmentInfo) -> some View {
+        Button { model.preview(attachment, in: message) } label: {
+            HStack(spacing: 6) {
+                FileIcon(info: attachment).frame(width: 16, height: 16)
+                Text(attachment.filename ?? attachment.mimeType).lineLimit(1)
+                Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .help("Quick Look")
+        .contextMenu {
+            Button("Quick Look", systemImage: "eye") { model.preview(attachment, in: message) }
+            Button("Open", systemImage: "arrow.up.forward.app") { model.openAttachment(attachment, in: message) }
+            #if os(macOS)
+            Button("Save…", systemImage: "square.and.arrow.down") { model.saveAttachment(attachment, in: message) }
+            #endif
         }
     }
 
@@ -454,7 +487,7 @@ struct MessageCard: View {
                 try? model.store.setAttachmentList(parsed.attachments, messageID: id)
             }
             showImages = model.allowsRemoteImages(from: message.fromAddress)
-            body_ = LoadedBody(
+            loadedBody = LoadedBody(
                 html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
                 to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
                 inline: MIMEParser.inlineParts(in: raw),
@@ -505,10 +538,7 @@ struct PrivacyBar: View {
             if hidden > 0 {
                 Menu {
                     Button("Load images", systemImage: "photo", action: loadImages)
-                    Button("Always from \(sender)") { alwaysLoad(sender) }
-                    if let domain = sender.split(separator: "@").last {
-                        Button("Always from @\(domain)") { alwaysLoad("@\(domain)") }
-                    }
+                    alwaysLoadButtons
                 } label: {
                     Text("Load images").fontWeight(.medium).lineLimit(1)
                 }
@@ -521,35 +551,38 @@ struct PrivacyBar: View {
     }
 
     private func regular(hidden: Int) -> some View {
-            HStack(spacing: 10) {
-                Image(systemName: "hand.raised.fill").foregroundStyle(.teal)
-                if prepared.trackersRemoved > 0 {
-                    Text("\(prepared.trackersRemoved) trackers removed")
-                }
-                if prepared.linksCleaned > 0 {
-                    Text("\(prepared.linksCleaned) links cleaned").foregroundStyle(.secondary)
-                }
-                if hidden > 0 {
-                    Text("\(hidden) images hidden").foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Load images", action: loadImages).buttonStyle(.borderless)
-                    Menu("Always") {
-                        Button("Always from \(sender)") { alwaysLoad(sender) }
-                        if let domain = sender.split(separator: "@").last {
-                            Button("Always from @\(domain)") { alwaysLoad("@\(domain)") }
-                        }
-                    }
+        HStack(spacing: 10) {
+            Image(systemName: "hand.raised.fill").foregroundStyle(.teal)
+            if prepared.trackersRemoved > 0 {
+                Text("\(prepared.trackersRemoved) trackers removed")
+            }
+            if prepared.linksCleaned > 0 {
+                Text("\(prepared.linksCleaned) links cleaned").foregroundStyle(.secondary)
+            }
+            if hidden > 0 {
+                Text("\(hidden) images hidden").foregroundStyle(.secondary)
+                Spacer()
+                Button("Load images", action: loadImages).buttonStyle(.borderless)
+                Menu("Always") { alwaysLoadButtons }
                     .menuStyle(.button)
                     .buttonStyle(.borderless)
                     .fixedSize()
-                } else {
-                    Spacer()
-                }
+            } else {
+                Spacer()
             }
-            .font(.caption)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .glassEffect(.regular, in: .capsule)
-            .help("Tracking pixels are always removed. Images from people you haven't written to stay hidden until you allow them.")
+        }
+        .font(.caption)
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .help("Tracking pixels are always removed. Images from people you haven't written to stay hidden until you allow them.")
+    }
+
+    /// Trust this sender's images from now on, or their whole domain's.
+    @ViewBuilder private var alwaysLoadButtons: some View {
+        Button("Always from \(sender)") { alwaysLoad(sender) }
+        if let domain = sender.split(separator: "@").last {
+            Button("Always from @\(domain)") { alwaysLoad("@\(domain)") }
+        }
     }
 }
 
@@ -844,37 +877,14 @@ struct CategoryPicker: View {
         let matches = filtered(all)
         VStack(alignment: .leading, spacing: 12) {
             #if os(macOS)
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Move to…", text: $query)
-                    .textFieldStyle(.plain)
-                    .font(.title3)
-                    .focused($focused)
-                    .onSubmit { moveHighlighted(matches, always: alwaysForSender) }
-                    .onKeyPress(characters: .decimalDigits, phases: .down) { press in
-                        guard let n = Int(press.characters), n >= 1, n <= all.count else { return .ignored }
-                        move(to: all[n - 1], always: alwaysForSender)
-                        return .handled
-                    }
-            }
+            searchField(all: all, matches: matches)
             #else
             Text("Move to…").font(.headline)
             #endif
             if matches.isEmpty {
                 Text("No category matches “\(query)”").foregroundStyle(.secondary).padding(.vertical, 5)
             } else {
-                ScrollView {
-                    VStack(spacing: 2) {
-                        ForEach(matches) { target in
-                            row(target, number: all.firstIndex(of: target).map { $0 + 1 },
-                                isCurrent: model.isCurrent(target, for: threads),
-                                isHighlighted: target == current(matches))
-                        }
-                    }
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(maxHeight: 420)
-                .fixedSize(horizontal: false, vertical: true)
+                targetList(matches, all: all, threads: threads)
             }
             Toggle(isOn: $alwaysForSender) {
                 HStack {
@@ -908,6 +918,39 @@ struct CategoryPicker: View {
         .onChange(of: query) { highlighted = nil }
         .onKeyPress(.downArrow) { step(1, in: matches); return .handled }
         .onKeyPress(.upArrow) { step(-1, in: matches); return .handled }
+    }
+
+    #if os(macOS)
+    private func searchField(all: [CategoryTarget], matches: [CategoryTarget]) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Move to…", text: $query)
+                .textFieldStyle(.plain)
+                .font(.title3)
+                .focused($focused)
+                .onSubmit { moveHighlighted(matches, always: alwaysForSender) }
+                .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+                    guard let n = Int(press.characters), n >= 1, n <= all.count else { return .ignored }
+                    move(to: all[n - 1], always: alwaysForSender)
+                    return .handled
+                }
+        }
+    }
+    #endif
+
+    private func targetList(_ matches: [CategoryTarget], all: [CategoryTarget], threads: [ThreadSummary]) -> some View {
+        ScrollView {
+            VStack(spacing: 2) {
+                ForEach(matches) { target in
+                    row(target, number: all.firstIndex(of: target).map { $0 + 1 },
+                        isCurrent: model.isCurrent(target, for: threads),
+                        isHighlighted: target == current(matches))
+                }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxHeight: 420)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func row(_ target: CategoryTarget, number: Int?, isCurrent: Bool, isHighlighted: Bool) -> some View {
@@ -971,14 +1014,17 @@ struct RiskBanner: View {
     @Environment(AppModel.self) private var model
     let message: StoredMessage
 
+    private var isDanger: Bool { message.riskLevel == .danger }
+    private var warningColor: Color { isDanger ? .red : .orange }
+    private static let cornerRadius: CGFloat = Platform.isPhone ? 20 : 14
+
     var body: some View {
-        let danger = message.riskLevel == .danger
         VStack(alignment: .leading, spacing: 8) {
-            Label(danger ? "This looks like a phishing attempt" : "Be careful with this message",
-                  systemImage: danger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
+            Label(isDanger ? "This looks like a phishing attempt" : "Be careful with this message",
+                  systemImage: isDanger ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill")
                 .font(.headline)
                 .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(danger ? .red : .orange)
+                .foregroundStyle(warningColor)
             ForEach(RiskAssessment.decode(message.riskReasons), id: \.self) { reason in
                 Label(reason.localized, systemImage: "circle.fill")
                     .labelStyle(BulletLabelStyle())
@@ -989,14 +1035,14 @@ struct RiskBanner: View {
                 // iPhone: the advice on its own line, then the buttons, each kept to one line.
                 advice
                 HStack(spacing: 10) {
-                    junkButton(danger: danger)
+                    junkButton
                     safeButton
                 }
                 .controlSize(.regular)
                 .padding(.top, 4)
             } else {
                 HStack {
-                    junkButton(danger: danger)
+                    junkButton
                     safeButton
                     Spacer()
                     advice
@@ -1005,9 +1051,9 @@ struct RiskBanner: View {
         }
         .padding(Platform.isPhone ? 16 : 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background((danger ? Color.red : Color.orange).opacity(0.08), in: .rect(cornerRadius: Platform.isPhone ? 20 : 14))
-        .overlay(RoundedRectangle(cornerRadius: Platform.isPhone ? 20 : 14)
-            .strokeBorder((danger ? Color.red : Color.orange).opacity(Platform.isPhone ? 0.25 : 0.4)))
+        .background(warningColor.opacity(0.08), in: .rect(cornerRadius: Self.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: Self.cornerRadius)
+            .strokeBorder(warningColor.opacity(Platform.isPhone ? 0.25 : 0.4)))
     }
 
     private var advice: some View {
@@ -1016,14 +1062,14 @@ struct RiskBanner: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func junkButton(danger: Bool) -> some View {
+    private var junkButton: some View {
         Button("Move to Junk", systemImage: "xmark.bin") {
             if let thread = model.threads.first(where: { $0.threadID == message.threadID }) {
                 model.perform(.junk, on: [thread])
             }
         }
         .buttonStyle(.glassProminent)
-        .tint(danger ? .red : .orange)
+        .tint(warningColor)
         .lineLimit(1)
         .fixedSize()
     }
@@ -1033,6 +1079,13 @@ struct RiskBanner: View {
             .buttonStyle(.glass)
             .lineLimit(1)
             .fixedSize()
+    }
+}
+
+private extension View {
+    /// The reader's small secondary toggles under a header ("Reader Mode", "Original Colours").
+    func quietCaptionButton() -> some View {
+        buttonStyle(.borderless).font(.caption).foregroundStyle(.secondary)
     }
 }
 

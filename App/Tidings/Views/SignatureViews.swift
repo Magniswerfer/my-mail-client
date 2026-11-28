@@ -25,13 +25,7 @@ struct SignatureSettingsPane: View {
         }
         #else
         SignaturesList(deleting: $deleting)
-            .confirmationDialog(String(localized: "Delete this signature?"), isPresented: Binding(
-                get: { deleting != nil }, set: { if !$0 { deleting = nil } }
-            ), titleVisibility: .visible, presenting: deleting) { signature in
-                Button("Delete “\(signature.name)”", role: .destructive) { model.deleteSignature(signature) }
-            } message: { _ in
-                Text("It's removed from all your devices, and from the rules that use it. Messages you sent keep it.")
-            }
+            .confirmsSignatureDeletion($deleting) { model.deleteSignature($0) }
         #endif
     }
 }
@@ -60,15 +54,9 @@ struct SignaturesView: View {
         .fileImporter(isPresented: $isImportingHTML, allowedContentTypes: [.html, .webArchive, .plainText]) { result in
             if case .success(let url) = result { importHTML(url) }
         }
-        .confirmationDialog(String(localized: "Delete this signature?"), isPresented: Binding(
-            get: { deleting != nil }, set: { if !$0 { deleting = nil } }
-        ), titleVisibility: .visible, presenting: deleting) { signature in
-            Button("Delete “\(signature.name)”", role: .destructive) {
-                model.deleteSignature(signature)
-                if selection == .signature(signature.id) { selection = nil }
-            }
-        } message: { _ in
-            Text("It's removed from all your devices, and from the rules that use it. Messages you sent keep it.")
+        .confirmsSignatureDeletion($deleting) { signature in
+            model.deleteSignature(signature)
+            if selection == .signature(signature.id) { selection = nil }
         }
     }
 
@@ -166,11 +154,24 @@ struct SignaturesView: View {
     private var stack: some View {
         NavigationStack {
             SignaturesList(deleting: $deleting)
-            .navigationTitle("Signatures")
-            .navigationBarTitleDisplayModeInline()
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
+                .navigationTitle("Signatures")
+                .navigationBarTitleDisplayModeInline()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+        }
+    }
+}
+
+private extension View {
+    /// Asks before deleting the signature in `deleting`, then hands it to `delete`.
+    func confirmsSignatureDeletion(_ deleting: Binding<Signature?>, delete: @escaping (Signature) -> Void) -> some View {
+        confirmationDialog(String(localized: "Delete this signature?"), isPresented: Binding(
+            get: { deleting.wrappedValue != nil }, set: { if !$0 { deleting.wrappedValue = nil } }
+        ), titleVisibility: .visible, presenting: deleting.wrappedValue) { signature in
+            Button("Delete “\(signature.name)”", role: .destructive) { delete(signature) }
+        } message: { _ in
+            Text("It's removed from all your devices, and from the rules that use it. Messages you sent keep it.")
         }
     }
 }
@@ -181,34 +182,34 @@ struct SignaturesList: View {
     @Binding var deleting: Signature?
 
     var body: some View {
-            List {
-                Section {
-                    ForEach(model.signatures) { signature in
-                        NavigationLink {
-                            SignatureDetail(original: signature)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(signature.name).font(.headline)
-                                SignaturePreview(signature: signature).frame(maxHeight: 120)
-                            }
+        List {
+            Section {
+                ForEach(model.signatures) { signature in
+                    NavigationLink {
+                        SignatureDetail(original: signature)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(signature.name).font(.headline)
+                            SignaturePreview(signature: signature).frame(maxHeight: 120)
                         }
                     }
-                    .onDelete { offsets in deleting = offsets.first.map { model.signatures[$0] } }
-                    .onMove { model.moveSignatures(from: $0, to: $1) }
-                    Button("Paste as New Signature", systemImage: "doc.on.clipboard") { model.pasteSignatureFromClipboard() }
-                } header: {
-                    Text("Signatures")
-                } footer: {
-                    Text("Copy a signature from a web page, Mail or Notes and paste it here. The full editor is on the Mac; signatures sync through iCloud.")
                 }
-                Section {
-                    NavigationLink {
-                        SignatureRulesView().navigationTitle("When to Use")
-                    } label: {
-                        Label("When to Use", systemImage: "arrow.triangle.branch")
-                    }
+                .onDelete { offsets in deleting = offsets.first.map { model.signatures[$0] } }
+                .onMove { model.moveSignatures(from: $0, to: $1) }
+                Button("Paste as New Signature", systemImage: "doc.on.clipboard") { model.pasteSignatureFromClipboard() }
+            } header: {
+                Text("Signatures")
+            } footer: {
+                Text("Copy a signature from a web page, Mail or Notes and paste it here. The full editor is on the Mac; signatures sync through iCloud.")
+            }
+            Section {
+                NavigationLink {
+                    SignatureRulesView().navigationTitle("When to Use")
+                } label: {
+                    Label("When to Use", systemImage: "arrow.triangle.branch")
                 }
             }
+        }
     }
 }
 
@@ -278,52 +279,67 @@ struct SignatureRulesView: View {
 
     var body: some View {
         Form {
-            Section {
-                ForEach(identities) { identity in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(identity.address).font(.headline)
-                        Picker("New mail", selection: newMailBinding(identity.address)) {
-                            Text("None").tag("none")
-                            ForEach(model.signatures) { Text($0.name).tag("sig:\($0.id)") }
-                        }
-                        Picker("Replies and forwards", selection: repliesBinding(identity.address)) {
-                            Text("Same as New Mail").tag("same")
-                            Text("None").tag("none")
-                            ForEach(model.signatures) { Text($0.name).tag("sig:\($0.id)") }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            } header: {
-                Text("For Each Address")
-            } footer: {
-                Text("Switching From in a message switches its signature too.")
-            }
-            Section {
-                ForEach(model.signatureSettings.rules) { rule in
-                    SignatureRuleRow(rule: rule, identities: identities)
-                }
-                .onDelete { offsets in model.updateSignatureSettings { $0.rules.remove(atOffsets: offsets) } }
-                .onMove { from, to in model.updateSignatureSettings { $0.rules.move(fromOffsets: from, toOffset: to) } }
-                Button("Add Rule", systemImage: "plus") {
-                    let domain = identities.first.flatMap { $0.address.split(separator: "@").last.map(String.init) } ?? ""
-                    model.updateSignatureSettings {
-                        $0.rules.append(SignatureRule(match: .everyRecipientIn, domains: domain.isEmpty ? [] : [domain],
-                                                      use: model.signatures.last.map { .signature($0.id) } ?? .none))
-                    }
-                }
-            } header: {
-                Text("Rules by Recipient")
-            } footer: {
-                Text("The first rule that fits wins, before the address's own choice. They look at To, Cc and Bcc and change the signature as you add people, until you pick one yourself.")
-            }
+            addressDefaultsSection
+            rulesSection
         }
         .formStyle(.grouped)
     }
 
+    private var addressDefaultsSection: some View {
+        Section {
+            ForEach(identities) { identity in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(identity.address).font(.headline)
+                    Picker("New mail", selection: newMailBinding(identity.address)) {
+                        Text("None").tag(SignatureChoiceTag.none)
+                        signatureOptions
+                    }
+                    Picker("Replies and forwards", selection: repliesBinding(identity.address)) {
+                        Text("Same as New Mail").tag(SignatureChoiceTag.sameAsNewMail)
+                        Text("None").tag(SignatureChoiceTag.none)
+                        signatureOptions
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        } header: {
+            Text("For Each Address")
+        } footer: {
+            Text("Switching From in a message switches its signature too.")
+        }
+    }
+
+    private var rulesSection: some View {
+        Section {
+            ForEach(model.signatureSettings.rules) { rule in
+                SignatureRuleRow(rule: rule, identities: identities)
+            }
+            .onDelete { offsets in model.updateSignatureSettings { $0.rules.remove(atOffsets: offsets) } }
+            .onMove { from, to in model.updateSignatureSettings { $0.rules.move(fromOffsets: from, toOffset: to) } }
+            Button("Add Rule", systemImage: "plus", action: addRule)
+        } header: {
+            Text("Rules by Recipient")
+        } footer: {
+            Text("The first rule that fits wins, before the address's own choice. They look at To, Cc and Bcc and change the signature as you add people, until you pick one yourself.")
+        }
+    }
+
+    private var signatureOptions: some View {
+        ForEach(model.signatures) { Text($0.name).tag(SignatureChoiceTag.signature($0.id)) }
+    }
+
+    /// A new rule starts from your first address's domain and your newest signature.
+    private func addRule() {
+        let domain = identities.first.flatMap { $0.address.split(separator: "@").last.map(String.init) } ?? ""
+        model.updateSignatureSettings {
+            $0.rules.append(SignatureRule(match: .everyRecipientIn, domains: domain.isEmpty ? [] : [domain],
+                                          use: model.signatures.last.map { .signature($0.id) } ?? .none))
+        }
+    }
+
     private func newMailBinding(_ address: String) -> Binding<String> {
         Binding(
-            get: { model.signatureSettings.defaults(for: address).newMail?.signatureID.map { "sig:\($0)" } ?? "none" },
+            get: { SignatureChoiceTag.tag(for: model.signatureSettings.defaults(for: address).newMail) },
             set: { tag in model.updateSignatureSettings { s in
                 var d = s.defaults(for: address)
                 d.newMail = SignatureRuleRow.choice(tag)
@@ -335,14 +351,13 @@ struct SignatureRulesView: View {
         Binding(
             get: {
                 switch model.signatureSettings.defaults(for: address).replies {
-                case nil: "same"
-                case .none?: "none"
-                case .signature(let id)?: "sig:\(id)"
+                case nil: SignatureChoiceTag.sameAsNewMail
+                case let choice?: SignatureChoiceTag.tag(for: choice)
                 }
             },
             set: { tag in model.updateSignatureSettings { s in
                 var d = s.defaults(for: address)
-                d.replies = tag == "same" ? nil : SignatureRuleRow.choice(tag)
+                d.replies = tag == SignatureChoiceTag.sameAsNewMail ? nil : SignatureRuleRow.choice(tag)
                 s.setDefaults(d, for: address)
             } })
     }
@@ -355,7 +370,8 @@ struct SignatureRuleRow: View {
     @State private var domains = ""
 
     static func choice(_ tag: String) -> SignatureChoice {
-        tag.hasPrefix("sig:") ? .signature(String(tag.dropFirst(4))) : .none
+        tag.hasPrefix(SignatureChoiceTag.signaturePrefix)
+            ? .signature(String(tag.dropFirst(SignatureChoiceTag.signaturePrefix.count))) : .none
     }
 
     var body: some View {
@@ -378,10 +394,10 @@ struct SignatureRuleRow: View {
                 Text("Replies and forwards").tag(SignatureRule.Context.replies)
             }
             Picker("Use", selection: Binding(
-                get: { rule.use.signatureID.map { "sig:\($0)" } ?? "none" },
+                get: { SignatureChoiceTag.tag(for: rule.use) },
                 set: { tag in update { $0.use = Self.choice(tag) } })) {
-                Text("No signature").tag("none")
-                ForEach(model.signatures) { Text($0.name).tag("sig:\($0.id)") }
+                Text("No signature").tag(SignatureChoiceTag.none)
+                ForEach(model.signatures) { Text($0.name).tag(SignatureChoiceTag.signature($0.id)) }
             }
         }
         .padding(.vertical, 4)
@@ -403,6 +419,20 @@ struct SignatureRuleRow: View {
             guard let index = settings.rules.firstIndex(where: { $0.id == rule.id }) else { return }
             change(&settings.rules[index])
         }
+    }
+}
+
+/// Picker tags for a `SignatureChoice` ("none", "sig:<id>"), plus "same" for replies that
+/// follow the new-mail choice.
+private enum SignatureChoiceTag {
+    static let none = "none"
+    static let sameAsNewMail = "same"
+    static let signaturePrefix = "sig:"
+
+    static func signature(_ id: String) -> String { signaturePrefix + id }
+
+    static func tag(for choice: SignatureChoice?) -> String {
+        choice?.signatureID.map(signature) ?? none
     }
 }
 
@@ -503,39 +533,14 @@ struct SignatureEditor: View {
         Signature(id: original.id, name: name, html: source, images: images, customPlainText: customPlainText)
     }
 
+    /// Typing pauses this long before the signature saves.
+    private static let saveDelay: Duration = .milliseconds(700)
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.headline)
-                    .frame(maxWidth: 280)
-                    .onChange(of: name) { scheduleSave() }
-                Spacer()
-                Picker("Edit as", selection: $mode) {
-                    Text("Visual").tag(Mode.visual)
-                    Text("HTML").tag(Mode.source)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: mode) { old, new in switchMode(from: old, to: new) }
-            }
+            nameAndMode
             formatBar
-            Group {
-                if mode == .visual {
-                    SignatureWebEditor(html: SignatureHTML.inliningImages(source, images), loadToken: loadToken,
-                                       controller: editor, onChange: scheduleSave)
-                } else {
-                    TextEditor(text: $source)
-                        .font(.system(size: 12, design: .monospaced))
-                        .autocorrectionDisabled()
-                        .onChange(of: source) { if mode == .source { scheduleSave() } }
-                }
-            }
-            .frame(minHeight: 220, idealHeight: 320, maxHeight: .infinity)
-            .clipShape(.rect(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+            editorArea
             plainTextSection
             footer
         }
@@ -553,6 +558,42 @@ struct SignatureEditor: View {
         } message: {
             Text("A web address, an email address or a phone number.")
         }
+    }
+
+    private var nameAndMode: some View {
+        HStack {
+            TextField("Name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .font(.headline)
+                .frame(maxWidth: 280)
+                .onChange(of: name) { scheduleSave() }
+            Spacer()
+            Picker("Edit as", selection: $mode) {
+                Text("Visual").tag(Mode.visual)
+                Text("HTML").tag(Mode.source)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .onChange(of: mode) { old, new in switchMode(from: old, to: new) }
+        }
+    }
+
+    private var editorArea: some View {
+        Group {
+            if mode == .visual {
+                SignatureWebEditor(html: SignatureHTML.inliningImages(source, images), loadToken: loadToken,
+                                   controller: editor, onChange: scheduleSave)
+            } else {
+                TextEditor(text: $source)
+                    .font(.system(size: 12, design: .monospaced))
+                    .autocorrectionDisabled()
+                    .onChange(of: source) { if mode == .source { scheduleSave() } }
+            }
+        }
+        .frame(minHeight: 220, idealHeight: 320, maxHeight: .infinity)
+        .clipShape(.rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
     }
 
     private var formatBar: some View {
@@ -615,7 +656,7 @@ struct SignatureEditor: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)).foregroundStyle(.secondary).monospacedDigit()
+            Text(Self.fileSize(size)).foregroundStyle(.secondary).monospacedDigit()
         }
         .font(.caption)
     }
@@ -656,7 +697,7 @@ struct SignatureEditor: View {
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task {
-            try? await Task.sleep(for: .milliseconds(700))
+            try? await Task.sleep(for: Self.saveDelay)
             guard !Task.isCancelled else { return }
             await save()
         }
@@ -667,13 +708,17 @@ struct SignatureEditor: View {
         let signature = current
         size = signature.storedSize
         if size > Signature.maxStoredSize {
-            problem = String(localized: "Too large to sync (\(ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)) of \(ByteCountFormatter.string(fromByteCount: Int64(Signature.maxStoredSize), countStyle: .file))). Use smaller pictures, or ones from the web.")
+            problem = String(localized: "Too large to sync (\(Self.fileSize(size)) of \(Self.fileSize(Signature.maxStoredSize))). Use smaller pictures, or ones from the web.")
             return
         }
         problem = editor.droppedImages > 0
             ? String(localized: "A pasted picture couldn't be kept. Add it with the picture button instead.") : nil
         guard signature != model.signature(id: original.id) else { return }
         model.saveSignature(signature)
+    }
+
+    private static func fileSize(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
     private func addImage(_ url: URL) {
@@ -687,12 +732,20 @@ struct SignatureEditor: View {
     }
 
     private func addLink() {
-        var address = linkAddress.trimmingCharacters(in: .whitespaces)
+        let address = linkAddress.trimmingCharacters(in: .whitespaces)
         guard !address.isEmpty else { return }
-        if address.contains("@"), !address.contains(":") { address = "mailto:" + address }
-        else if address.hasPrefix("+") || address.allSatisfy({ $0.isNumber || $0 == " " }) { address = "tel:" + address.filter { !$0.isWhitespace } }
-        else if !address.contains(":") { address = "https://" + address }
-        editor.run("createLink", value: address)
+        editor.run("createLink", value: Self.linkURL(for: address))
+    }
+
+    /// What was typed in the link prompt as a URL: an email address, a phone number or a web
+    /// address without its scheme get one.
+    private static func linkURL(for address: String) -> String {
+        if address.contains("@"), !address.contains(":") { return "mailto:" + address }
+        if address.hasPrefix("+") || address.allSatisfy({ $0.isNumber || $0 == " " }) {
+            return "tel:" + address.filter { !$0.isWhitespace }
+        }
+        if !address.contains(":") { return "https://" + address }
+        return address
     }
 
     private func pasteFormatted() {
@@ -836,9 +889,9 @@ struct SignatureWebEditor: NSViewRepresentable {
         var token: UUID?
         weak var controller: Controller?
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { controller?.isLoading = false }
-
         init(onChange: @escaping () -> Void) { self.onChange = onChange }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { controller?.isLoading = false }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) { onChange() }
 

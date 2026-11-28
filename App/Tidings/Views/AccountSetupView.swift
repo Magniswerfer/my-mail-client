@@ -109,26 +109,30 @@ struct ICloudAccountForm: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                Text("Use your primary @icloud.com address. Custom-domain addresses come later as sending identities.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if showsCancel {
-                    Button("Cancel") { closeSetup() }
-                        .keyboardShortcut(.cancelAction)
-                }
-                Button {
-                    Task { await connect() }
-                } label: {
-                    if isConnecting { ProgressView().controlSize(.small) } else { Text("Connect") }
-                }
-                .buttonStyle(.glassProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(isConnecting || !address.contains("@") || !AppPassword.isValid(password))
-            }
+            footer
         }
         .padding(24)
+    }
+
+    private var footer: some View {
+        HStack {
+            Text("Use your primary @icloud.com address. Custom-domain addresses come later as sending identities.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if showsCancel {
+                Button("Cancel") { closeSetup() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            Button {
+                Task { await connect() }
+            } label: {
+                if isConnecting { ProgressView().controlSize(.small) } else { Text("Connect") }
+            }
+            .buttonStyle(.glassProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(isConnecting || !address.contains("@") || !AppPassword.isValid(password))
+        }
     }
 
     private func step(_ n: Int, done: Bool, title: LocalizedStringKey, detail: LocalizedStringKey,
@@ -181,11 +185,16 @@ struct ICloudAccountForm: View {
 
 /// Apple's app-specific password format: four groups of four lowercase letters.
 enum AppPassword {
+    private static let groupLength = 4
+    private static let length = 4 * groupLength
+
     static func normalize(_ raw: String) -> String? {
         let letters = raw.lowercased().filter(\.isLetter)
-        guard letters.count == 16, letters.allSatisfy({ $0.isASCII }) else { return nil }
+        guard letters.count == length, letters.allSatisfy({ $0.isASCII }) else { return nil }
         let chars = Array(letters)
-        return stride(from: 0, to: 16, by: 4).map { String(chars[$0..<$0 + 4]) }.joined(separator: "-")
+        return stride(from: 0, to: length, by: groupLength)
+            .map { String(chars[$0..<$0 + groupLength]) }
+            .joined(separator: "-")
     }
 
     static func isValid(_ s: String) -> Bool { normalize(s) == s }
@@ -274,65 +283,15 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section {
-                ForEach(model.accounts) { account in
-                    AccountRow(account: account) { removing = account }
-                }
-                .onDelete { offsets in removing = offsets.first.map { model.accounts[$0] } }
-                ForEach(model.accountsAwaitingPassword) { account in
-                    AwaitingAccountRow(account: account, signIn: { signingIn = account }, remove: { removing = account })
-                }
-                Button("Add Account…") { isAdding = true }
-            } header: {
-                Text("Accounts")
-            } footer: {
-                if model.syncsAccountsThroughICloud {
-                    Text("Accounts sync through iCloud, with their passwords in iCloud Keychain, so your other devices set them up too. Removing one removes it from all of them. The mail stays on the server.")
-                } else {
-                    Text("Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.")
-                }
-            }
-            Section {
-                Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
-                                                                      set: { model.readerMode = $0 }))
-                Toggle("Show Website Icons", isOn: Binding(get: { AvatarImages.shared.showsWebsiteIcons },
-                                                           set: { AvatarImages.shared.showsWebsiteIcons = $0 }))
-            } header: {
-                Text("Reading")
-            } footer: {
-                Text("Reader Mode shows mail as clean text instead of its own layout; Read Later always opens this way. People show with their photo from Contacts; without one, mail from a company shows its website's icon, fetched once from that site and kept on this device.")
-            }
-            Section {
-                Toggle("Filter Junk", isOn: $filterJunk)
-            } header: {
-                Text("Junk")
-            } footer: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tidings learns from what's in Junk, from mail you move there, and from mail you move back out. New mail that's almost certainly junk goes to Junk; likely junk gets a warning. Mail from people you've written to is never moved.")
-                    if let totals = try? model.store.junkTotals() {
-                        Text("Learned from \(totals.spam) junk and \(totals.ham) other messages.")
-                    }
-                }
-            }
+            accountsSection
+            readingSection
+            junkSection
             HighlightTrainingSection()
             #if os(macOS)
             BackgroundSettingsSection()
             #endif
-            Section("Storage") {
-                LabeledContent("Location") {
-                    Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
-                }
-                LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
-            }
-            Section {
-                Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
-                                                         set: { model.isCloudSyncEnabled = $0 }))
-                LabeledContent("Status", value: model.cloudStatusText)
-            } header: {
-                Text("iCloud")
-            } footer: {
-                Text("Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.")
-            }
+            storageSection
+            iCloudSection
         }
         .formStyle(.grouped)
         .sheet(item: $signingIn) { account in
@@ -344,6 +303,76 @@ struct GeneralSettings: View {
                 .environment(model)
         }
         .modifier(AccountRemovalConfirmation(account: $removing))
+    }
+
+    private var accountsSection: some View {
+        Section {
+            ForEach(model.accounts) { account in
+                AccountRow(account: account) { removing = account }
+            }
+            .onDelete { offsets in removing = offsets.first.map { model.accounts[$0] } }
+            ForEach(model.accountsAwaitingPassword) { account in
+                AwaitingAccountRow(account: account, signIn: { signingIn = account }, remove: { removing = account })
+            }
+            Button("Add Account…") { isAdding = true }
+        } header: {
+            Text("Accounts")
+        } footer: {
+            if model.syncsAccountsThroughICloud {
+                Text("Accounts sync through iCloud, with their passwords in iCloud Keychain, so your other devices set them up too. Removing one removes it from all of them. The mail stays on the server.")
+            } else {
+                Text("Removing an account deletes its mail, settings and password from this device. Nothing changes on the mail server or on your other devices.")
+            }
+        }
+    }
+
+    private var readingSection: some View {
+        Section {
+            Toggle("Reader Mode for Every Message", isOn: Binding(get: { model.readerMode },
+                                                                  set: { model.readerMode = $0 }))
+            Toggle("Show Website Icons", isOn: Binding(get: { AvatarImages.shared.showsWebsiteIcons },
+                                                       set: { AvatarImages.shared.showsWebsiteIcons = $0 }))
+        } header: {
+            Text("Reading")
+        } footer: {
+            Text("Reader Mode shows mail as clean text instead of its own layout; Read Later always opens this way. People show with their photo from Contacts; without one, mail from a company shows its website's icon, fetched once from that site and kept on this device.")
+        }
+    }
+
+    private var junkSection: some View {
+        Section {
+            Toggle("Filter Junk", isOn: $filterJunk)
+        } header: {
+            Text("Junk")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Tidings learns from what's in Junk, from mail you move there, and from mail you move back out. New mail that's almost certainly junk goes to Junk; likely junk gets a warning. Mail from people you've written to is never moved.")
+                if let totals = try? model.store.junkTotals() {
+                    Text("Learned from \(totals.spam) junk and \(totals.ham) other messages.")
+                }
+            }
+        }
+    }
+
+    private var storageSection: some View {
+        Section("Storage") {
+            LabeledContent("Location") {
+                Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
+            }
+            LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
+        }
+    }
+
+    private var iCloudSection: some View {
+        Section {
+            Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
+                                                     set: { model.isCloudSyncEnabled = $0 }))
+            LabeledContent("Status", value: model.cloudStatusText)
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("Rules, smart folders, sender rules, Reply Later, Read Later, snoozes, mutes and settings, in your private iCloud. Never your mail.")
+        }
     }
 }
 
@@ -381,7 +410,6 @@ struct AccountRow: View {
     }
 }
 
-/// "Remove this account?" before anything is deleted.
 /// An account another device added, still waiting for its password on this one.
 struct AwaitingAccountRow: View {
     let account: AccountConfig
@@ -471,6 +499,7 @@ struct AccountPasswordSheet: View {
     }
 }
 
+/// "Remove this account?" before anything is deleted.
 struct AccountRemovalConfirmation: ViewModifier {
     @Environment(AppModel.self) private var model
     @Binding var account: AccountConfig?
@@ -587,6 +616,9 @@ struct BundleScheduleRow: View {
         }
     }
 
+    /// "Once a day" starts at 17:00 until a time is picked.
+    private static let defaultDailyHour = 17
+
     private var schedule: BundleSchedule { model.bundleSchedules[category] ?? .immediately }
 
     private var isDaily: Bool { if case .daily = schedule { true } else { false } }
@@ -598,7 +630,7 @@ struct BundleScheduleRow: View {
     private var schedulePicker: some View {
         Picker(selection: Binding(
             get: { isDaily ? 1 : 0 },
-            set: { $0 == 0 ? model.setSchedule(.immediately, for: category) : model.setSchedule(.daily(hour: 17, minute: 0), for: category) }
+            set: { $0 == 0 ? model.setSchedule(.immediately, for: category) : model.setSchedule(.daily(hour: Self.defaultDailyHour, minute: 0), for: category) }
         )) {
             Text("As it arrives").tag(0)
             Text("Once a day").tag(1)
@@ -615,7 +647,7 @@ struct BundleScheduleRow: View {
             },
             set: { date in
                 let c = Calendar.current.dateComponents([.hour, .minute], from: date)
-                model.setSchedule(.daily(hour: c.hour ?? 17, minute: c.minute ?? 0), for: category)
+                model.setSchedule(.daily(hour: c.hour ?? Self.defaultDailyHour, minute: c.minute ?? 0), for: category)
             }
         ), displayedComponents: .hourAndMinute)
     }
@@ -629,18 +661,22 @@ extension EnvironmentValues {
 
 extension AccountSetupView {
     func closeSetup() {
-        model.isAddingAccount = false
-        closeAccountSetup?()
-        dismiss()
+        closeAddAccount(model: model, close: closeAccountSetup, dismiss: dismiss)
     }
 }
 
 extension ICloudAccountForm {
     func closeSetup() {
-        model.isAddingAccount = false
-        closeAccountSetup?()
-        dismiss()
+        closeAddAccount(model: model, close: closeAccountSetup, dismiss: dismiss)
     }
+}
+
+/// Ends adding an account however it was presented: the main window's flag, Settings' own
+/// sheet, or a navigation stack.
+@MainActor func closeAddAccount(model: AppModel, close: (@MainActor () -> Void)?, dismiss: DismissAction) {
+    model.isAddingAccount = false
+    close?()
+    dismiss()
 }
 
 #if os(macOS)
