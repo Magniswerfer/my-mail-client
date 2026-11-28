@@ -37,6 +37,7 @@ Native macOS (iOS later) IMAP/SMTP mail client. **Read `docs/SPEC.md` first**; b
 - `swift test --package-path MailEngine`
 - `MailEngine/TestServer/make-certs.sh && docker compose -f MailEngine/TestServer/compose.yml up -d` — local Dovecot (IMAP, :31143) and Mailpit (SMTP with STARTTLS, :31587; UI/API at http://127.0.0.1:38025) for integration tests. Mailpit catches everything; nothing is delivered.
 - `swift run --package-path MailEngine tidings-probe --help`
+- Performance budgets (SPEC §15, CI job `Performance budgets`): `swift build -c release --package-path MailEngine --product tidings-bench`, then `tidings-bench seed --dir /tmp/bench` (~4 min, once), `tidings-bench run --dir /tmp/bench --out perf.json`, `tidings-bench compare --current perf.json [--baseline old.json]`. See `docs/performance.md`.
 - `swift test --package-path PushServer` — the push server; its end-to-end tests need the local Dovecot and Mailpit.
 - Linux check without CI: `docker run --rm --network host -v "$PWD":/src -w /src swift:6.2-noble bash -c "apt-get update -qq && apt-get install -y -qq libsqlite3-dev >/dev/null && swift test --package-path MailEngine"` (copy the tree first if you don't want a Linux `.build` in it).
 - `docker build -f PushServer/Dockerfile -t tidings-server .` — the server image (from the repository root).

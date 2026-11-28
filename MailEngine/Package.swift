@@ -8,6 +8,7 @@ let package = Package(
     products: [
         .library(name: "MailEngine", targets: ["MailEngine"]),
         .executable(name: "tidings-probe", targets: ["tidings-probe"]),
+        .executable(name: "tidings-bench", targets: ["tidings-bench"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio-imap.git", from: "0.5.0"),
@@ -32,6 +33,15 @@ let package = Package(
             name: "tidings-probe",
             dependencies: [
                 "MailEngine",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
+        // SPEC §15 budgets, checked in CI (docs/performance.md).
+        .executableTarget(
+            name: "tidings-bench",
+            dependencies: [
+                "MailEngine",
+                .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
