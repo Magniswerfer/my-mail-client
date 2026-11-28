@@ -22,6 +22,8 @@ public actor PushEngine {
     }
 
     var watchers: [String: Watcher] = [:]
+    /// Watchers being stopped: out of `watchers`, but their sync may still be mid-send.
+    var stopping: [String: Task<Void, Never>] = [:]
     var statuses: [String: PushAPI.AccountStatus] = [:]
     /// Pushes sent so far (for the status call and tests).
     public private(set) var sentCount = 0
@@ -116,7 +118,9 @@ public actor PushEngine {
     private func stopWatcher(_ login: String) async {
         guard let watcher = watchers.removeValue(forKey: login) else { return }
         watcher.task.cancel()
+        stopping[login] = watcher.task
         await watcher.task.value
+        stopping[login] = nil
         watcher.events.cancel()
     }
 
@@ -343,6 +347,10 @@ public actor PushEngine {
     public func cancelScheduled(id: String) async throws -> Bool {
         guard let (login, outboxID) = try store.scheduled(id: id) else { throw OperationError.notFound }
         guard let sync = watchers[login]?.sync else {
+            // A watcher being stopped may be sending it right now: wait for it to finish, then
+            // go by what it left. Only a still-queued item can be cancelled; a sent one is gone.
+            if let stoppingTask = stopping[login] { await stoppingTask.value }
+            guard try mail.outboxItem(id: outboxID)?.state == .queued else { return false }
             // Nothing is sending it now, but a watcher started later would.
             try mail.deleteOutboxItem(id: outboxID)
             try store.removeScheduled(id: id)

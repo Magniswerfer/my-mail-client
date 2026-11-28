@@ -103,10 +103,18 @@ extension AccountSync {
                 try await fileSentCopy(raw: raw, messageID: message.messageID, sentPath: sentPath, policy: policy,
                                        uidNextBefore: sentBefore ?? nil, session: session)
             } catch is CancellationError {
+                try markOriginal(item)
                 throw CancellationError()
+            } catch let error as MailSessionError {
+                // The server refused the copy (a full or missing Sent). The mail is out: a missing
+                // Sent copy mustn't also lose the \Answered mark, or hold up the rest of the queue.
+                SyncLog.info("sent \(id), but the server refused the Sent copy: \(error)")
             } catch {
-                // The mail is out: a missing Sent copy mustn't also lose the \Answered mark.
+                // The connection itself failed: reconnect before the next item goes out, so it
+                // doesn't lose its Sent copy too.
                 SyncLog.info("sent \(id), but filing the Sent copy failed: \(error)")
+                try markOriginal(item)
+                throw error
             }
             try markOriginal(item)
         }
