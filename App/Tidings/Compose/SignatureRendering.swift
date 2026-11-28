@@ -22,6 +22,8 @@ import UIKit
 
     /// The widest a signature is drawn; wider ones wrap as in a mail window.
     static let maxWidth: CGFloat = 600
+    /// The tallest a signature is drawn.
+    static let maxHeight: CGFloat = 2000
 
     static func key(_ signature: Signature, dark: Bool) -> String {
         SignatureHTML.stableHash(signature.displayHTML) + (dark ? "-dark" : "-light")
@@ -94,11 +96,18 @@ import UIKit
     private var window: UIWindow?
     #endif
 
+    /// The web view's size before a page is measured.
+    private static let initialSize = CGSize(width: SignatureRenderer.maxWidth, height: 200)
+    /// How long a hosted image may take to arrive before the picture is taken without it.
+    private static let imageTimeoutMilliseconds = 4000
+    /// Time for layout to catch up with the measured size before the picture.
+    private static let layoutSettleDelay: Duration = .milliseconds(30)
+
     override init() {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        webView = WKWebView(frame: CGRect(x: 0, y: 0, width: SignatureRenderer.maxWidth, height: 200), configuration: configuration)
+        webView = WKWebView(frame: CGRect(origin: .zero, size: Self.initialSize), configuration: configuration)
         super.init()
         webView.navigationDelegate = self
         #if os(macOS)
@@ -114,7 +123,7 @@ import UIKit
         #if os(iOS)
         attachToWindow()
         #endif
-        webView.frame.size = CGSize(width: SignatureRenderer.maxWidth, height: 200)
+        webView.frame.size = Self.initialSize
         await withCheckedContinuation { continuation in
             loaded = continuation
             webView.loadHTMLString(page, baseURL: nil)
@@ -122,16 +131,15 @@ import UIKit
         // Images (hosted ones arrive over the network) and fonts first, then measure.
         let measured = try? await webView.callAsyncJavaScript("""
             await Promise.all(Array.from(document.images).map(i => i.complete ? null :
-                new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000) })));
+                new Promise(r => { i.onload = i.onerror = r; setTimeout(r, \(Self.imageTimeoutMilliseconds)) })));
             if (document.fonts) { await document.fonts.ready }
             const r = document.getElementById('tidings-sig').getBoundingClientRect();
             return [Math.ceil(r.width), Math.ceil(r.height)];
             """, contentWorld: .page)
         guard let size = measured as? [Double], size.count == 2, size[0] > 0, size[1] > 0 else { return nil }
-        let rect = CGRect(x: 0, y: 0, width: min(size[0], SignatureRenderer.maxWidth), height: min(size[1], 2000))
+        let rect = CGRect(x: 0, y: 0, width: min(size[0], SignatureRenderer.maxWidth), height: min(size[1], SignatureRenderer.maxHeight))
         webView.frame.size = rect.size
-        // Layout catches up with the new size before the picture.
-        try? await Task.sleep(for: .milliseconds(30))
+        try? await Task.sleep(for: Self.layoutSettleDelay)
         let configuration = WKSnapshotConfiguration()
         configuration.rect = rect
         configuration.snapshotWidth = NSNumber(value: Double(rect.width))
@@ -145,7 +153,7 @@ import UIKit
         guard webView.window == nil else { return }
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
         let window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: -10_000, y: -10_000, width: SignatureRenderer.maxWidth, height: 2000)
+        window.frame = CGRect(x: -10_000, y: -10_000, width: SignatureRenderer.maxWidth, height: SignatureRenderer.maxHeight)
         window.isUserInteractionEnabled = false
         window.alpha = 0.01
         window.isHidden = false
@@ -154,19 +162,22 @@ import UIKit
     }
     #endif
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    /// Loaded or failed, the page is measured and drawn as far as it got.
+    private func finishLoading() {
         loaded?.resume()
         loaded = nil
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finishLoading()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        loaded?.resume()
-        loaded = nil
+        finishLoading()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        loaded?.resume()
-        loaded = nil
+        finishLoading()
     }
 
     /// Links in a signature never open from the picture's page.

@@ -16,6 +16,10 @@ struct TidingsMobileApp: App {
     @UIApplicationDelegateAdaptor(PushTokenDelegate.self) private var pushDelegate
 
     static let refreshTaskID = "hk.gnus.tidings.refresh"
+    /// The longest Tidings asks to wait for its next background refresh …
+    private static let refreshInterval: TimeInterval = 15 * 60
+    /// … and the shortest, however soon the next snooze or send is due.
+    private static let minimumRefreshDelay: TimeInterval = 60
 
     private var model: AppModel { Self.model }
 
@@ -75,8 +79,8 @@ struct TidingsMobileApp: App {
     /// Asks for the next refresh at the next snooze wake or scheduled send, or in 15 minutes.
     @MainActor static func scheduleRefresh(next: Date? = nil) {
         let request = BGAppRefreshTaskRequest(identifier: refreshTaskID)
-        let soon = Date().addingTimeInterval(15 * 60)
-        request.earliestBeginDate = next.map { min(max($0, Date().addingTimeInterval(60)), soon) } ?? soon
+        let soon = Date().addingTimeInterval(refreshInterval)
+        request.earliestBeginDate = next.map { min(max($0, Date().addingTimeInterval(minimumRefreshDelay)), soon) } ?? soon
         try? BGTaskScheduler.shared.submit(request)
     }
 }

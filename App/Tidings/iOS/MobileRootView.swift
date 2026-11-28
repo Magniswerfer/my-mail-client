@@ -304,15 +304,18 @@ struct MobileRootView: View {
 
 extension AppModel {
     /// Pull to refresh: reconnect if iOS dropped the connection, then check every folder.
+    /// The spinner reflects the work for up to 5 seconds, without blocking on a slow server.
     func refresh() async {
         checkForNewMail()
-        // Let the spinner reflect the work a little, without blocking on a slow server.
-        for _ in 0..<20 {
-            try? await Task.sleep(for: .milliseconds(250))
+        let pollInterval: Duration = .milliseconds(250)
+        let maxPolls = 20
+        for _ in 0..<maxPolls {
+            try? await Task.sleep(for: pollInterval)
             if syncStatus.values.allSatisfy({ $0 == String(localized: "Up to date") }) { break }
         }
     }
 }
+
 /// The tool sheets (palette, folder picker, rules, senders, attachments, editors, Answer Now),
 /// split out of the root view so the type-checker keeps up.
 private struct MobileToolSheets: ViewModifier {

@@ -10,6 +10,8 @@ import Foundation
     private var ref: EventHotKeyRef?
     private var installed = false
     nonisolated(unsafe) private static var action: (@MainActor () -> Void)?
+    /// "TDNG": identifies Tidings' hot keys to Carbon.
+    private static let signature = OSType(0x5444_4E47)
 
     /// ⌃⌥C → Copy Latest Login Code.
     func registerCopyCode(_ action: @escaping @MainActor () -> Void) {
@@ -23,7 +25,7 @@ import Foundation
             installed = true
         }
         guard ref == nil else { return }
-        let id = EventHotKeyID(signature: OSType(0x5444_4E47), id: 1)   // "TDNG"
+        let id = EventHotKeyID(signature: Self.signature, id: 1)
         RegisterEventHotKey(UInt32(kVK_ANSI_C), UInt32(controlKey | optionKey), id, GetApplicationEventTarget(), 0, &ref)
     }
 }
