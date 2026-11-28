@@ -91,10 +91,13 @@ struct InjectionTests {
     @Test func oneClickRefusesLocalTargets() {
         for host in ["https://localhost/u", "https://127.0.0.1/u", "https://10.0.0.1/u", "https://192.168.1.1/u",
                      "https://172.20.0.5/u", "https://169.254.169.254/latest", "https://[::1]/u", "https://[fd00::1]/u",
-                     "https://nas.local/u", "https://router/u"] {
+                     "https://nas.local/u", "https://router/u", "https://[0:0:0:0:0:0:0:1]/u",
+                     "https://[::ffff:7f00:1]/u", "https://[::ffff:127.0.0.1]/u", "https://[fe80::1%25en0]/u",
+                     "https://0177.0.0.1/u", "https://2130706433/u", "https://0x7f.1/u", "https://[fc00::1]/u"] {
             #expect(Unsubscribe.isLocalTarget(URL(string: host)!), "\(host)")
         }
-        for host in ["https://shop.dk/u", "https://8.8.8.8/u", "https://172.32.0.1/u", "https://list.example.org/u?x=1"] {
+        for host in ["https://shop.dk/u", "https://8.8.8.8/u", "https://172.32.0.1/u", "https://list.example.org/u?x=1",
+                     "https://163.com/u", "https://126.com/u", "https://123.cafe/u", "https://[2001:db8::1]/u"] {
             #expect(!Unsubscribe.isLocalTarget(URL(string: host)!), "\(host)")
         }
     }

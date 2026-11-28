@@ -132,7 +132,8 @@ public enum Unsubscribe {
         request.httpBody = Data("List-Unsubscribe=One-Click".utf8)
         let (_, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else { throw Failure.status(status) }
+        // A redirect means the POST arrived; it just isn't followed (RFC 8058).
+        guard (200..<400).contains(status) else { throw Failure.status(status) }
     }
 }
 

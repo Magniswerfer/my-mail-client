@@ -123,8 +123,15 @@ extension AppModel {
         guard let server = pushServer else { return }
         let known = Set((try? await server.status())?.accounts.filter(\.hasPassword).map(\.login) ?? [])
         for account in accounts where account.id != "dev" && known.contains(account.login.lowercased()) {
-            try? await server.putAccount(login: account.login.lowercased(),
-                                         PushAPI.AccountUpload(record: CloudAccountRecord(account), password: nil))
+            do {
+                try await server.putAccount(login: account.login.lowercased(),
+                                            PushAPI.AccountUpload(record: CloudAccountRecord(account), password: nil))
+            } catch PushServerClient.ClientError.http(409, _) {
+                // The server keeps its stored password only for the servers it was given for.
+                pushServerError = String(localized: "\(account.login)'s server settings changed. Enter its app-specific password for the push server again.")
+            } catch {
+                pushServerError = Self.describe(error)
+            }
         }
     }
 

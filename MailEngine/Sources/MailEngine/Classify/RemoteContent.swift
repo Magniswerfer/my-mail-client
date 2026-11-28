@@ -54,7 +54,7 @@ public enum RemoteContent {
     /// Link schemes a click in a message may open. Anything else (file:, smb:, vnc:, ssh:,
     /// x-apple.systempreferences:, other apps' schemes) can reach far beyond the browser, so a
     /// mail link doesn't get to.
-    public static let openableSchemes: Set<String> = ["http", "https", "mailto", "tel", "sms", "facetime", "facetime-audio", "tidings"]
+    public static let openableSchemes: Set<String> = ["http", "https", "mailto", "tel", "sms", "facetime", "facetime-audio", "webcal", "maps", "tidings"]
 
     public static func isOpenable(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), openableSchemes.contains(scheme) else { return false }
