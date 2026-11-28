@@ -163,7 +163,8 @@ public enum SignatureHTML {
         }
         let target = bare(href)
         guard !target.isEmpty, !href.hasPrefix("#") else { return true }
-        return bare(text) == target || bare(text).hasPrefix(target) || target.hasPrefix(bare(text)) && bare(text).contains(".")
+        let shown = bare(text)
+        return shown == target || shown.hasPrefix(target) || target.hasPrefix(shown) && shown.contains(".")
     }
 
     /// The `cid:` references in the HTML.
@@ -185,7 +186,6 @@ public enum SignatureHTML {
     /// uses.
     public static func extractingImages(_ html: String, existing: [SignatureImage] = []) -> (html: String, images: [SignatureImage]) {
         var images: [SignatureImage] = []
-        var counter = 0
         let out = replacing(in: html, pattern: #"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+"#) { uri in
             guard let comma = uri.firstIndex(of: ","),
                   let data = Data(base64Encoded: String(uri[uri.index(after: comma)...]).filter { !$0.isWhitespace }) else { return uri }
@@ -194,7 +194,6 @@ public enum SignatureHTML {
                 if !images.contains(known) { images.append(known) }
                 return "cid:\(known.contentID)"
             }
-            counter += 1
             let ext = mime.split(separator: "/").last.map { $0 == "jpeg" ? "jpg" : String($0) } ?? "png"
             let image = SignatureImage(filename: "signature-\(images.count + 1).\(ext.replacingOccurrences(of: "svg+xml", with: "svg"))",
                                        mimeType: mime, data: data)

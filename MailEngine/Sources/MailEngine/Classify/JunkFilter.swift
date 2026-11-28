@@ -298,12 +298,29 @@ extension MailStore {
 
     /// Have you ever written to this address?
     func hasWrittenTo(_ address: String, ownAddresses: Set<String>) throws -> Bool {
+        try db.read { try Self.hasWritten(to: address, from: ownAddresses, in: $0) }
+    }
+
+    /// Whether a message from one of `ownAddresses` has exactly `address` among its recipients.
+    /// A substring match isn't enough: it would let "ob@example.com" pass as "bob@example.com",
+    /// which the junk filter and the remote-image policy both trust.
+    static func hasWritten(to address: String, from ownAddresses: Set<String>, in db: Database) throws -> Bool {
         let mine = ownAddresses.map { $0.lowercased() }
+        let address = address.lowercased()
         guard !mine.isEmpty, !address.isEmpty else { return false }
-        return try db.read {
-            try Int.fetchOne($0, sql: """
-                SELECT count(*) FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ","))) AND instr(lower(recipients), ?) > 0 LIMIT 1
-                """, arguments: StatementArguments(mine + [address.lowercased()])) ?? 0 > 0
+        let candidates = try String.fetchCursor(db, sql: """
+            SELECT recipients FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))
+            AND lower(recipients) LIKE ? ESCAPE '\\'
+            """, arguments: StatementArguments(mine + ["%\(likeEscaped(address))%"]))
+        while let recipients = try candidates.next() {
+            if AddressParser.parse(recipients).contains(where: { $0.address.lowercased() == address }) { return true }
         }
+        return false
+    }
+
+    /// `%` and `_` in an address are LIKE wildcards; escaped, they match only themselves.
+    static func likeEscaped(_ s: String) -> String {
+        s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
     }
 }

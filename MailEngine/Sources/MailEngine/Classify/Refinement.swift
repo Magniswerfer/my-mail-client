@@ -199,6 +199,7 @@ public actor Refinement {
     var primaryThreshold: Float = 0.7      // ask the judge above this
     var noJudgeThreshold: Float = 0.95
     var maxJudgedPerPass = 25
+    static let minTrainingExamples = 20
 
     public init(store: MailStore, embedder: any TextEmbedder, judge: (any CategoryJudge)?) {
         self.store = store
@@ -222,7 +223,9 @@ public actor Refinement {
 
         for candidate in try store.refinementCandidates(limit: limit) {
             try Task.checkCancellation()
-            guard let vector = try store.embedding(for: candidate.id) else { continue }
+            // A vector stored by an earlier embedding model can have another size; the classifier
+            // reads exactly `dimension` floats from it.
+            guard let vector = try store.embedding(for: candidate.id), vector.count == classifier.dimension else { continue }
             let (predicted, p) = classifier.predict(vector)
             guard predicted != candidate.category else { continue }
             let crossesPrimary = predicted == .primary || candidate.category == .primary
@@ -260,7 +263,7 @@ public actor Refinement {
     /// Labels: your corrections (weight 3) and confident header decisions (weight 1).
     func trainModel() throws -> SoftmaxClassifier? {
         let labeled = try store.trainingExamples().filter { $0.vector.count == embedder.dimension }
-        guard labeled.count >= 20, Set(labeled.map(\.category)).count >= 2 else { return nil }
+        guard labeled.count >= Self.minTrainingExamples, Set(labeled.map(\.category)).count >= 2 else { return nil }
         var model = SoftmaxClassifier(dimension: embedder.dimension)
         model.train(labeled.map { ($0.vector, $0.category, $0.weight) })
         return model

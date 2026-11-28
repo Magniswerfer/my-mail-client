@@ -69,16 +69,14 @@ public struct EventSuggestion: Sendable, Codable, Hashable, Identifiable {
     public var timeZone: TimeZone? { timeZoneID.flatMap(TimeZone.init(identifier:)) }
 
     /// The effective end: the stated one, else an hour (timed) or the day (all-day).
-    public var effectiveEnd: Date { end ?? start.addingTimeInterval(isAllDay ? 86_400 : 3_600) }
+    public var effectiveEnd: Date { end ?? start.addingTimeInterval(isAllDay ? ICalDuration.secondsPerDay : 3_600) }
 
     /// Still worth suggesting at `now`: hasn't ended yet.
     public func isUpcoming(at now: Date = Date()) -> Bool {
         if isAllDay {
             // All-day dates are UTC midnights: compare calendar days, not instants.
-            var utc = Calendar(identifier: .gregorian)
-            utc.timeZone = TimeZone(identifier: "UTC")!
             let today = Calendar.current.dateComponents([.year, .month, .day], from: now)
-            guard let todayUTC = utc.date(from: today) else { return effectiveEnd > now }
+            guard let todayUTC = TimeZoneResolver.utc.date(from: today) else { return effectiveEnd > now }
             return effectiveEnd > todayUTC
         }
         return effectiveEnd > now
@@ -87,7 +85,7 @@ public struct EventSuggestion: Sendable, Codable, Hashable, Identifiable {
     /// As a calendar event the EventKit bridge can save (a PUBLISH: nobody to answer). `uid`
     /// links the calendar copy back to this suggestion.
     public func calendarInvite(uid: String, notes: String? = nil) -> CalendarInvite {
-        .calendarEvent(uid: uid, summary: title, start: start, end: end ?? (isAllDay ? start.addingTimeInterval(86_400) : nil),
+        .calendarEvent(uid: uid, summary: title, start: start, end: end ?? (isAllDay ? start.addingTimeInterval(ICalDuration.secondsPerDay) : nil),
                        isAllDay: isAllDay, timeZoneID: timeZoneID, location: location, notes: notes,
                        conferenceURL: ConferenceLink.find(in: [location, url, sourceText]), url: url)
     }

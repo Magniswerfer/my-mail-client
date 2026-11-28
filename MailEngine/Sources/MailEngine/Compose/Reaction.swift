@@ -75,9 +75,7 @@ extension OutgoingMessage {
     }
 
     static func escapeHTML(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "'", with: "&#39;")
+        SignatureHTML.escape(s).replacingOccurrences(of: "'", with: "&#39;")
     }
 }
 
@@ -85,17 +83,14 @@ extension MIMEBuilder {
     /// `multipart/alternative` of, in order: the RFC 9078 reaction part (text/plain with
     /// `Content-Disposition: reaction`), Gmail's JSON part, and an HTML line for everyone else.
     static func reactionPart(_ r: OutgoingReaction) -> Part {
-        var parts = [Part(headers: ["Content-Type: text/plain; charset=utf-8", "Content-Disposition: reaction",
-                                    "Content-Transfer-Encoding: quoted-printable"],
-                          content: quotedPrintable(r.emoji))]
+        var parts = [Part.quotedPrintableText(r.emoji, contentType: "text/plain; charset=utf-8",
+                                              extraHeaders: ["Content-Disposition: reaction"])]
         if r.includesGmailPart {
             let escaped = r.emoji.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-            parts.append(Part(headers: ["Content-Type: \(ReactionParts.gmailType); charset=utf-8",
-                                        "Content-Transfer-Encoding: quoted-printable"],
-                              content: quotedPrintable("{\"version\":1,\"emoji\":\"\(escaped)\"}")))
+            parts.append(.quotedPrintableText("{\"version\":1,\"emoji\":\"\(escaped)\"}",
+                                              contentType: "\(ReactionParts.gmailType); charset=utf-8"))
         }
-        parts.append(Part(headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                          content: quotedPrintable(r.html)))
+        parts.append(.quotedPrintableText(r.html, contentType: "text/html; charset=utf-8"))
         return multipart("alternative", parts)
     }
 }

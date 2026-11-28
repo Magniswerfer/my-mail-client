@@ -31,8 +31,12 @@ public actor EventScanner {
     /// The raw message when it's on disk (the cache tier); never fetched from the server here.
     let raw: @Sendable (StoredMessage) -> Data?
     /// How far back to look: older mail rarely has plans still ahead.
-    public var window: TimeInterval = 45 * 86_400
+    public var window: TimeInterval = 45 * ICalDuration.secondsPerDay
     public var maxReviewsPerPass = 12
+    /// How much of the message the model sees around the sentence.
+    static let maxContextLength = 700
+    static let maxModelTitleLength = 80
+    static let maxModelLocationLength = 120
 
     public init(store: MailStore, judge: (any EventJudge)?, raw: @escaping @Sendable (StoredMessage) -> Data?) {
         self.store = store
@@ -71,22 +75,7 @@ public actor EventScanner {
 
     /// The deterministic layers, plus what to do without a model.
     func scan(_ message: StoredMessage, ownAddresses: Set<String>) -> EventSuggestionRecord {
-        let own = Set(ownAddresses.map { $0.lowercased() })
-        // Your own mail, invites (M4.6 has a card for those) and ads aren't scanned.
-        let skip = message.invite != nil || own.contains(message.fromAddress.lowercased()) || message.category == .advertising
-        var suggestions: [EventSuggestion] = []
-        if !skip {
-            let input: EventExtractor.Input
-            if let data = raw(message) {
-                let parsed = MIMEParser.parse(data)
-                if parsed.invite != nil { return EventSuggestionRecord(accountID: message.accountID, messageKey: message.eventKey, suggestions: []) }
-                input = EventExtractor.Input(parsed: parsed, fallbackDate: message.date)
-            } else {
-                input = EventExtractor.Input(subject: message.subject, text: message.plainText ?? message.preview,
-                                             sent: message.date, timeZone: .current)
-            }
-            suggestions = EventExtractor.extract(input)
-        }
+        var suggestions = isScanned(message, ownAddresses: ownAddresses) ? extractSuggestions(from: message) : []
         let needsModel = suggestions.contains { Self.needsReview($0) }
         if needsModel && judge == nil {
             // No model: uncertain ones only from people you'd hear from personally.
@@ -100,6 +89,23 @@ public actor EventScanner {
         }
         return EventSuggestionRecord(accountID: message.accountID, messageKey: message.eventKey, suggestions: suggestions,
                                      awaitingReview: needsModel && judge != nil)
+    }
+
+    /// Your own mail, invites (M4.6 has a card for those) and ads aren't scanned.
+    func isScanned(_ message: StoredMessage, ownAddresses: Set<String>) -> Bool {
+        let own = Set(ownAddresses.map { $0.lowercased() })
+        return message.invite == nil && !own.contains(message.fromAddress.lowercased()) && message.category != .advertising
+    }
+
+    /// From the raw message when it's cached (HTML, the sender's zone), else the stored text.
+    func extractSuggestions(from message: StoredMessage) -> [EventSuggestion] {
+        guard let data = raw(message) else {
+            return EventExtractor.extract(EventExtractor.Input(
+                subject: message.subject, text: message.plainText ?? message.preview, sent: message.date, timeZone: .current))
+        }
+        let parsed = MIMEParser.parse(data)
+        guard parsed.invite == nil else { return [] }
+        return EventExtractor.extract(EventExtractor.Input(parsed: parsed, fallbackDate: message.date))
     }
 
     static func needsReview(_ s: EventSuggestion) -> Bool {
@@ -130,7 +136,7 @@ public actor EventScanner {
         var out = record
         out.suggestions = []
         let sender = message.fromName.flatMap { $0.isEmpty ? nil : $0 } ?? message.fromAddress
-        let context = String(MailStore.ownText(message.plainText ?? message.preview).prefix(700))
+        let context = String(MailStore.ownText(message.plainText ?? message.preview).prefix(Self.maxContextLength))
         for var s in record.suggestions {
             guard Self.needsReview(s) else { out.suggestions.append(s); continue }
             guard let verdict = await judge.review(s, subject: message.subject, sender: sender, context: context) else {
@@ -140,9 +146,9 @@ public actor EventScanner {
             }
             if s.confidence == .medium && !verdict.isEvent { continue }
             let title = verdict.title.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'.")))
-            if !title.isEmpty, title.count <= 80 { s.title = title; s.titleIsGuess = false }
+            if !title.isEmpty, title.count <= Self.maxModelTitleLength { s.title = title; s.titleIsGuess = false }
             if s.location == nil, let place = verdict.location?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !place.isEmpty, place.count <= 120, context.localizedCaseInsensitiveContains(place),
+               !place.isEmpty, place.count <= Self.maxModelLocationLength, context.localizedCaseInsensitiveContains(place),
                place.contains(where: { $0.isUppercase || $0.isNumber }) {   // a name or an address, not "hos os"
                 s.location = place
             }

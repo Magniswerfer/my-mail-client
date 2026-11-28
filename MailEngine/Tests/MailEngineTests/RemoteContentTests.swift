@@ -47,4 +47,14 @@ import Testing
         let parts = MIMEParser.inlineParts(in: Data(raw.utf8))
         #expect(parts["logo@x"]?.mimeType == "image/png")
     }
+
+    @Test func imagesNeedTheExactAddressNotASubstring() throws {
+        let store = try MailStore(path: FileManager.default.temporaryDirectory.appendingPathComponent("rc-\(UUID()).sqlite").path)
+        try store.upsert([(StoredMessage(accountID: "a", mailbox: "Sent", uid: 1, subject: "Hej", fromAddress: "me@x.dk",
+                                         recipients: "Bob <bob@example.dk>", date: Date()), "hej")])
+        let mine: Set<String> = ["me@x.dk"]
+        #expect(try store.allowsRemoteImages(from: "bob@example.dk", ownAddresses: mine))
+        #expect(try !store.allowsRemoteImages(from: "ob@example.dk", ownAddresses: mine), "a suffix of someone I wrote to")
+        #expect(try !store.allowsRemoteImages(from: "%@%", ownAddresses: mine), "LIKE wildcards match only themselves")
+    }
 }

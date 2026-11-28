@@ -293,4 +293,39 @@ END:VCALENDAR
         try s.forgetInviteResponse(accountID: "a", uid: invite.uid)
         #expect(try s.inviteResponse(accountID: "a", uid: invite.uid) == nil)
     }
+
+    @Test func craftedTimeZoneRulesDoNotCrash() {
+        let ics = """
+            BEGIN:VCALENDAR
+            BEGIN:VTIMEZONE
+            TZID:Crafted
+            BEGIN:STANDARD
+            DTSTART:16010101T030000
+            TZOFFSETTO:+0100
+            RRULE:FREQ=YEARLY;BYDAY=-100000000000000SU;BYMONTH=9223372036854775807
+            END:STANDARD
+            END:VTIMEZONE
+            BEGIN:VEVENT
+            UID:z
+            DTSTART;TZID=Crafted:20260715T100000
+            END:VEVENT
+            END:VCALENDAR
+            """
+        #expect(CalendarInvite.parse(ics)?.start == date("2026-07-15T09:00:00Z"), "falls back to the zone's only offset")
+    }
+
+    @Test func replyKeepsTheOrganizerNameOnOneLine() throws {
+        let invite = try #require(CalendarInvite.parse("""
+            BEGIN:VCALENDAR
+            METHOD:REQUEST
+            BEGIN:VEVENT
+            UID:n
+            DTSTART:20260701T090000Z
+            ORGANIZER;CN=Boss\\nATTENDEE:mailto:boss@example.dk
+            END:VEVENT
+            END:VCALENDAR
+            """))
+        let ics = invite.replyICS(as: MailAddress(name: nil, address: "me@x.dk"), status: .accepted)
+        #expect(!ics.split(whereSeparator: \.isNewline).contains { $0.hasPrefix("ATTENDEE:mailto:boss") })
+    }
 }

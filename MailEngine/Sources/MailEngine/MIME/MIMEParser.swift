@@ -65,23 +65,14 @@ public struct ParsedMessage: Sendable {
 /// a bad encoded-word is kept verbatim.
 public enum MIMEParser {
     public static func parse(_ data: Data) -> ParsedMessage {
-        let bytes = [UInt8](data)
-        let entity = Entity.parse(bytes[...])
+        let entity = Entity.parse([UInt8](data)[...])
+        var body = BodyCollector()
+        body.collect(entity)
 
-        var text: String?
-        var html: String?
-        var attachments: [AttachmentInfo] = []
-        var calendars: [String] = []
-        var reactions = ReactionParts()
-        collect(entity, text: &text, html: &html, attachments: &attachments, calendars: &calendars, reactions: &reactions)
-
-        let plain = text ?? html.map(HTMLText.toPlainText) ?? ""
-        let h = entity.headers
-        func value(_ name: String) -> String? {
-            h.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.value
-        }
+        let plain = body.text ?? body.html.map(HTMLText.toPlainText) ?? ""
+        func value(_ name: String) -> String? { entity.header(name) }
         return ParsedMessage(
-            headers: h,
+            headers: entity.headers,
             subject: value("Subject").map(EncodedWords.decode)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             from: AddressParser.parse(value("From") ?? ""),
             to: AddressParser.parse(value("To") ?? ""),
@@ -92,27 +83,28 @@ public enum MIMEParser {
             inReplyTo: MessageIDs.parse(value("In-Reply-To") ?? ""),
             references: MessageIDs.parse(value("References") ?? ""),
             plainText: plain.trimmingCharacters(in: .whitespacesAndNewlines),
-            html: html,
-            attachments: attachments,
-            calendarParts: calendars,
-            reactionParts: reactions
+            html: body.html,
+            attachments: body.attachments,
+            calendarParts: body.calendars,
+            reactionParts: body.reactions
         )
     }
+}
 
-    /// Picks the readable text/html bodies and lists attachments, preferring text/plain inside
-    /// multipart/alternative and the first text part elsewhere.
-    static func collect(_ entity: Entity, text: inout String?, html: inout String?, attachments: inout [AttachmentInfo],
-                        calendars: inout [String], reactions: inout ReactionParts) {
+/// Walks the entity tree and sorts each leaf into the readable body, an attachment, a calendar
+/// or a reaction. The first text/plain and the first text/html win (so inside
+/// multipart/alternative the plain part is the text, the HTML part the html).
+struct BodyCollector {
+    var text: String?
+    var html: String?
+    var attachments: [AttachmentInfo] = []
+    var calendars: [String] = []
+    var reactions = ReactionParts()
+
+    mutating func collect(_ entity: Entity) {
         let type = entity.contentType
         if type.type == "multipart" {
-            if entity.children.isEmpty {
-                // Declared multipart but no boundary lines: show the raw body rather than nothing.
-                if text == nil { text = Charsets.decode(Array(entity.body), charset: nil) }
-                return
-            }
-            for child in entity.children {
-                collect(child, text: &text, html: &html, attachments: &attachments, calendars: &calendars, reactions: &reactions)
-            }
+            collectMultipart(entity)
             return
         }
         if type.type == "message", type.subtype == "rfc822" {
@@ -122,36 +114,58 @@ public enum MIMEParser {
                 size: entity.body.count, contentID: nil, isInline: false))
             return
         }
-        let isAttachment = entity.disposition == "attachment" || entity.filename != nil
-        if !isAttachment, type.full == ReactionParts.gmailType {
-            // Gmail's machine-readable reaction: not something to show or list as a file.
-            if reactions.gmail == nil { reactions.gmail = ReactionParts.gmailEmoji(entity.decodedText) }
-            return
-        }
-        if !isAttachment, entity.disposition == "reaction", type.type == "text", reactions.rfc9078 == nil {
-            // RFC 9078: the body is the emoji. It stays the readable text too.
-            reactions.rfc9078 = entity.decodedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        let isCalendar = type.full == "text/calendar" || type.full == "application/ics"
-            || entity.filename?.lowercased().hasSuffix(".ics") == true
-        if isCalendar {
+        let isAttachment = entity.isAttachment
+        if !isAttachment, collectReaction(entity, type: type) { return }
+        if isCalendar(entity, type: type) {
             calendars.append(entity.decodedText)
             // The invite's own alternative part isn't a file; a real .ics attachment still is.
             if !isAttachment { return }
         }
-        if !isAttachment, type.type == "text", type.subtype == "plain", text == nil {
-            text = entity.decodedText
+        if !isAttachment, type.type == "text" {
+            collectText(entity, subtype: type.subtype)
             return
         }
-        if !isAttachment, type.type == "text", type.subtype == "html", html == nil {
-            html = entity.decodedText
-            return
-        }
-        if type.type == "text", !isAttachment { return } // e.g. a second text/plain alternative
         attachments.append(AttachmentInfo(
             filename: entity.filename, mimeType: type.full, size: entity.decodedBody.count,
-            contentID: entity.header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) },
-            isInline: entity.disposition == "inline"))
+            contentID: entity.contentID, isInline: entity.disposition == "inline"))
+    }
+
+    private mutating func collectMultipart(_ entity: Entity) {
+        guard !entity.children.isEmpty else {
+            // Declared multipart but no boundary lines: show the raw body rather than nothing.
+            if text == nil { text = Charsets.decode(Array(entity.body), charset: nil) }
+            return
+        }
+        for child in entity.children { collect(child) }
+    }
+
+    /// Records a reaction part. True when the part is only machine-readable and needs no
+    /// further handling.
+    private mutating func collectReaction(_ entity: Entity, type: ContentType) -> Bool {
+        if type.full == ReactionParts.gmailType {
+            // Gmail's machine-readable reaction: not something to show or list as a file.
+            if reactions.gmail == nil { reactions.gmail = ReactionParts.gmailEmoji(entity.decodedText) }
+            return true
+        }
+        if entity.disposition == "reaction", type.type == "text", reactions.rfc9078 == nil {
+            // RFC 9078: the body is the emoji. It stays the readable text too.
+            reactions.rfc9078 = entity.decodedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return false
+    }
+
+    private func isCalendar(_ entity: Entity, type: ContentType) -> Bool {
+        type.full == "text/calendar" || type.full == "application/ics"
+            || entity.filename?.lowercased().hasSuffix(".ics") == true
+    }
+
+    /// A later text part of a kind already found (e.g. a second text/plain alternative) is dropped.
+    private mutating func collectText(_ entity: Entity, subtype: String) {
+        switch subtype {
+        case "plain" where text == nil: text = entity.decodedText
+        case "html" where html == nil: html = entity.decodedText
+        default: break
+        }
     }
 }
 
@@ -193,6 +207,13 @@ struct Entity {
         header("Content-Disposition").map { HeaderParameters.parse($0).value.lowercased() }
     }
 
+    /// Has a filename or says `attachment`: a file, whatever its type.
+    var isAttachment: Bool { disposition == "attachment" || filename != nil }
+
+    var contentID: String? {
+        header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) }
+    }
+
     var filename: String? {
         if let d = header("Content-Disposition"), let name = HeaderParameters.parse(d).parameters["filename"] {
             return EncodedWords.decode(name)
@@ -214,11 +235,15 @@ struct Entity {
             .replacingOccurrences(of: "\r\n", with: "\n")
     }
 
+    /// Deeper multipart nesting is left unparsed: real mail never gets close, and a crafted
+    /// message could otherwise recurse without bound.
+    static let maxMultipartDepth = 20
+
     static func parse(_ bytes: ArraySlice<UInt8>, depth: Int = 0) -> Entity {
         let (headerBytes, body) = splitHeader(bytes)
         var entity = Entity(headers: HeaderBlock.parse(headerBytes), body: body)
         let type = entity.contentType
-        if type.type == "multipart", depth < 20, let boundary = type.parameters["boundary"], !boundary.isEmpty {
+        if type.type == "multipart", depth < maxMultipartDepth, let boundary = type.parameters["boundary"], !boundary.isEmpty {
             entity.children = Multipart.split(body, boundary: boundary).map { parse($0, depth: depth + 1) }
         }
         return entity
@@ -371,10 +396,10 @@ enum HeaderParameters {
 
 /// RFC 2047 encoded words: `=?utf-8?Q?M=C3=B8de?=`, `=?iso-8859-1?B?...?=`.
 public enum EncodedWords {
+    static let encodedWord = try? NSRegularExpression(pattern: #"=\?([^?]+)\?([bBqQ])\?([^?]*)\?="#)
+
     public static func decode(_ input: String) -> String {
-        guard input.contains("=?") else { return input }
-        let pattern = #"=\?([^?]+)\?([bBqQ])\?([^?]*)\?="#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return input }
+        guard input.contains("=?"), let regex = encodedWord else { return input }
         let ns = input as NSString
         let matches = regex.matches(in: input, range: NSRange(location: 0, length: ns.length))
         guard !matches.isEmpty else { return input }
@@ -661,11 +686,10 @@ extension MIMEParser {
         func walk(_ entity: Entity) {
             let type = entity.contentType
             if type.type == "multipart" { entity.children.forEach(walk); return }
-            let contentID = entity.header("Content-ID").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) }
-            let isAttachment = entity.disposition == "attachment" || entity.filename != nil
+            let contentID = entity.contentID
             // Inline images are often just a part with a Content-ID (no filename, no disposition).
             let isInlineResource = contentID != nil && entity.disposition != "attachment" && type.type != "text"
-            guard isAttachment || isInlineResource else { return }
+            guard entity.isAttachment || isInlineResource else { return }
             result.append(OutgoingAttachment(
                 filename: entity.filename ?? "attachment", mimeType: type.full, data: Data(entity.decodedBody),
                 contentID: entity.disposition == "attachment" ? nil : contentID))

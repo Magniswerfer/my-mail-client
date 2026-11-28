@@ -63,19 +63,28 @@ public struct OutgoingMessage: Codable, Sendable, Hashable {
 /// Output is 7-bit clean (quoted-printable text, base64 binaries, RFC 2047 headers, RFC 2231
 /// filenames), so it passes any SMTP server without 8BITMIME or SMTPUTF8.
 public enum MIMEBuilder {
+    /// RFC 5322 §2.1.1: lines SHOULD stay within 78 characters.
+    static let maxHeaderLineLength = 78
+    /// Folded continuation lines are kept a little shorter so the leading space still fits.
+    static let foldedLineLength = 76
+    /// RFC 2045 §6.7: an encoded line is at most 76 characters, the soft-break "=" included.
+    static let maxQuotedPrintableLineLength = 75
+    /// UTF-8 bytes per RFC 2047 encoded word, so the word stays under 75 characters once base64'd.
+    static let maxEncodedWordBytes = 45
+
     public static func build(_ m: OutgoingMessage, userAgent: String = "Tidings") -> Data {
         var headers: [String] = [
             "From: \(address(m.from))",
             "Date: \(rfc5322Date(m.date))",
-            "Message-ID: <\(m.messageID)>",
+            "Message-ID: \(angleBracketed(m.messageID))",
             "Subject: \(encodeHeader(m.subject))",
         ]
-        if !m.to.isEmpty { headers.append("To: \(m.to.map(address).joined(separator: ", "))") }
-        if !m.cc.isEmpty { headers.append("Cc: \(m.cc.map(address).joined(separator: ", "))") }
-        if let parent = m.inReplyTo { headers.append("In-Reply-To: <\(parent)>") }
-        if !m.references.isEmpty { headers.append("References: \(m.references.map { "<\($0)>" }.joined(separator: " "))") }
+        if !m.to.isEmpty { headers.append("To: \(addressList(m.to))") }
+        if !m.cc.isEmpty { headers.append("Cc: \(addressList(m.cc))") }
+        if let parent = m.inReplyTo { headers.append("In-Reply-To: \(angleBracketed(parent))") }
+        if !m.references.isEmpty { headers.append("References: \(m.references.map(angleBracketed).joined(separator: " "))") }
         headers.append("MIME-Version: 1.0")
-        headers.append("User-Agent: \(userAgent)")
+        headers.append("User-Agent: \(singleLine(userAgent))")
 
         let body = bodyPart(m)
         var lines = headers.map(fold)
@@ -89,30 +98,28 @@ public enum MIMEBuilder {
         var content: String
 
         var serialized: String { headers.joined(separator: "\r\n") + "\r\n\r\n" + content }
+
+        static func quotedPrintableText(_ text: String, contentType: String, extraHeaders: [String] = []) -> Part {
+            Part(headers: ["Content-Type: \(contentType)"] + extraHeaders + ["Content-Transfer-Encoding: quoted-printable"],
+                 content: quotedPrintable(text))
+        }
     }
 
+    /// The structure, innermost first: text (+ HTML, + iTIP calendar) as alternatives, inline
+    /// images around that as `related`, regular attachments around everything as `mixed`.
     static func bodyPart(_ m: OutgoingMessage) -> Part {
         if let reaction = m.reaction { return reactionPart(reaction) }
-        let textPart = Part(headers: ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                            content: quotedPrintable(m.text))
-        var main = textPart
+        var alternatives = [Part.quotedPrintableText(m.text, contentType: "text/plain; charset=utf-8")]
         if let html = m.html {
-            let htmlPart = Part(headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                                content: quotedPrintable(html))
-            main = multipart("alternative", [textPart, htmlPart])
+            alternatives.append(.quotedPrintableText(html, contentType: "text/html; charset=utf-8"))
         }
         if let calendar = m.calendar {
             // iTIP over email (RFC 6047): the calendar is an alternative of the text, with the
             // method repeated on the Content-Type so clients don't have to parse it.
-            let calendarPart = Part(
-                headers: ["Content-Type: text/calendar; charset=utf-8; method=\(calendar.method.rawValue)",
-                          "Content-Transfer-Encoding: quoted-printable"],
-                content: quotedPrintable(calendar.ics))
-            let alternatives = m.html == nil ? [textPart] : [textPart, Part(
-                headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                content: quotedPrintable(m.html ?? ""))]
-            main = multipart("alternative", alternatives + [calendarPart])
+            alternatives.append(.quotedPrintableText(
+                calendar.ics, contentType: "text/calendar; charset=utf-8; method=\(calendar.method.rawValue)"))
         }
+        var main = alternatives.count == 1 ? alternatives[0] : multipart("alternative", alternatives)
         let inline = m.attachments.filter { $0.contentID != nil }
         let regular = m.attachments.filter { $0.contentID == nil }
         if !inline.isEmpty {
@@ -135,56 +142,72 @@ public enum MIMEBuilder {
     }
 
     static func attachmentPart(_ a: OutgoingAttachment) -> Part {
-        let ascii = a.filename.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
-        let dispositionName = ascii
-            ? "filename=\"\(a.filename)\""
-            : "filename*=utf-8''\(a.filename.addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "attachment")"
+        let filename = singleLine(a.filename)
+        let isPlainQuotable = filename.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
+        let dispositionName = isPlainQuotable
+            ? "filename=\"\(filename)\""
+            : "filename*=utf-8''\(filename.addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "attachment")"
         var headers = [
-            fold("Content-Type: \(a.mimeType); name=\"\(ascii ? a.filename : encodeHeader(a.filename))\""),
+            fold("Content-Type: \(singleLine(a.mimeType)); name=\"\(isPlainQuotable ? filename : encodeHeader(filename))\""),
             fold("Content-Disposition: \(a.contentID == nil ? "attachment" : "inline"); \(dispositionName)"),
             "Content-Transfer-Encoding: base64",
         ]
-        if let cid = a.contentID { headers.append("Content-ID: <\(cid)>") }
+        if let cid = a.contentID { headers.append("Content-ID: \(angleBracketed(cid))") }
         return Part(headers: headers, content: a.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn, .endLineWithLineFeed]) + "\r\n")
     }
 
-    static let rfc2231Safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "!#$&+-.^_`|~"))
-        .subtracting(CharacterSet(charactersIn: "æøåÆØÅ")).intersection(CharacterSet(charactersIn: Unicode.Scalar(0)...Unicode.Scalar(127)))
+    /// RFC 2231 `attr-char`: ASCII letters, digits and the few symbols allowed unencoded.
+    static let rfc2231Safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$&+-.^_`|~")
 
     // MARK: Headers
 
+    /// Header text can come from received mail (a forwarded attachment's decoded filename, a
+    /// reply's subject), where an encoded word may hide a line break. A raw CR or LF would end
+    /// the header and let the sender inject headers or body into our message, so they become spaces.
+    static func singleLine(_ s: String) -> String {
+        func isLineBreak(_ c: Character) -> Bool { c.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }
+        guard s.contains(where: isLineBreak) else { return s }
+        return String(s.map { isLineBreak($0) ? " " : $0 })
+    }
+
+    static func angleBracketed(_ id: String) -> String { "<\(singleLine(id))>" }
+
+    static func addressList(_ addresses: [MailAddress]) -> String { addresses.map(address).joined(separator: ", ") }
+
     static func address(_ a: MailAddress) -> String {
-        guard let name = a.name, !name.isEmpty else { return a.address }
-        if !name.allSatisfy(\.isASCII) { return "\(encodeHeader(name)) <\(a.address)>" }
+        let mailbox = angleBracketed(a.address)
+        guard let name = a.name.map(singleLine), !name.isEmpty else { return singleLine(a.address) }
+        if !name.allSatisfy(\.isASCII) { return "\(encodeHeader(name)) \(mailbox)" }
         let needsQuotes = name.contains { "()<>[]:;@\\,.\"".contains($0) }
         let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        return needsQuotes ? "\"\(escaped)\" <\(a.address)>" : "\(name) <\(a.address)>"
+        return needsQuotes ? "\"\(escaped)\" \(mailbox)" : "\(name) \(mailbox)"
     }
 
     /// RFC 2047 B-encoding for non-ASCII header text, split so each encoded word stays short
-    /// and never cuts a UTF-8 sequence.
+    /// and never cuts a UTF-8 sequence. Line breaks become spaces (see `singleLine`).
     public static func encodeHeader(_ s: String) -> String {
+        let s = singleLine(s)
         guard !s.allSatisfy(\.isASCII) else { return s }
+        func encodedWord(_ chunk: String) -> String { "=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=" }
         var words: [String] = []
         var chunk = ""
         for ch in s {
-            if (chunk + String(ch)).utf8.count > 45 {
-                words.append("=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=")
+            if chunk.utf8.count + String(ch).utf8.count > maxEncodedWordBytes {
+                words.append(encodedWord(chunk))
                 chunk = ""
             }
             chunk.append(ch)
         }
-        if !chunk.isEmpty { words.append("=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=") }
+        if !chunk.isEmpty { words.append(encodedWord(chunk)) }
         return words.joined(separator: " ")
     }
 
-    /// Folds a header line at spaces to stay under 78 characters.
     static func fold(_ line: String) -> String {
-        guard line.count > 78 else { return line }
+        guard line.count > maxHeaderLineLength else { return line }
         var out = ""
         var current = ""
         for token in line.split(separator: " ", omittingEmptySubsequences: false) {
-            if !current.isEmpty, current.count + token.count + 1 > 76 {
+            if !current.isEmpty, current.count + token.count + 1 > foldedLineLength {
                 out += current + "\r\n"
                 current = " " + token
             } else {
@@ -212,16 +235,11 @@ public enum MIMEBuilder {
             var length = 0
             let bytes = Array(line.utf8)
             for (i, byte) in bytes.enumerated() {
-                let isLast = i == bytes.count - 1
-                var piece: String
-                switch byte {
-                case 33...60, 62...126: piece = String(UnicodeScalar(byte))
-                case 32, 9: piece = isLast ? String(format: "=%02X", byte) : String(UnicodeScalar(byte)) // trailing space must be encoded
-                default: piece = String(format: "=%02X", byte)
-                }
-                // A line starting with "." or "From " is safe for SMTP but encode "." to be robust.
-                if length == 0, byte == 46 { piece = "=2E" }
-                if length + piece.count > 75 {
+                var piece = quotedPrintablePiece(byte, isLastOnLine: i == bytes.count - 1)
+                // SMTP dot-stuffing would cover a leading "." too; encoding it keeps the body intact
+                // through relays that get that wrong.
+                if length == 0, byte == UInt8(ascii: ".") { piece = "=2E" }
+                if length + piece.count > maxQuotedPrintableLineLength {
                     out += "=\r\n"
                     length = 0
                 }
@@ -230,5 +248,13 @@ public enum MIMEBuilder {
             }
         }
         return out
+    }
+
+    /// RFC 2045 §6.7: printable ASCII except "=" stays literal; a space or tab only when it
+    /// isn't the last character of the line (trailing whitespace is stripped in transit).
+    static func quotedPrintablePiece(_ byte: UInt8, isLastOnLine: Bool) -> String {
+        let isLiteral = (33...60).contains(byte) || (62...126).contains(byte)
+        let isInnerWhitespace = (byte == 32 || byte == 9) && !isLastOnLine
+        return isLiteral || isInnerWhitespace ? String(UnicodeScalar(byte)) : String(format: "=%02X", byte)
     }
 }

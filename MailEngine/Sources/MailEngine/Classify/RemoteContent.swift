@@ -70,7 +70,8 @@ public enum RemoteContent {
         return trackerPathHints.contains(where: path.contains) && (w ?? 0) <= 10 && (h ?? 0) <= 10
     }
 
-    /// Removes tracking query parameters; nil if the URL can't be parsed.
+    /// Removes tracking query parameters. A link that can't be parsed comes back unchanged; nil
+    /// only when the cleaned components can't be put back together.
     public static func stripTracking(_ link: String) -> String? {
         let decoded = link.replacingOccurrences(of: "&amp;", with: "&")
         guard var components = URLComponents(string: decoded), let items = components.queryItems, !items.isEmpty else { return link }
@@ -125,15 +126,9 @@ extension MailStore {
             if try Int.fetchOne(db, sql: "SELECT count(*) FROM imageTrust WHERE sender IN (?, ?)", arguments: [sender, domain]) ?? 0 > 0 {
                 return true
             }
-            guard !ownAddresses.isEmpty else { return false }
-            let mine = ownAddresses.map { $0.lowercased() }
             // Mail you sent (your signature's pictures among them): nothing to protect you from.
-            if mine.contains(sender) { return true }
-            // A message from me with this person among the recipients.
-            return try Int.fetchOne(db, sql: """
-                SELECT count(*) FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))
-                AND lower(recipients) LIKE ? LIMIT 1
-                """, arguments: StatementArguments(mine + ["%\(sender)%"])) ?? 0 > 0
+            if ownAddresses.contains(where: { $0.lowercased() == sender }) { return true }
+            return try Self.hasWritten(to: sender, from: ownAddresses, in: db)
         }
     }
 
