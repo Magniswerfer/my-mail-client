@@ -109,7 +109,8 @@ extension AccountSync {
         }
         guard !applied.isEmpty else { return nil }
         let runID = try store.recordRuleRun(accountID: account.id, message: current, rules: rules, actions: applied)
-        SyncLog.info("rules: \(rules.map(\.name)) on message \(id): \(applied)")
+        // Kinds only: rule names, forward addresses and reply text are personal (the log is public).
+        SyncLog.info("rules: \(rules.count) rule(s) on message \(id): \(applied.map(\.logName))")
         return try store.ruleRuns(limit: 1).first { $0.id == runID }
     }
 

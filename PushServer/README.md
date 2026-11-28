@@ -43,7 +43,8 @@ Without `APNS_KEY_P8`, the server syncs, wakes snoozes and sends scheduled mail,
 | `TIDINGS_DATA_DIR` | no | Defaults to `/data`. Holds `server.sqlite`, `mail.sqlite` and a small cache. |
 | `PORT` | no | Defaults to `8080`. |
 | `TIDINGS_POLL_SECONDS` | no | How often Sent and Snoozed are re-synced next to INBOX's IDLE. Defaults to 300; the minimum is 30. |
-| `TIDINGS_PLAINTEXT_IMAP_HOSTS` | no | Extra hosts allowed without TLS, comma-separated. Use it for tests only. |
+| `TIDINGS_PLAINTEXT_IMAP_HOSTS` | no | Extra hosts allowed without TLS (IMAP and SMTP), comma-separated. Use it for tests only. |
+| `TIDINGS_ALLOWED_MAIL_HOSTS` | recommended | The only IMAP and SMTP hosts an account may use, comma-separated. For iCloud: `imap.mail.me.com,smtp.mail.me.com`. Without it, any public host is accepted (never a private-network one). |
 | `LOG_LEVEL` | no | Defaults to `info`. Logs never contain addresses (only `ma…@icloud.com`), subjects or bodies. |
 
 ## Deploy on Coolify
@@ -57,7 +58,7 @@ These are notes for Magnus. Nothing has been deployed. Deploying is your call, a
    - Dockerfile location: `/PushServer/Dockerfile`.
 3. **Add a volume.** Add persistent storage mounted at `/data`. Back it up: it holds your encrypted passwords and paired devices. Without the master key, the backup can't be read.
 4. **Set the environment.** Add the variables from the table above. Mark `TIDINGS_PAIRING_SECRET`, `TIDINGS_MASTER_KEY` and `APNS_KEY_P8` as secrets, and never put them in the repository.
-5. **Set the domain and port.** Give the app a domain such as `https://push.<your domain>`; Coolify's proxy terminates TLS. The exposed port is `8080`, and the health check path is `/health`.
+5. **Set the domain and port.** Give the app a domain such as `https://push.<your domain>`; Coolify's proxy terminates TLS. The exposed port is `8080`, and the health check path is `/health`. Never publish port 8080 directly: it speaks plain HTTP and relies on the proxy for TLS. The app refuses `http://` server addresses.
 6. **Deploy.** The log should say `push engine started`. Once the key is set, `APNS_KEY_P8 not set` should not appear.
 7. **Pair your devices.** On the iPhone, go to Settings › Notifications › Push Server, enter the address and the pairing secret, then tap **Pair This Device**. Your other devices get the address and secret through iCloud Keychain and pair themselves.
 8. **Give the server its passwords.**
@@ -77,4 +78,9 @@ iCloud allows about 3 IMAP connections per account. The server uses 1 all the ti
 `MailEngine/Sources/MailEngine/Push/PushAPI.swift` documents the calls, and `PushServerClient` is the app's client for them.
 - Every call except `POST /v1/devices` and `GET /health` needs `Authorization: Bearer <device token>`.
 - Device tokens are stored only as SHA-256 hashes.
-- After 5 wrong pairing secrets in a minute, pairing pauses for that minute.
+- Pairing allows 5 attempts per client (the address in the proxy's `X-Forwarded-For`) and 30 in total per minute. Attempts count as they start, so parallel guesses don't get extra tries.
+- `GET /v1/devices` lists paired devices and `DELETE /v1/devices/{id}` removes one, so a lost phone can be cut off from another device.
+- Changing `TIDINGS_PAIRING_SECRET` and redeploying retires every device paired with the old secret: they must pair again.
+- An account's stored password only goes to the servers it was entered for. Uploading other IMAP or SMTP settings without the password is refused (409); enter the password again.
+- Passwords are sealed with AES-GCM under `TIDINGS_MASTER_KEY`, bound to their account's login.
+- Send-later messages must be due at least a minute out, come from one of the account's own addresses, and at most 200 wait at once.

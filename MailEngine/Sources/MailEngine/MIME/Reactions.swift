@@ -89,7 +89,7 @@ enum ReactionDetector {
         let own = ownPart(html)
         // Outlook's own part is just the reaction line; a long one is a real reply quoting a reaction.
         guard HTMLText.toPlainText(own).count < 400 else { return nil }
-        for tag in matches(#"<img\b[^>]*>"#, in: own) {
+        for tag in matches(#"<img\b[^<>]*>"#, in: own) {
             let alt = attribute("alt", in: tag)
             let src = attribute("src", in: tag) ?? ""
             if let name = reactionImageName(src), let emoji = outlookEmoji[name] { return emoji }

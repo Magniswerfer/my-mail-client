@@ -17,15 +17,23 @@ public struct SecretBox: Sendable {
 
     public init(key: SymmetricKey) { self.key = key }
 
-    public func seal(_ secret: String) throws -> Data {
-        guard let combined = try AES.GCM.seal(Data(secret.utf8), using: key).combined else {
-            throw ConfigError.invalid("AES-GCM produced no output")
-        }
+    /// `context` (the account's login) is authenticated with the ciphertext, so a sealed
+    /// password only opens for the account it was sealed for: swapping blobs between rows in
+    /// the database doesn't move a password to another account.
+    public func seal(_ secret: String, context: String? = nil) throws -> Data {
+        let sealed = try context.map { try AES.GCM.seal(Data(secret.utf8), using: key, authenticating: Data($0.utf8)) }
+            ?? AES.GCM.seal(Data(secret.utf8), using: key)
+        guard let combined = sealed.combined else { throw ConfigError.invalid("AES-GCM produced no output") }
         return combined
     }
 
-    public func open(_ sealed: Data) throws -> String {
-        String(decoding: try AES.GCM.open(AES.GCM.SealedBox(combined: sealed), using: key), as: UTF8.self)
+    /// Opens with `context`; passwords sealed before contexts existed open without one.
+    public func open(_ sealed: Data, context: String? = nil) throws -> String {
+        let box = try AES.GCM.SealedBox(combined: sealed)
+        if let context, let data = try? AES.GCM.open(box, using: key, authenticating: Data(context.utf8)) {
+            return String(decoding: data, as: UTF8.self)
+        }
+        return String(decoding: try AES.GCM.open(box, using: key), as: UTF8.self)
     }
 }
 
@@ -36,6 +44,12 @@ enum Tokens {
         let raw = (0..<bytes).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
         return Data(raw).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+    }
+
+    /// Which pairing secret a device paired under. Rotating `TIDINGS_PAIRING_SECRET` retires
+    /// every device paired with the old one.
+    static func secretTag(_ secret: String) -> String {
+        String(hash("tidings-pairing-secret|" + secret).prefix(16))
     }
 
     static func hash(_ token: String) -> String {

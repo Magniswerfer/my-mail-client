@@ -60,6 +60,9 @@ extension MailSession {
             """)
         let tagged: TaggedResponse
         switch method {
+        case .login where has("LOGINDISABLED"):
+            // RFC 3501: the server forbids LOGIN here (usually: no TLS yet). Don't send it anyway.
+            throw MailSessionError.authenticationFailed("the server doesn't allow LOGIN on this connection (LOGINDISABLED)")
         case .login:
             tagged = try await connection.send(.login(username: endpoint.username, password: password)) { _, responses in
                 try await Self.collect(responses)

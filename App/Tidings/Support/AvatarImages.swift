@@ -1,4 +1,5 @@
 import Contacts
+import MailEngine
 import Foundation
 import SwiftUI
 #if os(macOS)
@@ -102,11 +103,23 @@ final class AvatarImages {
 
     // MARK: Website icons
 
-    /// The domain after the @, unless it's a free mail service (or a test address).
+    /// The registrable domain after the @ ("news.example.com" → "example.com"), unless it's a
+    /// free mail service, a test address, or a local or private-network host.
+    ///
+    /// Only the registrable domain is ever fetched: a sender could otherwise mail you from
+    /// `x@<a-code-for-you>.their-site.com` and learn from the icon request that, and when, the
+    /// message reached your screen.
     nonisolated static func domain(of address: String) -> String? {
         guard let at = address.lastIndex(of: "@") else { return nil }
-        let domain = address[address.index(after: at)...].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "> "))
-        guard domain.contains("."), !freeMail.contains(domain), !domain.hasSuffix(".test"), !domain.hasSuffix(".example"),
+        let full = address[address.index(after: at)...].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "> "))
+        guard full.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }), !NetworkTarget.isLocal(host: full) else { return nil }
+        let labels = full.split(separator: ".")
+        guard labels.count >= 2, !labels.last!.allSatisfy(\.isNumber) else { return nil }
+        // "shop.co.uk" keeps three labels; otherwise two.
+        let secondLevel: Set<Substring> = ["co", "com", "org", "net", "ac", "gov", "edu", "ltd", "plc", "or", "ne", "go"]
+        let keep = labels.count >= 3 && labels.last!.count == 2 && secondLevel.contains(labels[labels.count - 2]) ? 3 : 2
+        let domain = labels.suffix(keep).joined(separator: ".")
+        guard !freeMail.contains(domain), !freeMail.contains(full), !domain.hasSuffix(".test"), !domain.hasSuffix(".example"),
               !domain.hasSuffix("example.com"), !domain.hasSuffix(".invalid"), !domain.hasSuffix(".local") else { return nil }
         return domain
     }
@@ -154,11 +167,8 @@ actor WebsiteIcons {
         let miss = folder.appendingPathComponent(domain + ".none")
         if let age = Self.age(of: file), age < 30 * 86_400, let data = try? Data(contentsOf: file) { return PlatformImage(data: data) }
         if let age = Self.age(of: miss), age < 7 * 86_400 { return nil }
-        // The domain itself, then its parent ("news.example.com" → "example.com").
-        var candidates = [domain]
-        let labels = domain.split(separator: ".")
-        if labels.count > 2 { candidates.append(labels.suffix(2).joined(separator: ".")) }
-        for host in candidates {
+        // Already the registrable domain (`AvatarImages.domain(of:)`): never a sender's subdomain.
+        for host in [domain] {
             if let data = await fetchIcon(host: host), let image = PlatformImage(data: data), Self.isUsable(image) {
                 try? data.write(to: file)
                 try? FileManager.default.removeItem(at: miss)
@@ -194,7 +204,7 @@ actor WebsiteIcons {
     /// The best icon a page names: apple-touch-icon, else the largest "icon".
     static func iconLink(in html: String) -> String? {
         var best: (score: Int, href: String)?
-        for match in html.matches(of: /(?is)<link\b[^>]*>/) {
+        for match in html.matches(of: /(?is)<link\b[^<>]*>/) {
             let tag = String(match.output)
             guard let rel = attribute("rel", in: tag)?.lowercased(), rel.contains("icon"),
                   let href = attribute("href", in: tag), !href.hasPrefix("data:") else { continue }

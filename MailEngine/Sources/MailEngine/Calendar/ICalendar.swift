@@ -36,6 +36,8 @@ public struct ICalProperty: Sendable, Hashable {
 }
 
 public enum ICalendar {
+    static let maxDepth = 16
+
     /// Parses a VCALENDAR (or any component stream). Returns the top-level components.
     public static func parse(_ source: String) -> [ICalComponent] {
         var stack: [ICalComponent] = []
@@ -44,6 +46,9 @@ public enum ICalendar {
             guard let property = parseLine(line) else { continue }
             switch property.name {
             case "BEGIN":
+                // Real calendars nest 3 deep (VCALENDAR > VEVENT > VALARM). A sender's
+                // 100 000-deep nesting would overflow the stack when the tree is freed.
+                guard stack.count < maxDepth else { return [] }
                 stack.append(ICalComponent(name: property.value.uppercased().trimmingCharacters(in: .whitespaces),
                                            properties: [], children: []))
             case "END":

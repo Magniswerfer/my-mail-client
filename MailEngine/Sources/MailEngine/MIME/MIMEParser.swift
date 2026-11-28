@@ -82,7 +82,7 @@ public enum MIMEParser {
         }
         return ParsedMessage(
             headers: h,
-            subject: value("Subject").map(EncodedWords.decode)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            subject: value("Subject").map { HeaderText.singleLine(EncodedWords.decode($0)) }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             from: AddressParser.parse(value("From") ?? ""),
             to: AddressParser.parse(value("To") ?? ""),
             cc: AddressParser.parse(value("Cc") ?? ""),
@@ -195,9 +195,9 @@ struct Entity {
 
     var filename: String? {
         if let d = header("Content-Disposition"), let name = HeaderParameters.parse(d).parameters["filename"] {
-            return EncodedWords.decode(name)
+            return AttachmentNames.sanitize(EncodedWords.decode(name))
         }
-        return contentType.parameters["name"].map(EncodedWords.decode)
+        return contentType.parameters["name"].map { AttachmentNames.sanitize(EncodedWords.decode($0)) }
     }
 
     var decodedBody: [UInt8] {
@@ -394,7 +394,8 @@ public enum EncodedWords {
             let bytes: [UInt8] = encoding == "b"
                 ? Base64Lenient.decode(ArraySlice(Array(text.utf8)))
                 : QuotedPrintable.decode(ArraySlice(Array(text.utf8)), isHeader: true)
-            output += Charsets.decode(bytes, charset: charset)
+            // Decoded words may carry CR/LF (=0D=0A); a header value never spans lines.
+            output += HeaderText.singleLine(Charsets.decode(bytes, charset: charset))
             cursor = match.range.location + match.range.length
             previousWasEncoded = true
         }
@@ -438,16 +439,18 @@ public enum AddressParser {
                 if name.hasPrefix("\""), name.hasSuffix("\""), name.count >= 2 {
                     name = String(name.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
                 }
-                name = EncodedWords.decode(name).trimmingCharacters(in: .whitespaces)
-                if !address.isEmpty { result.append(MailAddress(name: name.isEmpty ? nil : name, address: address)) }
+                name = HeaderText.singleLine(EncodedWords.decode(name)).trimmingCharacters(in: .whitespaces)
+                let clean = HeaderText.token(address)
+                if !clean.isEmpty { result.append(MailAddress(name: name.isEmpty ? nil : name, address: clean)) }
             } else {
                 // "addr (Comment Name)" or bare address.
                 var address = entry
                 var name: String?
                 if let open = entry.firstIndex(of: "("), let close = entry.lastIndex(of: ")"), open < close {
-                    name = EncodedWords.decode(String(entry[entry.index(after: open)..<close]))
+                    name = HeaderText.singleLine(EncodedWords.decode(String(entry[entry.index(after: open)..<close])))
                     address = entry[..<open].trimmingCharacters(in: .whitespaces)
                 }
+                address = HeaderText.token(address)
                 if address.contains("@") { result.append(MailAddress(name: name, address: address)) }
             }
         }
@@ -593,16 +596,15 @@ public enum HTMLText {
     /// Converts an HTML body to readable plain text for indexing, previews and AI.
     /// Not a renderer: drops scripts/styles/head, keeps paragraph and list structure.
     public static func toPlainText(_ html: String) -> String {
-        var s = html
-        for tag in ["script", "style", "head", "title"] {
-            s = s.replacingOccurrences(of: "<\(tag)\\b[^>]*>[\\s\\S]*?</\(tag)>", with: " ", options: [.regularExpression, .caseInsensitive])
-        }
-        s = s.replacingOccurrences(of: "<!--[\\s\\S]*?-->", with: " ", options: .regularExpression)
+        // Forward-only scans and `[^<>]` classes: each regex start stops at the next `<`, so an
+        // unclosed tag can't make the pass quadratic (one crafted mail would stall sync).
+        var s = HTMLScan.removingComments(from: html)
+        s = HTMLScan.removingElements(["script", "style", "head", "title"], from: s)
         s = s.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
-        s = s.replacingOccurrences(of: "<li\\b[^>]*>", with: "\n• ", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: "<li\\b[^<>]*>", with: "\n• ", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "</(p|div|tr|h[1-6]|table|ul|ol|blockquote)>", with: "\n\n", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "</t[dh]>", with: "\t", options: [.regularExpression, .caseInsensitive])
-        s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: "<[^<>]+>", with: "", options: .regularExpression)
         s = decodeEntities(s)
         // Normalise whitespace: trim lines, collapse runs of blank lines and spaces.
         let lines = s.components(separatedBy: .newlines).map {

@@ -40,6 +40,9 @@ public actor PushEngine {
         mail = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
         cache = MessageCache(directory: dir.appendingPathComponent("cache", isDirectory: true), limitBytes: 64 << 20)
         secrets = try SecretBox(base64: config.masterKey)
+        // The engine refuses passwords without TLS except to these (the local test server).
+        TransportPolicy.additionalPlaintextHosts = Set(config.plaintextHosts.map { $0.lowercased() })
+        try store.adoptSecretTag(Tokens.secretTag(config.pairingSecret))
     }
 
     // MARK: Running
@@ -67,7 +70,7 @@ public actor PushEngine {
             statuses[account.login] = .init(login: account.login, hasPassword: false, state: "no password", lastSync: nil, error: nil)
             return
         }
-        let password = try secrets.open(sealed)
+        let password = try secrets.open(sealed, context: account.login)
         let sync = AccountSync(account: accountConfig(account), password: password, store: mail, cache: cache, scope: .pushServer)
         let login = account.login
         let poll = config.pollInterval
@@ -208,21 +211,48 @@ public actor PushEngine {
     public func upsertAccount(login rawLogin: String, _ upload: PushAPI.AccountUpload) async throws {
         let login = rawLogin.lowercased()
         guard login.contains("@") else { throw OperationError.badRequest("login must be an address") }
-        let endpoint = upload.record.endpoint
+        let record = upload.record
+        let endpoint = record.endpoint
         if !endpoint.useTLS && !config.plaintextHosts.contains(endpoint.host.lowercased()) {
             throw OperationError.badRequest("IMAP without TLS is only allowed to the local test server")
         }
+        if let smtp = record.smtp, smtp.security == .none, !config.plaintextHosts.contains(smtp.host.lowercased()) {
+            throw OperationError.badRequest("SMTP without TLS is only allowed to the local test server")
+        }
+        for host in [endpoint.host] + (record.smtp.map { [$0.host] } ?? []) { try checkMailHost(host) }
         if let password = upload.password, password.isEmpty { throw OperationError.badRequest("empty password") }
-        let sealed = try upload.password.map(secrets.seal)
+        let sealed = try upload.password.map { try secrets.seal($0, context: login) }
         let existing = try store.accounts().first { $0.login == login }
         guard sealed != nil || existing?.sealedPassword != nil else {
             throw OperationError.badRequest("the server needs its app-specific password for this account")
+        }
+        // The stored password only ever goes to the servers it was given for. Without this,
+        // anyone with a device token could re-point the account at their own server and
+        // receive the password at the next login.
+        if sealed == nil, let existing, existing.record.endpoint != record.endpoint || existing.record.smtp != record.smtp {
+            throw OperationError.conflict("the server settings changed: send the app-specific password again")
         }
         try store.saveAccount(login: login, record: upload.record, sealedPassword: sealed)
         // Restart only when something the connection depends on changed.
         if sealed != nil || existing?.record != upload.record || watchers[login] == nil {
             await stopWatcher(login)
             if let account = try store.accounts().first(where: { $0.login == login }) { try startWatcher(account) }
+        }
+    }
+
+    /// A host an uploaded account may use: on the allow-list when there is one, and never this
+    /// machine's or a private network's (other containers, the cloud metadata service) unless
+    /// it's a configured test host.
+    func checkMailHost(_ raw: String) throws {
+        let host = raw.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !host.isEmpty, host.allSatisfy({ $0.isLetter || $0.isNumber || ".-:[]".contains($0) }) else {
+            throw OperationError.badRequest("invalid host")
+        }
+        if !config.allowedMailHosts.isEmpty, !config.allowedMailHosts.contains(host) {
+            throw OperationError.badRequest("this server only accepts the mail hosts in TIDINGS_ALLOWED_MAIL_HOSTS")
+        }
+        if NetworkTarget.isLocal(host: host), !config.plaintextHosts.contains(host), !config.allowedMailHosts.contains(host) {
+            throw OperationError.badRequest("local and private-network hosts aren't allowed")
         }
     }
 
@@ -249,7 +279,20 @@ public actor PushEngine {
     public func schedule(id: String, _ send: PushAPI.ScheduledSend) async throws {
         let login = send.account.lowercased()
         guard let sync = watchers[login]?.sync else { throw OperationError.badRequest("unknown account") }
-        if try store.scheduled(id: id) != nil { _ = try await cancelScheduled(id: id) }
+        // Devices hand off only mail due more than 5 minutes out; something due now is either
+        // a mistake or someone using a token to send mail as the user straight away.
+        guard send.sendAt.timeIntervalSinceNow >= config.minimumScheduleLead else { throw OperationError.badRequest("sendAt must be in the future") }
+        let account = try store.accounts().first { $0.login == login }
+        let own = Set(((account?.record.addresses ?? []) + (account?.record.identities ?? []).map(\.address) + [login]).map { $0.lowercased() })
+        guard own.contains(send.message.from.address.lowercased()) else {
+            throw OperationError.badRequest("the sender must be one of the account's addresses")
+        }
+        if try store.scheduled(id: id) != nil {
+            // Already sending (or sent): queueing it again would send it twice.
+            guard try await cancelScheduled(id: id) else { throw OperationError.conflict("already sending or sent") }
+        } else if try store.scheduledCount() >= config.maxScheduled {
+            throw OperationError.conflict("too many scheduled messages")
+        }
         let item = try await sync.queue(send.message, sendAt: send.sendAt, kind: send.kind)
         guard let outboxID = item.id else { throw OperationError.conflict("not queued") }
         try store.setScheduled(id: id, login: login, outboxID: outboxID)

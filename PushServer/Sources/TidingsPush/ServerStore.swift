@@ -16,6 +16,8 @@ public final class ServerStore: Sendable {
         public var environment: String?
         public var createdAt: Date
         public var lastSeenAt: Date
+        /// `Tokens.secretTag` of the pairing secret it paired with.
+        public var secretTag: String?
     }
 
     public struct Account: Sendable, Hashable {
@@ -50,15 +52,23 @@ public final class ServerStore: Sendable {
                 t.column("outboxID", .integer).notNull()
             }
         }
+        migrator.registerMigration("v2-secret-tag") { db in
+            try db.alter(table: "device") { t in t.add(column: "secretTag", .text) }
+        }
         try migrator.migrate(db)
+    }
+
+    /// Devices paired before tags existed belong to the current secret.
+    public func adoptSecretTag(_ tag: String) throws {
+        try db.write { try $0.execute(sql: "UPDATE device SET secretTag = ? WHERE secretTag IS NULL", arguments: [tag]) }
     }
 
     // MARK: Devices
 
-    public func addDevice(name: String, now: Date = Date()) throws -> (device: Device, token: String) {
+    public func addDevice(name: String, secretTag: String? = nil, now: Date = Date()) throws -> (device: Device, token: String) {
         let token = Tokens.random()
-        let device = Device(id: UUID().uuidString, name: String(name.prefix(80)), tokenHash: Tokens.hash(token), apnsToken: nil,
-                            environment: nil, createdAt: now, lastSeenAt: now)
+        let device = Device(id: UUID().uuidString, name: String(HeaderText.singleLine(name).prefix(80)), tokenHash: Tokens.hash(token),
+                            apnsToken: nil, environment: nil, createdAt: now, lastSeenAt: now, secretTag: secretTag)
         try db.write { try device.insert($0) }
         return (device, token)
     }
@@ -88,8 +98,9 @@ public final class ServerStore: Sendable {
         try db.write { try $0.execute(sql: "UPDATE device SET apnsToken = NULL WHERE apnsToken = ?", arguments: [token]) }
     }
 
-    public func removeDevice(id: String) throws {
-        try db.write { _ = try Device.deleteOne($0, key: id) }
+    @discardableResult
+    public func removeDevice(id: String) throws -> Bool {
+        try db.write { try Device.deleteOne($0, key: id) }
     }
 
     public func devices() throws -> [Device] {

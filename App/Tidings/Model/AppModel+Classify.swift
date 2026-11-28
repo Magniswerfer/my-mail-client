@@ -32,8 +32,13 @@ extension StoredMessage {
 }
 
 extension AppModel {
-    func allowsRemoteImages(from sender: String) -> Bool {
-        (try? store.allowsRemoteImages(from: sender, ownAddresses: ownAddresses)) ?? false
+    /// Whether this message's remote images load without asking. Not in Junk, not when the
+    /// phishing check has doubts, and "from me" only counts in Sent and Drafts (it's forgeable).
+    func allowsRemoteImages(for message: StoredMessage) -> Bool {
+        let role = mailboxes.first { $0.accountID == message.accountID && $0.path == message.mailbox }?.role
+        return (try? store.allowsRemoteImages(
+            from: message.fromAddress, ownAddresses: ownAddresses, risk: message.riskLevel,
+            isJunk: role == .junk || (message.junkScore ?? 0) > 0, isOwnFolder: role == .sent || role == .drafts)) ?? false
     }
 
     func trustImages(from senderOrDomain: String) {

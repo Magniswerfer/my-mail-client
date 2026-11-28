@@ -134,7 +134,12 @@ extension AppModel {
         for (login, payload) in report.accounts {
             guard let record = try? CloudAccountRecord(payload: payload) else { continue }
             if let index = accounts.firstIndex(where: { $0.login.lowercased() == login }) {
-                let updated = record.account(id: accounts[index].id)
+                var updated = record.account(id: accounts[index].id)
+                // This device's password only goes to the servers it was set up with: a synced
+                // record (from another device, or anything else that can write the CloudKit
+                // zone) can't move it to another host. Ports, TLS upgrades and names follow.
+                updated.endpoint = Self.adoptable(updated.endpoint, over: accounts[index].endpoint)
+                updated.smtp = Self.adoptable(updated.smtp, over: accounts[index].smtp, imapHost: accounts[index].endpoint.host)
                 guard updated != accounts[index] else { continue }
                 let reconnect = updated.endpoint != accounts[index].endpoint || updated.smtp != accounts[index].smtp
                 accounts[index] = updated
@@ -149,6 +154,23 @@ extension AppModel {
         }
         persistAccounts()
         adoptAccountsWithPasswords()
+    }
+
+    static func adoptable(_ incoming: IMAPEndpoint, over local: IMAPEndpoint) -> IMAPEndpoint {
+        guard incoming.host.caseInsensitiveCompare(local.host) == .orderedSame, incoming.useTLS || !local.useTLS else { return local }
+        return incoming
+    }
+
+    /// An SMTP server from sync: the same host as here, or (when there's none here yet) one in
+    /// the IMAP server's domain, with TLS.
+    static func adoptable(_ incoming: SMTPEndpoint?, over local: SMTPEndpoint?, imapHost: String) -> SMTPEndpoint? {
+        guard let incoming else { return local }
+        func domain(_ host: String) -> String { host.lowercased().split(separator: ".").suffix(2).joined(separator: ".") }
+        if let local {
+            let sameHost = incoming.host.caseInsensitiveCompare(local.host) == .orderedSame
+            return sameHost && (incoming.security != .none || local.security == .none) ? incoming : local
+        }
+        return incoming.security != .none && domain(incoming.host) == domain(imapHost) ? incoming : nil
     }
 
     /// Accounts waiting for a password join as soon as this device's Keychain has one.

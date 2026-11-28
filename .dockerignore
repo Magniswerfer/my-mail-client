@@ -8,3 +8,10 @@ App
 docs
 scripts
 MailEngine/TestServer
+# Secrets never go into the image's build context.
+**/.env
+**/.env.*
+**/*.p8
+**/*.p12
+**/*.pem
+**/*.key

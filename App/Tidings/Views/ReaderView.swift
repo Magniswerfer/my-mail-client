@@ -453,7 +453,7 @@ struct MessageCard: View {
             if message.attachmentList == nil, let id = message.id {
                 try? model.store.setAttachmentList(parsed.attachments, messageID: id)
             }
-            showImages = model.allowsRemoteImages(from: message.fromAddress)
+            showImages = model.allowsRemoteImages(for: message)
             body_ = LoadedBody(
                 html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
                 to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
@@ -613,7 +613,8 @@ final class PassthroughScrollWebView: WKWebView {
         return """
         <!doctype html><html><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src \(images); style-src 'unsafe-inline'; font-src data:">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src \(images); style-src 'unsafe-inline'; font-src data:; form-action 'none'; base-uri 'none'">
+        <meta http-equiv="x-dns-prefetch-control" content="off">
         <style>
           :root { color-scheme: light; }
           html, body { margin: 0; padding: 12px; background: white; color: #1d1d1f;
@@ -659,7 +660,7 @@ final class PassthroughScrollWebView: WKWebView {
         /// same; this is belt and braces.
         static func withRuleList(allowImages: Bool, _ body: @escaping @MainActor (WKContentRuleList?) -> Void) {
             if let list = cached[allowImages] { body(list); return }
-            var types = ["style-sheet", "font", "media", "raw", "svg-document", "script", "fetch", "websocket", "other"]
+            var types = ["document", "style-sheet", "font", "media", "raw", "svg-document", "script", "fetch", "websocket", "other"]
             if !allowImages { types.append("image") }
             let rules = #"[{"trigger":{"url-filter":"^https?://","resource-type":["# + types.map { "\"\($0)\"" }.joined(separator: ",") + #"]},"action":{"type":"block"}}]"#
             WKContentRuleListStore.default().compileContentRuleList(
@@ -673,12 +674,20 @@ final class PassthroughScrollWebView: WKWebView {
             }
         }
 
+        /// The only load the view makes itself is the message (`about:blank`). A clicked link
+        /// opens outside, if its scheme is one a mail may open; every other navigation (a
+        /// `<meta refresh>`, a form) is cancelled, so the sender's page never replaces the mail.
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
-            if action.navigationType == .linkActivated, let url = action.request.url {
-                Platform.openExternally(url)
+            guard let url = action.request.url else { return .cancel }
+            if action.navigationType == .linkActivated {
+                if RemoteContent.isOpenable(url) { Platform.openExternally(url) }
                 return .cancel
             }
-            return action.request.url?.scheme == "about" || action.navigationType == .other ? .allow : .cancel
+            #if os(iOS)
+            // Data detectors (dates, addresses, phone numbers) are WebKit's own.
+            if url.scheme == "x-apple-data-detectors" { return .allow }
+            #endif
+            return url.scheme == "about" ? .allow : .cancel
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

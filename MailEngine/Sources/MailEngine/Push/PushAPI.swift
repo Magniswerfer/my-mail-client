@@ -54,6 +54,23 @@ public enum PushAPI {
 
     /// An account and, the first time or when it changes, the server's own app-specific
     /// password for it. The password is never sent back.
+    /// A paired device as `GET /v1/devices` lists it (never its token).
+    public struct DeviceInfo: Codable, Sendable, Hashable, Identifiable {
+        public var id: String
+        public var name: String
+        public var createdAt: Date
+        public var lastSeenAt: Date
+        /// The device making the call.
+        public var isCurrent: Bool
+        public init(id: String, name: String, createdAt: Date, lastSeenAt: Date, isCurrent: Bool) {
+            self.id = id
+            self.name = name
+            self.createdAt = createdAt
+            self.lastSeenAt = lastSeenAt
+            self.isCurrent = isCurrent
+        }
+    }
+
     public struct AccountUpload: Codable, Sendable, Hashable {
         public var record: CloudAccountRecord
         public var password: String?
@@ -173,6 +190,16 @@ public struct PushServerClient: Sendable {
         try await call("DELETE", "v1/devices/me")
     }
 
+    /// Every device paired with the server.
+    public func devices() async throws -> [PushAPI.DeviceInfo] {
+        try await call("GET", "v1/devices", as: [PushAPI.DeviceInfo].self)
+    }
+
+    /// Unpairs another device (a lost or stolen one): its token stops working at once.
+    public func removeDevice(id: String) async throws {
+        try await call("DELETE", "v1/devices/\(Self.pathComponent(id))")
+    }
+
     public func putAccount(login: String, _ upload: PushAPI.AccountUpload) async throws {
         try await call("PUT", "v1/accounts/\(Self.pathComponent(login))", body: upload)
     }
@@ -202,6 +229,15 @@ public struct PushServerClient: Sendable {
         try await call("GET", "v1/status", as: PushAPI.ServerStatus.self)
     }
 
+    /// https, or http to this machine only.
+    public static func isAllowed(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+        case "https": return url.host()?.isEmpty == false
+        case "http": return ["127.0.0.1", "localhost", "::1"].contains(url.host()?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")) ?? "")
+        default: return false
+        }
+    }
+
     static func pathComponent(_ s: String) -> String {
         s.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~@"))) ?? s
     }
@@ -211,6 +247,9 @@ public struct PushServerClient: Sendable {
         guard let url = URL(string: path, relativeTo: baseURL.hasDirectoryPath ? baseURL : baseURL.appendingPathComponent("")) else {
             throw ClientError.badURL
         }
+        // The pairing secret, the device token and app passwords travel here: HTTPS only,
+        // except to this machine (a dev server).
+        guard Self.isAllowed(url) else { throw ClientError.badURL }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 30
