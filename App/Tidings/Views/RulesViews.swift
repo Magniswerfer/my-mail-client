@@ -543,10 +543,12 @@ struct ActionEditor: View {
                 TextField("address", text: Binding(get: { to }, set: { action = .forward(to: $0) }),
                           prompt: Text(verbatim: "anna@example.com"))
                     .frame(maxWidth: 260)
+                    .help("Sent from the device where you save this rule.")
             case .autoReply(let text):
                 TextField("message", text: Binding(get: { text }, set: { action = .autoReply(text: $0) }), axis: .vertical)
                     .lineLimit(1...4)
                     .frame(maxWidth: 300)
+                    .help("Sent from the device where you save this rule.")
             case .runShortcut(let name):
                 TextField("shortcut name", text: Binding(get: { name }, set: { action = .runShortcut(name: $0) }))
                     .frame(maxWidth: 220)

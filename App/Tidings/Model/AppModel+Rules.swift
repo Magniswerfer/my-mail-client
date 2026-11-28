@@ -7,6 +7,12 @@ extension AppModel {
 
     func loadRules() {
         rules = (try? store.rules()) ?? []
+        // Rules from before sending actions needed this device's confirmation keep working
+        // where they already ran. (A new device starts empty, so synced rules wait.)
+        if !UserDefaults.standard.bool(forKey: "rules.sendingConfirmationMigrated") {
+            UserDefaults.standard.set(true, forKey: "rules.sendingConfirmationMigrated")
+            rules.forEach(confirmSendingActionsOnThisDevice)
+        }
         ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
     }
 
@@ -18,9 +24,11 @@ extension AppModel {
         }
     }
 
-    /// Adds or replaces a rule (matched by id); new rules go to the end.
+    /// Adds or replaces a rule (matched by id); new rules go to the end. Its sending actions
+    /// (forward, auto-reply, Shortcut) run from this device from now on.
     func save(_ rule: Rule) {
         let rule = calibrated(rule)
+        confirmSendingActionsOnThisDevice(rule)
         if let index = rules.firstIndex(where: { $0.id == rule.id }) {
             rules[index] = rule
         } else {
@@ -240,6 +248,38 @@ extension Rule {
 // MARK: - Forward, auto-reply, Shortcuts
 
 extension AppModel {
+    static let confirmedSendingRulesKey = "rules.sendingConfirmedOnThisDevice"
+
+    /// The rule's sending actions, as text: a different address or reply is a different rule.
+    static func sendingFingerprint(_ actions: [RuleAction]) -> String {
+        actions.filter { action in
+            switch action {
+            case .forward, .autoReply, .runShortcut: true
+            default: false
+            }
+        }.map { String(describing: $0) }.joined(separator: "\n")
+    }
+
+    /// Rules sync to every device (and a CloudKit record can be written by more than the app).
+    /// A rule only sends mail, or runs a Shortcut, on a device where it was saved with exactly
+    /// these actions, so a synced rule can't quietly start forwarding mail somewhere, and one
+    /// rule doesn't forward the same message once per device.
+    func confirmSendingActionsOnThisDevice(_ rule: Rule) {
+        var confirmed = UserDefaults.standard.dictionary(forKey: Self.confirmedSendingRulesKey) as? [String: String] ?? [:]
+        let fingerprint = Self.sendingFingerprint(rule.actions)
+        confirmed[rule.id] = fingerprint.isEmpty ? nil : fingerprint
+        UserDefaults.standard.set(confirmed, forKey: Self.confirmedSendingRulesKey)
+    }
+
+    /// Whether `action` came from a rule in this run that was saved on this device as it is now.
+    func isConfirmedOnThisDevice(_ action: RuleAction, ruleIDs: [String]) -> Bool {
+        let confirmed = UserDefaults.standard.dictionary(forKey: Self.confirmedSendingRulesKey) as? [String: String] ?? [:]
+        return rules.contains { rule in
+            ruleIDs.contains(rule.id) && rule.actions.contains(action)
+                && confirmed[rule.id] == Self.sendingFingerprint(rule.actions)
+        }
+    }
+
     /// The actions the engine leaves to the app. Forwards and replies go through the outbox (so
     /// the undo window applies), or stay in Drafts when the rule used an "about" condition.
     func deliver(_ deliveries: [RuleDelivery]) async {
@@ -247,12 +287,21 @@ extension AppModel {
             guard let message = (try? store.message(id: delivery.run.messageID)) ?? nil else { continue }
             for action in delivery.run.actions {
                 switch action {
+                case .forward, .autoReply, .runShortcut:
+                    guard isConfirmedOnThisDevice(action, ruleIDs: delivery.run.ruleIDs) else {
+                        SyncLog.info("rules: a sending action wasn't saved on this device; skipped")
+                        continue
+                    }
+                default:
+                    continue
+                }
+                switch action {
                 case .forward(let address):
                     await ruleMail(.forward, about: message, to: [MailAddress(name: nil, address: address)], text: nil,
                                    send: !delivery.draftOnly)
                 case .autoReply(let text):
-                    guard shouldAutoReply(to: message) else { continue }
-                    await ruleMail(.reply, about: message, to: nil, text: text, send: !delivery.draftOnly)
+                    guard message.category == .primary, !SignatureInfo.looksAutomated(message.fromAddress) else { continue }
+                    await ruleMail(.reply, about: message, to: nil, text: text, send: !delivery.draftOnly, isAutoReply: true)
                 case .runShortcut(let name):
                     var c = URLComponents(string: "shortcuts://run-shortcut")
                     c?.queryItems = [URLQueryItem(name: "name", value: name), URLQueryItem(name: "input", value: "text"),
@@ -266,23 +315,40 @@ extension AppModel {
         if !deliveries.isEmpty { reloadOutbox() }
     }
 
-    /// Auto-replies never go to robots or lists, and at most once a day per person.
-    private func shouldAutoReply(to message: StoredMessage) -> Bool {
-        guard message.category == .primary, !SignatureInfo.looksAutomated(message.fromAddress) else { return false }
-        var log = UserDefaults.standard.dictionary(forKey: "rules.autoReplied") as? [String: Date] ?? [:]
-        let sender = message.fromAddress.lowercased()
-        if let last = log[sender], Date().timeIntervalSince(last) < 86_400 { return false }
-        log[sender] = Date()
+    /// At most this many automatic replies a day, whoever they go to.
+    static let autoReplyDailyLimit = 20
+
+    /// Auto-replies go at most once a day to each person, and at most `autoReplyDailyLimit` a
+    /// day in all. Records the reply when it's allowed.
+    private func takeAutoReplySlot(for address: String) -> Bool {
+        let now = Date()
+        var log = (UserDefaults.standard.dictionary(forKey: "rules.autoReplied") as? [String: Date] ?? [:])
+            .filter { now.timeIntervalSince($0.value) < 86_400 }
+        let recipient = address.lowercased()
+        guard log[recipient] == nil, log.count < Self.autoReplyDailyLimit else { return false }
+        log[recipient] = now
         UserDefaults.standard.set(log, forKey: "rules.autoReplied")
         return true
     }
 
-    private func ruleMail(_ kind: ComposeKind, about message: StoredMessage, to: [MailAddress]?, text: String?, send: Bool) async {
+    private func ruleMail(_ kind: ComposeKind, about message: StoredMessage, to: [MailAddress]?, text: String?, send: Bool,
+                          isAutoReply: Bool = false) async {
         guard let account = accounts.first(where: { $0.id == message.accountID }),
               let raw = try? await rawMessage(message) else { return }
         let parsed = MIMEParser.parse(raw)
         var draft = self.draft(kind, replyingTo: parsed, raw: raw, account: account)
         if let to { draft.message.to = to }
+        if isAutoReply {
+            // Only ever to the author, never to lists, robots or mail forged "from you" (RFC 3834).
+            let mine = ownAddresses.union(account.sendingIdentities.map { $0.address.lowercased() })
+            guard let recipient = AutoReplyPolicy.recipient(for: parsed, ownAddresses: mine),
+                  takeAutoReplySlot(for: recipient.address) else { return }
+            draft.message.to = [recipient]
+            draft.message.cc = []
+            draft.message.bcc = []
+        }
+        // RFC 3834: say it's automatic, so other robots don't answer it back.
+        if send { draft.message.autoSubmitted = isAutoReply ? "auto-replied" : "auto-generated" }
         let body = NSMutableAttributedString(string: text.map { $0 + "\n" } ?? "", attributes: RichTextEditor.baseAttributes)
         body.append(draft.body)
         guard let id = saveDraft(draft.message, body: body, accountID: account.id, kind: kind, originalLocalID: message.id) else { return }

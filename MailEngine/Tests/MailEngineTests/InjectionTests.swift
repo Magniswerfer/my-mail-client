@@ -175,4 +175,28 @@ struct InjectionTests {
         #expect(!out.contains("t.evil"))
         #expect(out.contains("<p>Hi</p>"))
     }
+
+    func parsed(_ headers: String) -> ParsedMessage {
+        MIMEParser.parse(Data((headers.replacingOccurrences(of: "\n", with: "\r\n") + "\r\n\r\nhi\r\n").utf8))
+    }
+
+    @Test func autoRepliesGoOnlyToTheAuthor() {
+        let mine: Set<String> = ["me@example.com"]
+        let ok = parsed("From: Anna <anna@example.dk>\nReply-To: victim@else.test\nTo: me@example.com, boss@corp.test\nSubject: Hi")
+        #expect(AutoReplyPolicy.recipient(for: ok, ownAddresses: mine)?.address == "anna@example.dk", "the author, not Reply-To")
+        // Forged "from me" with an attacker's To: list: no reply at all.
+        #expect(AutoReplyPolicy.recipient(for: parsed("From: me@example.com\nTo: a@x.test, b@y.test\nSubject: x"), ownAddresses: mine) == nil)
+        for robot in ["Auto-Submitted: auto-replied", "Precedence: bulk", "List-Id: <news.shop.dk>", "List-Unsubscribe: <mailto:u@shop.dk>",
+                      "Return-Path: <>", "Authentication-Results: mx; dmarc=fail header.from=example.dk"] {
+            #expect(AutoReplyPolicy.recipient(for: parsed("From: anna@example.dk\n\(robot)\nSubject: x"), ownAddresses: mine) == nil, "\(robot)")
+        }
+        #expect(AutoReplyPolicy.recipient(for: parsed("From: noreply@shop.dk\nSubject: x"), ownAddresses: mine) == nil)
+        #expect(AutoReplyPolicy.recipient(for: parsed("From: anna@example.dk\nAuto-Submitted: no\nSubject: x"), ownAddresses: mine) != nil)
+    }
+
+    @Test func ruleMailSaysItsAutomatic() {
+        var m = OutgoingMessage(from: me, to: [MailAddress(name: nil, address: "a@b.dk")], subject: "Re: x", text: "Away")
+        m.autoSubmitted = "auto-replied"
+        #expect(headerLines(MIMEBuilder.build(m)).contains("Auto-Submitted: auto-replied"))
+    }
 }

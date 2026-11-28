@@ -37,6 +37,9 @@ public struct OutgoingMessage: Codable, Sendable, Hashable {
     public var calendar: OutgoingCalendar?
     /// Set when this message is a reaction ("👍"): the body is then the reaction parts only.
     public var reaction: OutgoingReaction?
+    /// RFC 3834 `Auto-Submitted` for mail a rule sends by itself ("auto-replied",
+    /// "auto-generated"), so other auto-responders don't answer it.
+    public var autoSubmitted: String?
 
     public init(
         from: MailAddress, to: [MailAddress], cc: [MailAddress] = [], bcc: [MailAddress] = [],
@@ -75,6 +78,7 @@ public enum MIMEBuilder {
         if let parent = m.inReplyTo.map(HeaderText.token), !parent.isEmpty { headers.append("In-Reply-To: <\(parent)>") }
         let references = m.references.map(HeaderText.token).filter { !$0.isEmpty }
         if !references.isEmpty { headers.append("References: \(references.map { "<\($0)>" }.joined(separator: " "))") }
+        if let auto = m.autoSubmitted.map(HeaderText.token), !auto.isEmpty { headers.append("Auto-Submitted: \(auto)") }
         headers.append("MIME-Version: 1.0")
         headers.append("User-Agent: \(HeaderText.singleLine(userAgent))")
 

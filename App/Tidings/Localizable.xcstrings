@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Sent from the device where you save this rule." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sendes fra den enhed, hvor du gemmer reglen."
+          }
+        }
+      }
+    },
     "Open “%@”?" : {
       "localizations" : {
         "da" : {
