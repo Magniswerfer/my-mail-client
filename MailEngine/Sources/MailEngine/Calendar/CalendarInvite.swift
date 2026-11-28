@@ -113,7 +113,8 @@ extension CalendarInvite {
         let methodName = calendar.property("METHOD")?.value.uppercased().trimmingCharacters(in: .whitespaces)
         let method = methodName.flatMap(Method.init(rawValue:)) ?? .publish
         let status = event.property("STATUS")?.value.uppercased()
-        let summary = event.property("SUMMARY")?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // A title: one line. It goes into the reply's Subject ("Accepted: …").
+        let summary = HeaderText.singleLine(event.property("SUMMARY")?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let location = event.property("LOCATION")?.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let notes = event.property("DESCRIPTION")?.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let url = event.property("URL")?.value.trimmingCharacters(in: .whitespaces)
@@ -147,8 +148,10 @@ extension CalendarInvite {
         if value.lowercased().hasPrefix("mailto:") { value = String(value.dropFirst(7)) }
         // Some servers put the address in EMAIL= and an opaque URN in the value.
         if !value.contains("@"), let email = p.parameter("EMAIL") { value = email }
+        value = HeaderText.token(value)
         guard value.contains("@") else { return nil }
-        let name = p.parameter("CN").map(ICalendar.unescape)?.trimmingCharacters(in: .whitespaces)
+        // The organizer's name becomes the reply's To: display name: one line.
+        let name = p.parameter("CN").map { HeaderText.singleLine(ICalendar.unescape($0)) }?.trimmingCharacters(in: .whitespaces)
         let cutype = p.parameter("CUTYPE")?.uppercased()
         return Person(
             name: name?.isEmpty == false && name != value ? name : nil,

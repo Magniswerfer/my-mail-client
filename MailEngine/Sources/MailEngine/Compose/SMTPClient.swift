@@ -45,6 +45,12 @@ public enum SMTPError: Error, CustomStringConvertible, Equatable {
     case connectionClosed
     case notSMTP(String)
     case timeout
+    /// An address or command with a line break or other unsafe character in it.
+    case unsafeInput(String)
+    /// No TLS to a host other than this machine: the password would go in the clear.
+    case plaintextRefused
+    /// The server sent bytes the client didn't ask for (e.g. extra lines after STARTTLS's 220).
+    case protocolViolation(String)
 
     public var description: String {
         switch self {
@@ -55,6 +61,9 @@ public enum SMTPError: Error, CustomStringConvertible, Equatable {
         case .connectionClosed: "The mail server closed the connection."
         case .notSMTP(let line): "That server doesn't speak SMTP (it said \"\(line.prefix(60))\")."
         case .timeout: "The mail server stopped responding."
+        case .unsafeInput(let what): "Refusing to send: \(what) contains a line break or another character SMTP can't carry."
+        case .plaintextRefused: "That server setting has no encryption; refusing to send the password in the clear."
+        case .protocolViolation(let what): "The mail server broke the protocol (\(what))."
         }
     }
 
@@ -94,10 +103,13 @@ public enum SMTPClient {
         _ = try? await connection.command("QUIT")
     }
 
-    /// Dot-stuffs and terminates the DATA payload, normalizing line endings to CRLF.
+    /// Dot-stuffs and terminates the DATA payload, normalizing line endings to CRLF. A bare CR
+    /// becomes a line end too, so "\r.\r\n" can't end the data early on a lenient server
+    /// (SMTP smuggling).
     static func dataPayload(_ message: Data) -> ByteBuffer {
         var text = String(decoding: message, as: UTF8.self)
-        text = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\n", with: "\r\n")
+        text = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\n", with: "\r\n")
         if text.hasPrefix(".") { text = "." + text }
         text = text.replacingOccurrences(of: "\r\n.", with: "\r\n..")
         if !text.hasSuffix("\r\n") { text += "\r\n" }
@@ -154,6 +166,9 @@ final class SMTPConnection: Sendable {
     // MARK: Protocol
 
     func handshake(endpoint: SMTPEndpoint, password: String) async throws -> [String] {
+        // The account form only offers "no encryption" for this machine; a synced or uploaded
+        // setting mustn't be able to get around that.
+        guard endpoint.security != .none || TransportPolicy.allowsPlaintext(host: endpoint.host) else { throw SMTPError.plaintextRefused }
         let greeting = try await response()
         guard greeting.code == 220 else { throw SMTPError.rejected(command: "greeting", code: greeting.code, message: greeting.text) }
         var extensions = try await ehlo()
@@ -162,6 +177,11 @@ final class SMTPConnection: Sendable {
             guard extensions.contains(where: { $0.uppercased() == "STARTTLS" }) else { throw SMTPError.startTLSUnavailable }
             let reply = try await command("STARTTLS")
             guard reply.code == 220 else { throw SMTPError.rejected(command: "STARTTLS", code: reply.code, message: reply.text) }
+            // Anything already received came in the clear; a man in the middle could have queued
+            // fake replies for after the upgrade (STARTTLS response injection).
+            let decoder = self.decoder
+            let buffered = try await channel.eventLoop.submit { decoder.value.hasBufferedInput }.get()
+            guard !buffered else { throw SMTPError.protocolViolation("data after STARTTLS") }
             let context = try Self.makeTLSContext(endpoint)
             let host = endpoint.host
             let channel = self.channel
@@ -194,6 +214,9 @@ final class SMTPConnection: Sendable {
            size > 0, message.count > size {
             throw SMTPError.tooLarge(size: message.count, limit: size)
         }
+        for address in [from] + recipients where !Self.isSafeEnvelopeAddress(address) {
+            throw SMTPError.unsafeInput("the address \"\(HeaderText.singleLine(address).prefix(80))\"")
+        }
         try await expect(250, "MAIL FROM:<\(from)>")
         var accepted = 0
         var lastRejection: SMTPResponse?
@@ -214,14 +237,16 @@ final class SMTPConnection: Sendable {
         return final
     }
 
+    /// An addr-spec that can go between `<` and `>` in MAIL FROM / RCPT TO: no controls,
+    /// spaces, brackets or commas, so it can't add commands or ESMTP parameters.
+    static func isSafeEnvelopeAddress(_ address: String) -> Bool {
+        address.contains("@") && HeaderText.token(address) == address
+    }
+
     func ehlo() async throws -> [String] {
-        #if os(macOS)
-        let name = Host.current().localizedName.map { $0.replacingOccurrences(of: " ", with: "-") } ?? "tidings"
-        #else
-        // No host-name API on iOS (or a server); an address literal is valid and reveals nothing.
-        let name = "[127.0.0.1]"
-        #endif
-        let reply = try await command("EHLO \(name.isEmpty ? "tidings" : name)")
+        // An address literal is valid and reveals nothing. (The Mac's computer name, e.g.
+        // "Magnus's MacBook", would end up in recipients' Received: headers.)
+        let reply = try await command("EHLO [127.0.0.1]")
         guard reply.code == 250 else { throw SMTPError.rejected(command: "EHLO", code: reply.code, message: reply.text) }
         return Array(reply.lines.dropFirst())
     }
@@ -236,6 +261,9 @@ final class SMTPConnection: Sendable {
     }
 
     func command(_ line: String, redacted: String? = nil) async throws -> SMTPResponse {
+        guard !line.unicodeScalars.contains(where: { $0 == "\r" || $0 == "\n" }) else {
+            throw SMTPError.unsafeInput("a command")
+        }
         try await channel.writeAndFlush(ByteBuffer(string: line + "\r\n"))
         return try await response()
     }
@@ -269,6 +297,13 @@ final class SMTPResponseDecoder: ChannelInboundHandler {
     private var waiting = CircularBuffer<EventLoopPromise<SMTPResponse>>()
     private var ready = CircularBuffer<SMTPResponse>()
     private var failure: (any Error)?
+    /// A reply line, and a multi-line reply, are short; a server that never ends one is
+    /// trying to use up memory.
+    static let maxLineBytes = 8_192
+    static let maxReplyLines = 512
+
+    /// True when bytes or whole replies have arrived that no caller has asked for yet.
+    var hasBufferedInput: Bool { buffer.readableBytes > 0 || !ready.isEmpty || !pendingLines.isEmpty }
 
     func next(_ promise: EventLoopPromise<SMTPResponse>) {
         if let response = ready.popFirst() { promise.succeed(response) }
@@ -286,6 +321,10 @@ final class SMTPResponseDecoder: ChannelInboundHandler {
             handle(line)
         }
         buffer.discardReadBytes()
+        if buffer.readableBytes > Self.maxLineBytes {
+            fail(SMTPError.protocolViolation("reply line too long"))
+            context.close(promise: nil)
+        }
     }
 
     private func handle(_ line: String) {
@@ -296,7 +335,10 @@ final class SMTPResponseDecoder: ChannelInboundHandler {
         let rest = line.dropFirst(3)
         let text = rest.dropFirst().trimmingCharacters(in: .whitespaces)
         pendingLines.append(text)
-        if rest.first == "-" { return }  // continuation
+        if rest.first == "-" {  // continuation
+            if pendingLines.count > Self.maxReplyLines { fail(SMTPError.protocolViolation("reply too long")) }
+            return
+        }
         let response = SMTPResponse(code: code, lines: pendingLines)
         pendingLines = []
         if let promise = waiting.popFirst() { promise.succeed(response) } else { ready.append(response) }

@@ -59,3 +59,17 @@ public struct ServerProfile: Sendable, Hashable {
         host.hasSuffix("mail.me.com") ? .iCloud : .generic
     }
 }
+
+/// Where a password may go without TLS. The account form only offers "no encryption" for this
+/// machine; the engine enforces the same rule, so a synced or uploaded account setting can't
+/// make a device send its password in the clear.
+public enum TransportPolicy {
+    /// Extra hosts allowed without TLS, set once at startup (the push server's
+    /// `TIDINGS_PLAINTEXT_HOSTS`, for a test server on a private network).
+    nonisolated(unsafe) public static var additionalPlaintextHosts: Set<String> = []
+
+    public static func allowsPlaintext(host: String) -> Bool {
+        let host = host.lowercased()
+        return ["127.0.0.1", "localhost", "::1"].contains(host) || additionalPlaintextHosts.contains(host)
+    }
+}

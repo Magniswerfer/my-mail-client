@@ -218,13 +218,10 @@ public enum PhishingCheck {
 
     /// (shown domain, actual domain) for anchors whose text looks like a URL/domain on another site.
     static func mismatchedLinks(in html: String) -> [(String, String)] {
-        guard let regex = try? NSRegularExpression(pattern: #"<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>"#,
-                                                   options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
-        let ns = html as NSString
         var result: [(String, String)] = []
-        for match in regex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-            let href = ns.substring(with: match.range(at: 1))
-            let text = ns.substring(with: match.range(at: 2)).replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        for anchor in HTMLScan.elements("a", in: html) {
+            guard let href = Unsubscribe.href(in: anchor.open) else { continue }
+            let text = anchor.inner.replacingOccurrences(of: "<[^<>]+>", with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard let actualHost = URL(string: href)?.host()?.lowercased(),
                   let shownRange = text.range(of: #"^(https?://)?([a-z0-9-]+\.)+[a-z]{2,}"#, options: .regularExpression) else { continue }

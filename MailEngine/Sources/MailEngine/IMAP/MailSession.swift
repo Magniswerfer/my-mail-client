@@ -34,11 +34,14 @@ public struct SelectedMailbox: Sendable, Hashable {
 public enum MailSessionError: Error, CustomStringConvertible {
     case commandFailed(command: String, detail: String)
     case authenticationFailed(String)
+    /// No TLS to a host other than this machine: the password would go in the clear.
+    case plaintextRefused
 
     public var description: String {
         switch self {
         case .commandFailed(let command, let detail): "\(command) failed: \(detail)"
         case .authenticationFailed(let detail): "Login failed: \(detail)"
+        case .plaintextRefused: "That server setting has no encryption; refusing to send the password in the clear."
         }
     }
 }
@@ -94,6 +97,10 @@ public final class MailSession: Sendable {
         auth: IMAPAuthMethod = .login,
         _ body: nonisolated(nonsending) (MailSession) async throws -> Result
     ) async throws -> Result {
+        guard endpoint.useTLS || TransportPolicy.allowsPlaintext(host: endpoint.host) else {
+            IMAPDiagnostics.log("connect: refused: no TLS to \(endpoint.host)")
+            throw MailSessionError.plaintextRefused
+        }
         let profile = profile ?? ServerProfile.detect(host: endpoint.host)
         let configuration = IMAPConnection.Configuration(
             hostname: endpoint.host, port: endpoint.port, useTLS: endpoint.useTLS, logging: .noLogging

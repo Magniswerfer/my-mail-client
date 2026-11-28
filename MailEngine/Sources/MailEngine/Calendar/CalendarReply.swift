@@ -63,14 +63,19 @@ extension CalendarInvite {
         return message
     }
 
+    /// One content line. Parameters can come from the invite (RECURRENCE-ID's are echoed), so
+    /// names are reduced to iCalendar name characters and values kept on one line.
     static func property(_ name: String, _ parameters: [String: String], _ value: String) -> String {
         var line = name
-        for key in parameters.keys.sorted() {
-            let v = parameters[key] ?? ""
+        for rawKey in parameters.keys.sorted() {
+            let key = String(rawKey.unicodeScalars.filter { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-") }
+                .map(Character.init))
+            guard !key.isEmpty else { continue }
+            let v = HeaderText.singleLine(parameters[rawKey] ?? "")
             let needsQuotes = v.contains { ":;,".contains($0) } || v.contains(" ")
             line += ";\(key)=" + (needsQuotes ? "\"\(v.replacingOccurrences(of: "\"", with: "'"))\"" : v)
         }
-        return line + ":" + value
+        return line + ":" + HeaderText.singleLine(value)
     }
 
     static func utcStamp(_ date: Date) -> String {

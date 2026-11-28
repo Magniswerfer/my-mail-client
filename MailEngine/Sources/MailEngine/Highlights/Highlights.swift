@@ -56,8 +56,8 @@ public enum HighlightExtractor {
 
     static func jsonLD(_ html: String) -> [Highlight] {
         var results: [Highlight] = []
-        for match in html.matches(of: /(?is)<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>(.*?)<\/script>/) {
-            let json = HTMLText.decodeEntities(String(match.output.1))
+        for script in SchemaOrgEvents.scripts(in: html) {
+            let json = HTMLText.decodeEntities(script)
             guard let data = json.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) else { continue }
             for item in flatten(object) { if let h = highlight(item) { results.append(h) } }
         }

@@ -67,15 +67,16 @@ public enum MIMEBuilder {
         var headers: [String] = [
             "From: \(address(m.from))",
             "Date: \(rfc5322Date(m.date))",
-            "Message-ID: <\(m.messageID)>",
+            "Message-ID: <\(HeaderText.token(m.messageID))>",
             "Subject: \(encodeHeader(m.subject))",
         ]
         if !m.to.isEmpty { headers.append("To: \(m.to.map(address).joined(separator: ", "))") }
         if !m.cc.isEmpty { headers.append("Cc: \(m.cc.map(address).joined(separator: ", "))") }
-        if let parent = m.inReplyTo { headers.append("In-Reply-To: <\(parent)>") }
-        if !m.references.isEmpty { headers.append("References: \(m.references.map { "<\($0)>" }.joined(separator: " "))") }
+        if let parent = m.inReplyTo.map(HeaderText.token), !parent.isEmpty { headers.append("In-Reply-To: <\(parent)>") }
+        let references = m.references.map(HeaderText.token).filter { !$0.isEmpty }
+        if !references.isEmpty { headers.append("References: \(references.map { "<\($0)>" }.joined(separator: " "))") }
         headers.append("MIME-Version: 1.0")
-        headers.append("User-Agent: \(userAgent)")
+        headers.append("User-Agent: \(HeaderText.singleLine(userAgent))")
 
         let body = bodyPart(m)
         var lines = headers.map(fold)
@@ -135,35 +136,50 @@ public enum MIMEBuilder {
     }
 
     static func attachmentPart(_ a: OutgoingAttachment) -> Part {
-        let ascii = a.filename.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
+        let filename = HeaderText.singleLine(a.filename)
+        let ascii = filename.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
         let dispositionName = ascii
-            ? "filename=\"\(a.filename)\""
-            : "filename*=utf-8''\(a.filename.addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "attachment")"
+            ? "filename=\"\(filename)\""
+            : "filename*=utf-8''\(filename.addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "attachment")"
         var headers = [
-            fold("Content-Type: \(a.mimeType); name=\"\(ascii ? a.filename : encodeHeader(a.filename))\""),
+            fold("Content-Type: \(mimeType(a.mimeType)); name=\"\(ascii ? filename : encodeHeader(filename))\""),
             fold("Content-Disposition: \(a.contentID == nil ? "attachment" : "inline"); \(dispositionName)"),
             "Content-Transfer-Encoding: base64",
         ]
-        if let cid = a.contentID { headers.append("Content-ID: <\(cid)>") }
+        if let cid = a.contentID.map(HeaderText.token) { headers.append("Content-ID: <\(cid)>") }
         return Part(headers: headers, content: a.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn, .endLineWithLineFeed]) + "\r\n")
     }
 
     static let rfc2231Safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "!#$&+-.^_`|~"))
         .subtracting(CharacterSet(charactersIn: "æøåÆØÅ")).intersection(CharacterSet(charactersIn: Unicode.Scalar(0)...Unicode.Scalar(127)))
 
+    /// `type/subtype` as given when it's a plain MIME type, else `application/octet-stream`.
+    static func mimeType(_ s: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "!#$&^_.+-"))
+        let parts = s.split(separator: "/", omittingEmptySubsequences: false)
+        let valid = parts.count == 2 && parts.allSatisfy {
+            !$0.isEmpty && $0.unicodeScalars.allSatisfy { $0.isASCII && allowed.contains($0) }
+        }
+        return valid ? s : "application/octet-stream"
+    }
+
     // MARK: Headers
 
+    /// Every header value is kept on one line: names and subjects often come from received mail
+    /// (a reply's recipients, "Re: …"), which a sender controls.
     static func address(_ a: MailAddress) -> String {
-        guard let name = a.name, !name.isEmpty else { return a.address }
-        if !name.allSatisfy(\.isASCII) { return "\(encodeHeader(name)) <\(a.address)>" }
+        let addr = HeaderText.token(a.address)
+        guard let name = a.name.map(HeaderText.singleLine), !name.isEmpty else { return addr }
+        if !name.allSatisfy(\.isASCII) { return "\(encodeHeader(name)) <\(addr)>" }
         let needsQuotes = name.contains { "()<>[]:;@\\,.\"".contains($0) }
         let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        return needsQuotes ? "\"\(escaped)\" <\(a.address)>" : "\(name) <\(a.address)>"
+        return needsQuotes ? "\"\(escaped)\" <\(addr)>" : "\(name) <\(addr)>"
     }
 
     /// RFC 2047 B-encoding for non-ASCII header text, split so each encoded word stays short
-    /// and never cuts a UTF-8 sequence.
+    /// and never cuts a UTF-8 sequence. Control characters (CR, LF, …) become spaces first.
     public static func encodeHeader(_ s: String) -> String {
+        let s = HeaderText.singleLine(s)
         guard !s.allSatisfy(\.isASCII) else { return s }
         var words: [String] = []
         var chunk = ""

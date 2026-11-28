@@ -21,14 +21,16 @@ enum SchemaOrgEvents {
 
     // MARK: Markup
 
-    static let scriptPattern = try! NSRegularExpression(
-        pattern: #"<script[^>]*type\s*=\s*["']?application/ld\+json["']?[^>]*>(.*?)</script\s*>"#,
-        options: [.caseInsensitive, .dotMatchesLineSeparators])
+    static let ldJSONType = try! NSRegularExpression(
+        pattern: #"\btype\s*=\s*["']?application/ld\+json"#, options: [.caseInsensitive])
 
+    /// The JSON-LD blocks' text. A forward-only scan (`HTMLScan`): a lazy regex over the whole
+    /// body is quadratic on unclosed `<script` tags.
     static func scripts(in html: String) -> [String] {
-        let ns = html as NSString
-        return scriptPattern.matches(in: html, range: NSRange(location: 0, length: ns.length)).map {
-            var text = ns.substring(with: $0.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+        HTMLScan.elements("script", in: html).filter { element in
+            ldJSONType.firstMatch(in: element.open, range: NSRange(location: 0, length: (element.open as NSString).length)) != nil
+        }.map {
+            var text = $0.inner.trimmingCharacters(in: .whitespacesAndNewlines)
             // Some senders wrap it in an HTML comment or CDATA.
             for (open, close) in [("<!--", "-->"), ("<![CDATA[", "]]>")] where text.hasPrefix(open) && text.hasSuffix(close) {
                 text = String(text.dropFirst(open.count).dropLast(close.count))

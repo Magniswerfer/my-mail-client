@@ -35,10 +35,13 @@ public enum Unsubscribe {
             case "mailto":
                 let parts = URLComponents(string: entry)
                 let address = (parts?.path ?? "").removingPercentEncoding ?? ""
-                guard address.contains("@") else { continue }
+                // One plain address: a decoded CR/LF, ">", "," or space would otherwise reach the
+                // SMTP RCPT TO command and the To: header of a mail sent as the user.
+                guard HeaderText.isSafeAddress(address), address.filter({ $0 == "@" }).count == 1 else { continue }
                 let query = Dictionary((parts?.queryItems ?? []).map { ($0.name.lowercased(), $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
-                mails.append(.mail(to: address, subject: query["subject"].flatMap { $0.isEmpty ? nil : $0 } ?? "unsubscribe",
-                                   body: query["body"] ?? ""))
+                let subject = HeaderText.singleLine(query["subject"] ?? "").trimmingCharacters(in: .whitespaces)
+                mails.append(.mail(to: address, subject: subject.isEmpty ? "unsubscribe" : String(subject.prefix(200)),
+                                   body: String((query["body"] ?? "").prefix(2_000))))
             default: continue
             }
         }
@@ -62,18 +65,15 @@ public enum Unsubscribe {
 
     /// Links in the body whose text or address says unsubscribe, http(s) only, in order.
     public static func bodyLinks(html: String) -> [URL] {
-        guard let regex = try? NSRegularExpression(
-            pattern: #"<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>(.*?)</a\s*>"#,
-            options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
-        let ns = html as NSString
         var found: [URL] = []
-        for match in regex.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-            let hrefRange = match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2)
-            let href = ns.substring(with: hrefRange).replacingOccurrences(of: "&amp;", with: "&")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+        // A forward-only scan: a lazy `<a…>(.*?)</a>` regex is quadratic on unclosed anchors,
+        // and this runs when a message opens.
+        for anchor in HTMLScan.elements("a", in: html) {
+            guard let raw = href(in: anchor.open) else { continue }
+            let href = raw.replacingOccurrences(of: "&amp;", with: "&").trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: href), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { continue }
-            let text = ns.substring(with: match.range(at: 3))
-                .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            let text = anchor.inner
+                .replacingOccurrences(of: "<[^<>]+>", with: " ", options: .regularExpression)
                 .replacingOccurrences(of: "&nbsp;", with: " ")
                 .lowercased()
             let lowerHref = href.lowercased()
@@ -85,10 +85,61 @@ public enum Unsubscribe {
         return found
     }
 
-    public enum Failure: Error, Sendable { case status(Int) }
+    static let hrefPattern = try! NSRegularExpression(
+        pattern: #"\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#, options: [.caseInsensitive])
+
+    /// The `href` of an opening `<a …>` tag (quoted or not), as written.
+    static func href(in tag: String) -> String? {
+        let ns = tag as NSString
+        guard let match = hrefPattern.firstMatch(in: tag, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        for group in 1...3 where match.range(at: group).location != NSNotFound {
+            return ns.substring(with: match.range(at: group))
+        }
+        return nil
+    }
+
+    public enum Failure: Error, Sendable { case status(Int), unsafeTarget }
+
+    /// Doesn't follow redirects (RFC 8058 §3.2): the POST goes to the host the user confirmed.
+    final class NoRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+            completionHandler(nil)
+        }
+    }
+
+    public static let oneClickSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        return URLSession(configuration: configuration, delegate: NoRedirects(), delegateQueue: nil)
+    }()
+
+    /// True for hosts on this machine or the local network (by name or address literal): a
+    /// mail mustn't be able to make the app POST to the user's router or NAS.
+    public static func isLocalTarget(_ url: URL) -> Bool {
+        guard var host = url.host()?.lowercased() else { return true }
+        host = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") || host.hasSuffix(".internal")
+            || host.hasSuffix(".lan") || host.hasSuffix(".home.arpa") || !host.contains(".") && !host.contains(":") { return true }
+        let octets = host.split(separator: ".").compactMap { UInt8($0) }
+        if octets.count == 4, host.split(separator: ".").count == 4 {
+            switch (octets[0], octets[1]) {
+            case (0, _), (10, _), (127, _), (169, 254), (192, 168): return true
+            case (172, 16...31), (100, 64...127): return true
+            default: return false
+            }
+        }
+        if host.contains(":") {   // IPv6 literal: loopback, unique local, link-local, mapped v4
+            return host == "::1" || host == "::" || host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80")
+                || host.hasPrefix("::ffff:")
+        }
+        return false
+    }
 
     /// RFC 8058 one-click: POST `List-Unsubscribe=One-Click`, no cookies, no redirects to follow.
-    public static func postOneClick(_ url: URL, session: URLSession = .shared) async throws {
+    public static func postOneClick(_ url: URL, session: URLSession = oneClickSession) async throws {
+        guard url.scheme?.lowercased() == "https", !isLocalTarget(url) else { throw Failure.unsafeTarget }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.httpMethod = "POST"
         request.httpShouldHandleCookies = false

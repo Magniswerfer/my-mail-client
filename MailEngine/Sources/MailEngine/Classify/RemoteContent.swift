@@ -33,7 +33,7 @@ public enum RemoteContent {
     public static func prepare(_ html: String) -> PreparedHTML {
         var trackers = 0
         var remote = 0
-        var output = replacing(in: html, pattern: #"<img\b[^>]*>"#) { tag in
+        var output = replacing(in: html, pattern: #"<img\b[^<>]*>"#) { tag in
             if isTracker(imgTag: tag) { trackers += 1; return "" }
             if let src = attribute("src", in: tag), src.lowercased().hasPrefix("http") { remote += 1 }
             return tag
