@@ -74,7 +74,9 @@ enum Keychain {
     /// for this device). nil removes it.
     static func setDeviceSecret(_ value: String?, account: String) {
         SecItemDelete(item(account, synchronizable: false) as CFDictionary)
-        if let value { _ = write(value, to: item(account, synchronizable: false)) }
+        // ThisDeviceOnly: not in backups restored to another device either, so two devices
+        // never share one push-server identity.
+        if let value { _ = write(value, to: item(account, synchronizable: false), accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly) }
     }
 
     /// A secret your devices share through iCloud Keychain when sync is on (say the push
@@ -119,13 +121,14 @@ enum Keychain {
     }
 
     /// Update first: an item may already exist (deleting another tool's item can fail).
-    private static func write(_ password: String, to query: [String: Any]) -> OSStatus {
+    private static func write(_ password: String, to query: [String: Any],
+                              accessible: CFString = kSecAttrAccessibleAfterFirstUnlock) -> OSStatus {
         let data = Data(password.utf8)
         var status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
         if status == errSecItemNotFound {
             var add = query
             add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            add[kSecAttrAccessible as String] = accessible
             status = SecItemAdd(add as CFDictionary, nil)
         }
         return status

@@ -549,9 +549,17 @@ public final class MailSession: Sendable {
         return mapping
     }
 
+    static let maxCopyUIDMapping: UInt64 = 100_000
+
     /// Expands `[COPYUID validity src dst]` into an ordered old → new UID map.
     static func copyUIDMapping(_ code: ResponseTextCode?) -> [UInt32: UInt32] {
         guard case .uidCopy(let copy) = code else { return [:] }
+        // The ranges come from the server: `1:4294967295` would be a 16 GB array (and the move
+        // stays queued, so it would crash every launch). We never move more than this at once.
+        func count(_ ranges: [UIDRange]) -> UInt64 {
+            ranges.reduce(0) { $0 + UInt64($1.range.upperBound.rawValue) - UInt64($1.range.lowerBound.rawValue) + 1 }
+        }
+        guard count(copy.sourceUIDs) <= maxCopyUIDMapping, count(copy.destinationUIDs) <= maxCopyUIDMapping else { return [:] }
         func expand(_ ranges: [UIDRange]) -> [UInt32] {
             ranges.flatMap { r in Array(r.range.lowerBound.rawValue...r.range.upperBound.rawValue) }
         }

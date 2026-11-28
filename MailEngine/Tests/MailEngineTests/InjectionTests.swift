@@ -199,4 +199,20 @@ struct InjectionTests {
         m.autoSubmitted = "auto-replied"
         #expect(headerLines(MIMEBuilder.build(m)).contains("Auto-Submitted: auto-replied"))
     }
+
+    @Test func deeplyNestedCalendarsAreRefused() {
+        let deep = String(repeating: "BEGIN:VEVENT\r\n", count: 100_000)
+        #expect(ICalendar.parse("BEGIN:VCALENDAR\r\n" + deep).isEmpty)
+        #expect(ICalendar.parse("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nBEGIN:VALARM\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").count == 1)
+    }
+
+    @Test func oneBadCloudRecordDoesntStopTheBatch() throws {
+        let store = try MailStore(path: FileManager.default.temporaryDirectory.appendingPathComponent("cloud-\(UUID()).sqlite").path)
+        let now = Date()
+        let bad = StateRecord(type: StateRecordType.rule.rawValue, key: "r1", payload: Data("not json".utf8), modifiedAt: now)
+        let good = StateRecord(type: StateRecordType.imageTrust.rawValue, key: "@shop.dk", payload: Data("{}".utf8), modifiedAt: now)
+        let report = try store.applyCloudChanges(saves: [bad, good], deletions: [], accounts: CloudAccounts([]))
+        #expect(report.skipped == 1)
+        #expect(try store.allowsRemoteImages(from: "news@shop.dk", ownAddresses: []))
+    }
 }

@@ -98,6 +98,25 @@ public struct AboutCondition: Codable, Sendable, Hashable {
     }
 }
 
+extension RuleAction {
+    /// The action's kind, without its address, text or folder (for logs).
+    public var logName: String {
+        switch self {
+        case .setCategory: "category"
+        case .pin: "pin"
+        case .markRead: "markRead"
+        case .replyLater: "replyLater"
+        case .done: "done"
+        case .snooze: "snooze"
+        case .moveToFolder: "move"
+        case .notify: "notify"
+        case .forward: "forward"
+        case .autoReply: "autoReply"
+        case .runShortcut: "shortcut"
+        }
+    }
+}
+
 public enum RuleAction: Codable, Sendable, Hashable {
     case setCategory(MailCategory)
     case pin

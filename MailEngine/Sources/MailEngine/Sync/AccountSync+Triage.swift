@@ -371,11 +371,25 @@ extension AccountSync {
         }
     }
 
+    /// False when the server's UIDVALIDITY for `mailbox` differs from the one the stored UIDs
+    /// belong to (unknown on either side counts as unchanged).
+    func uidValidityUnchanged(_ selected: SelectedMailbox, mailbox: String) throws -> Bool {
+        guard let now = selected.uidValidity,
+              let saved = try store.mailboxStates(accountID: account.id).first(where: { $0.path == mailbox })?.uidValidity else { return true }
+        return saved == Int64(now)
+    }
+
     /// Moves each source mailbox's share of `items` to `target`, flag edits first.
     private func moveGroups(_ items: [QueuedAction.MoveItem], to target: String, add: [String], remove: [String],
                             _ session: MailSession) async throws {
         for (mailbox, group) in Dictionary(grouping: items, by: \.fromMailbox) {
-            _ = try await session.select(mailbox)
+            let selected = try await session.select(mailbox)
+            guard try uidValidityUnchanged(selected, mailbox: mailbox) else {
+                // The server renumbered this mailbox since the change was queued: these UIDs
+                // now name other messages. Drop the change; the next sync starts the mailbox over.
+                SyncLog.info("queue: \(mailbox) has a new UIDVALIDITY; dropped a queued move of \(group.count)")
+                continue
+            }
             let uids = group.map(\.fromUID).filter { $0 < provisionalUIDBase }
             if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
             if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
@@ -439,7 +453,11 @@ extension AccountSync {
                     SyncLog.info("flags: skipped \(mailbox), only provisional UIDs \(group.map(\.uid))")
                     continue
                 }
-                _ = try await session.select(mailbox)
+                let selected = try await session.select(mailbox)
+                guard try uidValidityUnchanged(selected, mailbox: mailbox) else {
+                    SyncLog.info("flags: \(mailbox) has a new UIDVALIDITY; dropped a queued flag change")
+                    continue
+                }
                 if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
                 if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
                 SyncLog.info("flags: \(mailbox) uids \(uids) +\(add) -\(remove)")

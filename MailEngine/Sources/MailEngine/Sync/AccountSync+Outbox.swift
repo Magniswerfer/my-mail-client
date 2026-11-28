@@ -61,8 +61,12 @@ extension AccountSync {
     /// Sends everything that's due. Runs on the sync loop's IMAP session (for the Sent copy and
     /// the \Answered flag); SMTP gets its own short-lived connection per message.
     func sendDue(_ session: MailSession) async throws {
-        for var item in try store.dueOutbox(accountID: account.id) {
-            guard let message = item.message, let id = item.id else { continue }
+        for listed in try store.dueOutbox(accountID: account.id) {
+            // Re-read each one: while the previous message was being sent (an await), this one
+            // may have been undone, edited or handed to the push server. Nothing awaits between
+            // this check and the save below, so the actor makes the two one step.
+            guard let id = listed.id, var item = try store.outboxItem(id: id), item.state == .queued,
+                  let sendAt = item.sendAt, sendAt <= Date(), let message = item.message else { continue }
             item.state = .sending
             item = try store.save(item)
             emit(.sending(outboxID: id))

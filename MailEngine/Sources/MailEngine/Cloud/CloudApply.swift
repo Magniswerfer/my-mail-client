@@ -18,7 +18,17 @@ extension MailStore {
                 report.skipped += 1
                 continue
             }
-            switch try apply(record, accounts: accounts, report: &report) {
+            // One bad record (a newer app's format, a damaged payload) mustn't stop the rest of
+            // the batch: the sync token moves on after it, so they'd never be applied.
+            let outcome: ApplyOutcome
+            do {
+                outcome = try apply(record, accounts: accounts, report: &report)
+            } catch {
+                SyncLog.cloud("skipped a \(record.type) record that didn't apply")
+                report.skipped += 1
+                continue
+            }
+            switch outcome {
             case .applied:
                 try db.write { db in
                     try db.execute(sql: "INSERT OR REPLACE INTO cloudShadow (type, key, payload) VALUES (?, ?, ?)",
