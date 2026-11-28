@@ -33,3 +33,22 @@ import Testing
         #expect(OutgoingHTML.plainTextLink(text: "anna@x.dk", href: "mailto:anna@x.dk") == "anna@x.dk")
     }
 }
+
+@Suite struct SubjectEncodingTests {
+    @Test func onlyTheWordsThatNeedItAreEncoded() {
+        #expect(MIMEBuilder.encodeText("Re: Møde i morgen") == "Re: =?utf-8?Q?M=C3=B8de?= i morgen")
+        #expect(MIMEBuilder.encodeText("Plain subject") == "Plain subject")
+        #expect(MIMEBuilder.encodeText("Re: Grøn æble") == "Re: =?utf-8?Q?Gr=C3=B8n_=C3=A6ble?=")
+    }
+
+    @Test func roundTripsThroughOurParser() {
+        let subjects = ["Re: Møde i morgen", "🎉🎉🎉 Fest på fredag 🎉", "Sv: Kære Åse — årsregnskab", "Tab\tand  two spaces ø",
+                        String(repeating: "Ø", count: 120), "a =?utf-8?B?SGVq?= b", " leading ø", "ø trailing "]
+        for subject in subjects {
+            let raw = MIMEBuilder.build(OutgoingMessage(from: MailAddress(name: nil, address: "a@x.dk"), to: [], subject: subject, text: "t"))
+            let expected = subject.replacingOccurrences(of: "\t", with: " ").trimmingCharacters(in: .whitespaces)
+            #expect(MIMEParser.parse(raw).subject == expected)
+            #expect(String(decoding: raw, as: UTF8.self).components(separatedBy: "\r\n").allSatisfy { $0.count <= 78 })
+        }
+    }
+}

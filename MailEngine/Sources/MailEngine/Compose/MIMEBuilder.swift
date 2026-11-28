@@ -88,7 +88,7 @@ public enum MIMEBuilder {
             // (RFC 5322 §3.6.3), and spam filters don't flag a missing To.
             headers.append("To: undisclosed-recipients:;")
         }
-        headers.append("Subject: \(encodeHeader(clean(m.subject)))")
+        headers.append("Subject: \(encodeText(clean(m.subject)))")
         headers.append("Message-ID: <\(messageID(m.messageID))>")
         if let parent = m.inReplyTo.map(messageID), !parent.isEmpty { headers.append("In-Reply-To: <\(parent)>") }
         let references = m.references.map(messageID).filter { !$0.isEmpty }
@@ -249,6 +249,59 @@ public enum MIMEBuilder {
             chunk.append(ch)
         }
         if !chunk.isEmpty { words.append("=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=") }
+        return words.joined(separator: " ")
+    }
+
+    /// Unstructured header text (a subject) the way Apple Mail and Gmail write it: plain
+    /// words stay readable, and only runs of words that need it become encoded words: Q for
+    /// mostly-Latin text ("Re: =?utf-8?Q?M=C3=B8de?= i morgen"), B for emoji and other scripts.
+    static func encodeText(_ s: String) -> String {
+        func needsEncoding(_ word: Substring) -> Bool { !word.allSatisfy(\.isASCII) || word.contains("=?") }
+        let words = s.split(separator: " ", omittingEmptySubsequences: false)
+        guard words.contains(where: needsEncoding) else { return s }
+        var out: [String] = []
+        var run: [Substring] = []
+        func flush() {
+            guard !run.isEmpty else { return }
+            out.append(encodedWords(run.joined(separator: " ")))
+            run = []
+        }
+        for word in words {
+            if needsEncoding(word) { run.append(word) } else { flush(); out.append(String(word)) }
+        }
+        flush()
+        return out.joined(separator: " ")
+    }
+
+    /// `text` as encoded words of at most 64 characters each, never cutting a character.
+    static func encodedWords(_ text: String) -> String {
+        let qSafe = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!*+-/".utf8)
+        func q(_ ch: Character) -> String {
+            String(ch).utf8.map { byte in
+                byte == 32 ? "_" : qSafe.contains(byte) ? String(UnicodeScalar(byte)) : String(format: "=%02X", byte)
+            }.joined()
+        }
+        let qLength = text.reduce(0) { $0 + q($1).count }
+        // Q keeps mostly-Latin text legible; B is far shorter for emoji and non-Latin scripts.
+        let bLength = (text.utf8.count + 2) / 3 * 4
+        let useQ = qLength <= bLength * 3 / 2
+        let budget = 64 - "=?utf-8?Q??=".count
+        var words: [String] = []
+        var chunk = ""
+        var chunkBytes = Data()
+        func emit() {
+            guard !chunk.isEmpty || !chunkBytes.isEmpty else { return }
+            words.append(useQ ? "=?utf-8?Q?\(chunk)?=" : "=?utf-8?B?\(chunkBytes.base64EncodedString())?=")
+            chunk = ""; chunkBytes = Data()
+        }
+        for ch in text {
+            let bytes = Data(String(ch).utf8)
+            let fits = useQ ? chunk.count + q(ch).count <= budget : (chunkBytes.count + bytes.count + 2) / 3 * 4 <= budget
+            if !fits { emit() }
+            if useQ { chunk += q(ch) }
+            chunkBytes += bytes
+        }
+        emit()
         return words.joined(separator: " ")
     }
 
