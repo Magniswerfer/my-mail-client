@@ -158,6 +158,7 @@ public final class MailStore: Sendable {
         registerSignatureMigrations(&m)
         registerHighlightTrainingMigrations(&m)
         registerReactionIndexMigrations(&m)
+        registerMailboxIndexMigrations(&m)
         return m
     }
 

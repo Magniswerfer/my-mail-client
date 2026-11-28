@@ -41,6 +41,8 @@ public struct SearchFacets: Sendable {
 public struct SearchEngine: Sendable {
     public let store: MailStore
     public var senderSampleSize = 2_000
+    /// How many of the newest sender matches the person card weighs (see `contact(for:)`).
+    public var contactSampleSize = 1_000
 
     public init(store: MailStore) { self.store = store }
 
