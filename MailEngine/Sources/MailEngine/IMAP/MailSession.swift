@@ -15,6 +15,17 @@ public struct MailboxListing: Sendable, Hashable {
         self.separator = separator
         self.attributes = attributes
     }
+
+    /// LIST attributes are case-insensitive (RFC 3501 §7.2.2): `\Noselect`, `\NoSelect`.
+    func has(attribute: String) -> Bool {
+        attributes.contains { $0.caseInsensitiveCompare(attribute) == .orderedSame }
+    }
+
+    /// `\Noselect`: a hierarchy placeholder that holds no messages.
+    var isSelectable: Bool { !has(attribute: "\\Noselect") }
+
+    /// `\Noinferiors`: can't hold subfolders.
+    var canHoldSubfolders: Bool { !has(attribute: "\\Noinferiors") }
 }
 
 /// State reported by SELECT/EXAMINE.
@@ -81,7 +92,7 @@ public final class MailSession: Sendable {
             if caps.isEmpty {
                 caps = try await Self.fetchCapabilities(connection)
             }
-            _ = try? await connection.send(.logout) { _, responses in try await responses.waitForCompletion() }
+            await logOut(connection)
             return caps
         }
     }
@@ -121,7 +132,7 @@ public final class MailSession: Sendable {
             )
             try await session.enableExtensions()
             let result = try await body(session)
-            _ = try? await connection.send(.logout) { _, responses in try await responses.waitForCompletion() }
+            await logOut(connection)
             return result
             }
         } catch let error as MailSessionError {
@@ -131,6 +142,11 @@ public final class MailSession: Sendable {
             IMAPDiagnostics.log("connect: failed: \(Self.sanitized(error))")
             throw error
         }
+    }
+
+    /// Polite, not required: the connection closes either way.
+    private static func logOut(_ connection: IMAPConnection) async {
+        _ = try? await connection.send(.logout) { _, responses in try await responses.waitForCompletion() }
     }
 
     private static func capabilities(in status: UntaggedStatus) -> [String] {
@@ -165,8 +181,8 @@ public final class MailSession: Sendable {
         capability.value.map { "\(capability.name)=\($0)" } ?? capability.name
     }
 
-    /// Enables CONDSTORE/QRESYNC. iCloud answers with a bare OK (no `* ENABLED`),
-    /// which `ServerProfile.enableOmitsEnabledResponse` tells us to accept.
+    /// `ENABLE` succeeded for CONDSTORE and/or QRESYNC (despite the name, either counts), so
+    /// SELECT needs no `(CONDSTORE)` parameter.
     public private(set) var qresyncEnabled: Bool {
         get { _qresyncEnabled.withLock { $0 } }
         set { _qresyncEnabled.withLock { $0 = newValue } }
@@ -193,6 +209,8 @@ public final class MailSession: Sendable {
     public var selected: SelectedMailbox? { _selected.withLock { $0 } }
     let _selected = Mutex<SelectedMailbox?>(nil)
 
+    /// Enables CONDSTORE/QRESYNC. iCloud answers with a bare OK (no `* ENABLED`),
+    /// which `ServerProfile.enableOmitsEnabledResponse` tells us to accept.
     private func enableExtensions() async throws {
         // CONDSTORE works without ENABLE (SELECT … (CONDSTORE)); QRESYNC needs it.
         if supports("CONDSTORE") { resyncMode = .condStore }
@@ -406,15 +424,7 @@ public final class MailSession: Sendable {
     /// Use this instead of `uidSearch(header:)` on iCloud: `UID SEARCH HEADER` there fails with
     /// `NO [UNAVAILABLE] Unexpected exception` (live server, 2026-11-24).
     public func fetchHeaderField(_ field: String, uids: [UInt32]? = nil) async throws -> [UInt32: String] {
-        let set: LastCommandSet<UID>
-        if let uids {
-            guard let s = Self.uidSet(uids) else { return [:] }
-            set = s
-        } else {
-            if selected?.exists == 0 { return [:] }
-            let all = MessageIdentifierSet<UID>(UID(rawValue: 1)...UID.max)
-            set = .set(MessageIdentifierSetNonEmpty(set: all)!)
-        }
+        guard let set = uidSetOrAll(uids) else { return [:] }
         return try await fetchHeaderField(field, set: set)
     }
 
@@ -423,7 +433,12 @@ public final class MailSession: Sendable {
         let responses = try await run(
             .uidFetch(set, [.uid, .bodySection(peek: true, section, nil)], []), name: "UID FETCH HEADER.FIELDS"
         )
-        var result: [UInt32: String] = [:]
+        return Self.bodySections(in: responses).mapValues { Self.headerValue(field, in: String(buffer: $0)) }
+    }
+
+    /// The body bytes each message streamed in a `UID FETCH … BODY[…]` answer, by UID.
+    static func bodySections(in responses: [Response]) -> [UInt32: ByteBuffer] {
+        var result: [UInt32: ByteBuffer] = [:]
         var uid: UInt32?
         var bytes = ByteBuffer()
         for response in responses {
@@ -436,7 +451,7 @@ public final class MailSession: Sendable {
             case .simpleAttribute(.uid(let u)): uid = u.rawValue
             case .streamingBytes(var chunk): bytes.writeBuffer(&chunk)
             case .finish:
-                if let uid { result[uid] = Self.headerValue(field, in: String(buffer: bytes)) }
+                if let uid { result[uid] = bytes }
             default: break
             }
         }
@@ -446,8 +461,7 @@ public final class MailSession: Sendable {
     /// `fetchHeaderField` for every message with UID ≥ `fromUID` (e.g. "what arrived since").
     public func fetchHeaderField(_ field: String, fromUID: UInt32) async throws -> [UInt32: String] {
         if selected?.exists == 0 { return [:] }
-        let range = MessageIdentifierSet<UID>(UID(rawValue: max(1, fromUID))...UID.max)
-        return try await fetchHeaderField(field, set: .set(MessageIdentifierSetNonEmpty(set: range)!))
+        return try await fetchHeaderField(field, set: Self.uidSet(from: fromUID))
             .filter { $0.key >= fromUID }   // "n:*" also matches the last message when n is past the end
     }
 
@@ -562,6 +576,19 @@ public final class MailSession: Sendable {
         }
         try await store(uids: uids, .add, flags: ["\\Deleted"])
         try await run(.uidExpunge(set), name: "UID EXPUNGE")
+    }
+
+    /// `n:*`: every UID from `first` on.
+    static func uidSet(from first: UInt32) -> LastCommandSet<UID> {
+        let range = MessageIdentifierSet<UID>(UID(rawValue: max(1, first))...UID.max)
+        return .set(MessageIdentifierSetNonEmpty(set: range)!)
+    }
+
+    /// `uids`, or every message in the selected mailbox when nil; nil when that's nothing.
+    func uidSetOrAll(_ uids: [UInt32]?) -> LastCommandSet<UID>? {
+        if let uids { return Self.uidSet(uids) }
+        if selected?.exists == 0 { return nil }
+        return Self.uidSet(from: 1)
     }
 
     static func uidSet(_ uids: [UInt32]) -> LastCommandSet<UID>? {

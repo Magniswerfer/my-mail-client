@@ -25,9 +25,14 @@ public struct KeywordTest: Sendable {
     /// nil = detect from host. Use `.iCloudSimulation` to run iCloud's code paths against Dovecot.
     public var profile: ServerProfile?
     /// How many extra keywords to try when probing for a cap. Kept small to be polite.
-    public var capProbeLimit: Int = 40
+    public var capProbeLimit: Int
+    public static let defaultCapProbeLimit = 40
 
-    public init(endpoint: IMAPEndpoint, password: String, profile: ServerProfile? = nil, capProbeLimit: Int = 40) {
+    /// The keyword the test stores: one of ours, so it behaves like Tidings' real state.
+    static let testKeyword = "$TidingsPinned"
+
+    public init(endpoint: IMAPEndpoint, password: String, profile: ServerProfile? = nil,
+                capProbeLimit: Int = KeywordTest.defaultCapProbeLimit) {
         self.profile = profile
         self.endpoint = endpoint
         self.password = password
@@ -36,7 +41,7 @@ public struct KeywordTest: Sendable {
 
     public func run(log: @Sendable (String) -> Void = { _ in }) async throws -> Report {
         let runID = "probe-" + UUID().uuidString.prefix(8).lowercased()
-        let keyword = "$TidingsPinned"
+        let keyword = Self.testKeyword
         var steps: [Step] = []
         func record(_ name: String, _ passed: Bool, _ detail: String, informational: Bool = false) {
             steps.append(Step(name: name, passed: passed, detail: detail, informational: informational))

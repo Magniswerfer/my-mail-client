@@ -8,6 +8,17 @@ extension AccountSync {
     enum SentCopyPolicy: String { case server, client }
     static let sentCopyKey = "sentCopyPolicy"
 
+    /// Where a copy of sent mail goes when the account has no Sent folder yet (iCloud's name).
+    static let fallbackSentFolder = "Sent Messages"
+
+    /// Transient SMTP failures are retried this many times in all, with exponential backoff.
+    static let maxSendAttempts = 6
+    static let firstRetryDelay: TimeInterval = 30
+    static let maxRetryDelay: TimeInterval = 3600
+
+    /// The pauses while watching Sent for the server's own copy on the first send (~12 s in all).
+    static let serverCopyChecks: [Duration] = [.seconds(2), .seconds(4), .seconds(6)]
+
     // MARK: Queueing
 
     /// Queues a message. It sends at `sendAt` (now + the undo window by default), so until then
@@ -68,7 +79,7 @@ extension AccountSync {
             emit(.sending(outboxID: id))
 
             let raw = MIMEBuilder.build(message)
-            let sentPath = try path(for: .sent) ?? "Sent Messages"
+            let sentPath = try path(for: .sent) ?? Self.fallbackSentFolder
             let policy = (try store.setting(Self.sentCopyKey, accountID: account.id)).flatMap(SentCopyPolicy.init)
             let sentBefore = policy == nil ? try? await session.select(sentPath, readOnly: true).uidNext : nil
 
@@ -76,19 +87,7 @@ extension AccountSync {
                 try await SMTPClient.send(endpoint: smtpEndpoint, password: password, from: message.from.address,
                                           recipients: message.envelopeRecipients, message: raw)
             } catch {
-                // SMTP 4xx, timeouts and network errors (refused, offline) are retried with
-                // backoff; 5xx and auth errors wait for the user.
-                let smtpError = error as? SMTPError
-                let transient = smtpError?.isTransient ?? true
-                item.attempts += 1
-                item.lastError = smtpError?.description ?? error.localizedDescription
-                if transient, item.attempts < 6 {
-                    item.state = .queued
-                    item.sendAt = Date().addingTimeInterval(min(3600, 30 * pow(2, Double(item.attempts - 1))))
-                } else {
-                    item.state = .failed
-                }
-                try store.save(item)
+                try recordSendFailure(error, of: &item)
                 emit(.sendFailed(outboxID: id, message: item.lastError ?? ""))
                 continue
             }
@@ -96,33 +95,66 @@ extension AccountSync {
             // Sent. From here on nothing may re-send it: drop it from the outbox first.
             try store.deleteOutboxItem(id: id)
             emit(.sent(outboxID: id))
-            try await fileSentCopy(raw: raw, messageID: message.messageID, sentPath: sentPath, policy: policy,
-                                   uidNextBefore: sentBefore ?? nil, session: session)
+            do {
+                try await fileSentCopy(raw: raw, messageID: message.messageID, sentPath: sentPath, policy: policy,
+                                       uidNextBefore: sentBefore ?? nil, session: session)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // The mail is out: a missing Sent copy mustn't also lose the \Answered mark.
+                SyncLog.info("sent \(id), but filing the Sent copy failed: \(error)")
+            }
             try markOriginal(item)
         }
+    }
+
+    /// SMTP 4xx, timeouts and network errors (refused, offline) are retried with backoff; 5xx
+    /// and auth errors wait for the user.
+    private func recordSendFailure(_ error: any Error, of item: inout OutboxItem) throws {
+        let smtpError = error as? SMTPError
+        let transient = smtpError?.isTransient ?? true
+        item.attempts += 1
+        item.lastError = smtpError?.description ?? error.localizedDescription
+        if transient, item.attempts < Self.maxSendAttempts {
+            item.state = .queued
+            let delay = min(Self.maxRetryDelay, Self.firstRetryDelay * pow(2, Double(item.attempts - 1)))
+            item.sendAt = Date().addingTimeInterval(delay)
+        } else {
+            item.state = .failed
+        }
+        try store.save(item)
     }
 
     /// Puts a copy in Sent unless the server already does (learned once, then remembered).
     func fileSentCopy(raw: Data, messageID: String, sentPath: String, policy: SentCopyPolicy?,
                       uidNextBefore: UInt32?, session: MailSession) async throws {
-        var policy = policy
-        if policy == nil {
-            policy = .client
-            if let from = uidNextBefore {
-                for delay in [2, 4, 6] {   // give the server ~12 s to file its own copy
-                    try await Task.sleep(for: .seconds(delay))
-                    _ = try await session.select(sentPath, readOnly: true)
-                    let ids = try await session.fetchHeaderField("Message-ID", fromUID: from)
-                    if ids.values.contains(where: { $0.contains(messageID) }) { policy = .server; break }
-                }
-            }
-            try store.setSetting(Self.sentCopyKey, policy!.rawValue, accountID: account.id)
+        let policy = if let policy { policy } else {
+            try await learnSentCopyPolicy(messageID: messageID, sentPath: sentPath, uidNextBefore: uidNextBefore, session: session)
         }
         if policy == .client {
             try await session.ensureMailbox(sentPath)
-            try await session.append(to: sentPath, message: raw, flags: ["\\Seen"])
+            _ = try await session.append(to: sentPath, message: raw, flags: ["\\Seen"])
         }
     }
+
+    /// Watches Sent for the server's own copy of the message just sent, and remembers the answer.
+    private func learnSentCopyPolicy(messageID: String, sentPath: String, uidNextBefore: UInt32?,
+                                     session: MailSession) async throws -> SentCopyPolicy {
+        var learned = SentCopyPolicy.client
+        if let from = uidNextBefore {
+            for delay in Self.serverCopyChecks {
+                try await Task.sleep(for: delay)
+                _ = try await session.select(sentPath, readOnly: true)
+                let ids = try await session.fetchHeaderField("Message-ID", fromUID: from)
+                if ids.values.contains(where: { $0.contains(messageID) }) { learned = .server; break }
+            }
+        }
+        try store.setSetting(Self.sentCopyKey, learned.rawValue, accountID: account.id)
+        return learned
+    }
+
+    /// The keyword other clients (Apple Mail, Thunderbird) show as "forwarded".
+    static let forwardedKeyword = "$Forwarded"
 
     /// Replied → \Answered, forwarded → $Forwarded, through the normal triage queue.
     func markOriginal(_ item: OutboxItem) throws {
@@ -130,7 +162,7 @@ extension AccountSync {
         // A reply sent from another account's address: the original isn't ours to flag (its
         // local id means nothing on this account's server).
         guard (try? store.message(id: original))?.accountID == account.id else { return }
-        let flag = item.kind == .forward ? "$Forwarded" : "\\Answered"
+        let flag = item.kind == .forward ? Self.forwardedKeyword : "\\Answered"
         try store.db.write { db in
             try store.applyLocalFlags(localIDs: [original], add: [flag], remove: [], in: db)
             try store.enqueue(.flags(localIDs: [original], add: [flag], remove: []),

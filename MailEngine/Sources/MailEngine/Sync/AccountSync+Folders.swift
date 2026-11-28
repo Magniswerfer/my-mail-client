@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 
 /// Why a folder change was refused. The app words these; the engine only says which.
 public enum FolderError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -78,10 +77,14 @@ public enum FolderPath {
         return to + path.dropFirst(from.count)
     }
 
-    /// Checks a name typed for a new or renamed folder; returns it trimmed.
+    /// A sane bound on a typed name; servers' own limits are higher.
+    static let maxNameLength = 200
+
+    /// Checks a name typed for a new or renamed folder; returns it trimmed. `*` and `%` are
+    /// LIST wildcards (RFC 3501 §6.3.8); quotes and backslashes need escaping some servers get wrong.
     public static func validated(_ name: String, separator: Character?) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= 200,
+        guard !trimmed.isEmpty, trimmed.count <= maxNameLength,
               !trimmed.contains(where: { $0 == "*" || $0 == "%" || $0.isNewline || $0 == "\"" || $0 == "\\" }),
               trimmed.uppercased() != "INBOX" else { throw FolderError.invalidName }
         if let separator, trimmed.contains(separator) { throw FolderError.containsSeparator(separator) }
@@ -148,13 +151,7 @@ extension AccountSync {
             let separator = Self.hierarchySeparator(in: listing)
             let prefix = try await personalPrefix(session, listing: listing)
             let clean = try FolderPath.validated(name, separator: separator)
-            if let parent {
-                guard separator != nil else { throw FolderError.noSubfolders }
-                guard let box = listing.first(where: { $0.path == parent }) else { throw FolderError.notFound(parent) }
-                if box.attributes.contains(where: { $0.caseInsensitiveCompare("\\Noinferiors") == .orderedSame }) {
-                    throw FolderError.noSubfolders
-                }
-            }
+            if let parent { try Self.checkCanHoldSubfolders(parent, listing: listing, separator: separator) }
             let path = FolderPath.child(named: clean, of: parent, separator: separator, prefix: prefix)
             if listing.contains(where: { $0.path.caseInsensitiveCompare(path) == .orderedSame }) {
                 throw FolderError.alreadyExists(path)
@@ -198,10 +195,7 @@ extension AccountSync {
             if let parent {
                 guard separator != nil else { throw FolderError.noSubfolders }
                 guard !FolderPath.isWithin(parent, path, separator: separator) else { throw FolderError.intoItself }
-                guard let box = listing.first(where: { $0.path == parent }) else { throw FolderError.notFound(parent) }
-                if box.attributes.contains(where: { $0.caseInsensitiveCompare("\\Noinferiors") == .orderedSame }) {
-                    throw FolderError.noSubfolders
-                }
+                try Self.checkCanHoldSubfolders(parent, listing: listing, separator: separator)
             }
             let target = FolderPath.child(named: FolderPath.name(of: path, separator: separator), of: parent,
                                           separator: separator, prefix: prefix)
@@ -271,6 +265,12 @@ extension AccountSync {
         }
     }
 
+    static func checkCanHoldSubfolders(_ parent: String, listing: [MailboxListing], separator: Character?) throws {
+        guard separator != nil else { throw FolderError.noSubfolders }
+        guard let box = listing.first(where: { $0.path == parent }) else { throw FolderError.notFound(parent) }
+        guard box.canHoldSubfolders else { throw FolderError.noSubfolders }
+    }
+
     /// Refuses INBOX always, and special folders (or a folder holding one) unless allowed.
     func checkChangeable(_ path: String, listing: [MailboxListing], allowSpecial: Bool) throws {
         guard path.uppercased() != "INBOX" else { throw FolderError.inbox }
@@ -312,91 +312,8 @@ extension AccountSync {
                                uniquingKeysWith: { a, _ in a })
         for old in affected {
             guard let new = FolderPath.renamed(old, from: from, to: to, separator: separator),
-                  let box = listing.first(where: { $0.path == old }),
-                  !box.attributes.contains(where: { $0.caseInsensitiveCompare("\\Noselect") == .orderedSame }) else { continue }
+                  let box = listing.first(where: { $0.path == old }), box.isSelectable else { continue }
             try await syncMailbox(session, path: new, role: roles[new])
-        }
-    }
-}
-
-extension MailStore {
-    /// Local side of a RENAME: `from` and everything inside it become `to…`.
-    func renameMailbox(accountID: String, from: String, to: String, separator: Character?) throws {
-        let sep = separator.map(String.init) ?? ""
-        // Leftovers under the new name (from an earlier folder there) would clash.
-        for stale in try mailboxStates(accountID: accountID) where FolderPath.isWithin(stale.path, to, separator: separator) {
-            try deleteMailbox(accountID: accountID, mailbox: stale.path)
-        }
-        func within(_ column: String) -> String {
-            "(\(column) = :from OR (:sep <> '' AND substr(\(column), 1, length(:from) + length(:sep)) = :from || :sep))"
-        }
-        let args: StatementArguments = ["from": from, "to": to, "sep": sep, "account": accountID]
-        try db.write { db in
-            try db.execute(sql: "UPDATE message SET mailbox = :to || substr(mailbox, length(:from) + 1) WHERE accountID = :account AND \(within("mailbox"))",
-                           arguments: args)
-            try db.execute(sql: "UPDATE mailboxState SET path = :to || substr(path, length(:from) + 1) WHERE accountID = :account AND \(within("path"))",
-                           arguments: args)
-            // Queued actions that still name the old folder (queued while the rename ran).
-            try rewritePending(db, accountID: accountID) { path in
-                FolderPath.renamed(path, from: from, to: to, separator: separator) ?? path
-            }
-        }
-    }
-
-    /// Queued actions moving mail out of or into a deleted folder can't run any more.
-    func dropPending(accountID: String, inside path: String, separator: Character?) throws {
-        try db.write { db in
-            for pending in try PendingAction.filter(Column("accountID") == accountID).fetchAll(db) {
-                guard case .move(let items, let target, _, _, _)? = pending.action else { continue }
-                if FolderPath.isWithin(target, path, separator: separator)
-                    || items.contains(where: { FolderPath.isWithin($0.fromMailbox, path, separator: separator) }) {
-                    _ = try pending.delete(db)
-                }
-            }
-        }
-    }
-
-    private func rewritePending(_ db: Database, accountID: String, _ map: (String) -> String) throws {
-        for var pending in try PendingAction.filter(Column("accountID") == accountID).fetchAll(db) {
-            guard case .move(let items, let target, let add, let remove, let create)? = pending.action else { continue }
-            let newItems = items.map { QueuedAction.MoveItem(localID: $0.localID, fromMailbox: map($0.fromMailbox), fromUID: $0.fromUID) }
-            let rewritten = QueuedAction.move(items: newItems, to: map(target), addFlags: add, removeFlags: remove, createTarget: create)
-            guard rewritten != pending.action else { continue }
-            pending.payload = try JSONEncoder().encode(rewritten)
-            try pending.update(db)
-        }
-    }
-}
-
-extension MessageCache {
-    func renameMailbox(_ old: String, to new: String, account: String) {
-        let from = url(account: account, mailbox: old, validity: 0, uid: 0).deletingLastPathComponent()
-        let to = url(account: account, mailbox: new, validity: 0, uid: 0).deletingLastPathComponent()
-        guard FileManager.default.fileExists(atPath: from.path) else { return }
-        try? FileManager.default.removeItem(at: to)
-        try? FileManager.default.moveItem(at: from, to: to)
-    }
-
-    func removeMailbox(_ mailbox: String, account: String) {
-        guard !account.isEmpty, !account.contains("/") else { return }
-        try? FileManager.default.removeItem(at: url(account: account, mailbox: mailbox, validity: 0, uid: 0).deletingLastPathComponent())
-    }
-}
-
-extension MailStore {
-    /// "Use as Archive": remembered for the account, and the folder takes the role now if it's
-    /// already known here (from you, or from another device through iCloud).
-    func useFolder(_ path: String?, for role: MailboxRole, accountID: String) throws {
-        guard AccountSync.choosableRoles.contains(role) else { return }
-        try setSetting(AccountSync.roleChoiceKey(role), path ?? "", accountID: accountID)
-        guard let path else { return }
-        try db.write { db in
-            guard try Bool.fetchOne(db, sql: "SELECT 1 FROM mailboxState WHERE accountID = ? AND path = ?",
-                                    arguments: [accountID, path]) == true else { return }
-            try db.execute(sql: "UPDATE mailboxState SET role = NULL WHERE accountID = ? AND role = ?",
-                           arguments: [accountID, role.rawValue])
-            try db.execute(sql: "UPDATE mailboxState SET role = ? WHERE accountID = ? AND path = ?",
-                           arguments: [role.rawValue, accountID, path])
         }
     }
 }

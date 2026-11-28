@@ -37,10 +37,10 @@ extension MailStore {
             let gone = try threads.filter {
                 try Int.fetchOne(db, sql: "SELECT count(*) FROM message WHERE threadID = ?", arguments: [$0]) == 0
             }
-            for chunk in stride(from: 0, to: gone.count, by: 500).map({ Array(gone[$0..<min($0 + 500, gone.count)]) }) {
-                let marks = chunk.map { _ in "?" }.joined(separator: ",")
+            for batch in gone.sqlBatches() {
                 for table in ["threadDigest", "mutedThread", "aiCategoryMember"] {
-                    try db.execute(sql: "DELETE FROM \(table) WHERE threadID IN (\(marks))", arguments: StatementArguments(chunk))
+                    try db.execute(sql: "DELETE FROM \(table) WHERE threadID IN (\(batch.sqlPlaceholders))",
+                                   arguments: StatementArguments(Array(batch)))
                 }
             }
         }
@@ -62,9 +62,9 @@ extension MailStore {
         guard !threadIDs.isEmpty else { return [:] }
         return try db.read { db in
             var result: [String: Set<String>] = [:]
-            for chunk in stride(from: 0, to: threadIDs.count, by: 500).map({ Array(threadIDs[$0..<min($0 + 500, threadIDs.count)]) }) {
-                var sql = "SELECT DISTINCT threadID, accountID FROM message WHERE threadID IN (\(chunk.map { _ in "?" }.joined(separator: ",")))"
-                var args: [any DatabaseValueConvertible] = chunk
+            for batch in threadIDs.sqlBatches() {
+                var sql = "SELECT DISTINCT threadID, accountID FROM message WHERE threadID IN (\(batch.sqlPlaceholders))"
+                var args: [any DatabaseValueConvertible] = Array(batch)
                 if let mailbox { sql += " AND mailbox = ?"; args.append(mailbox) }
                 for row in try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? })) {
                     result[row["threadID"], default: []].insert(row["accountID"])

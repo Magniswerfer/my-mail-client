@@ -206,12 +206,15 @@ public final class MailStore: Sendable {
     }
 
     public func delete(ids: [Int64]) throws {
-        try db.write { db in
-            for id in ids {
-                guard let key = try Int64.fetchOne(db, sql: "SELECT sortKey FROM message WHERE id = ?", arguments: [id]) else { continue }
-                try db.execute(sql: "DELETE FROM message_fts WHERE rowid = ?", arguments: [key])
-                try db.execute(sql: "DELETE FROM message WHERE id = ?", arguments: [id])
-            }
+        try db.write { try deleteRowsIn($0, ids: ids) }
+    }
+
+    /// Deletes messages and their search-index entries inside the caller's transaction.
+    func deleteRowsIn(_ db: Database, ids: [Int64]) throws {
+        for id in ids {
+            guard let key = try Int64.fetchOne(db, sql: "SELECT sortKey FROM message WHERE id = ?", arguments: [id]) else { continue }
+            try db.execute(sql: "DELETE FROM message_fts WHERE rowid = ?", arguments: [key])
+            try db.execute(sql: "DELETE FROM message WHERE id = ?", arguments: [id])
         }
     }
 
@@ -219,13 +222,15 @@ public final class MailStore: Sendable {
         try db.read { try StoredMessage.fetchCount($0) }
     }
 
+    static let previewLength = 160
+
     /// The first words of what this message itself says. Quoted replies ("> …"), attribution
     /// lines ("On … wrote:", "Den … skrev …:") and forwarded/original-message blocks are left out.
     static func makePreview(_ text: String) -> String {
         let kept = ownLines(text)
         let collapsed = kept.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
         let result = collapsed.isEmpty ? text.split(whereSeparator: \.isWhitespace).joined(separator: " ") : collapsed
-        return String(result.prefix(160))
+        return String(result.prefix(previewLength))
     }
 
     /// The lines the sender wrote themselves: no "> " quotes, attribution lines, or the
@@ -317,6 +322,7 @@ public enum SortKey {
     static let categoryShift: Int64 = 21
     static let attachmentShift: Int64 = 20
     static let lowMask: Int64 = (1 << 20) - 1
+    static let categoryMask: Int64 = 0b111
 
     static let categoryCodes: [MailCategory: Int64] = [
         .primary: 0, .transactions: 1, .updates: 2, .newsletters: 3, .advertising: 4, .social: 5,
@@ -339,7 +345,7 @@ public enum SortKey {
     static func withLowBits(_ key: Int64, _ bits: Int64) -> Int64 { (key & ~lowMask) | (bits & lowMask) }
 
     /// SQL fragments over a rowid column.
-    static func categorySQL(_ column: String) -> String { "((\(column) >> \(categoryShift)) & 7)" }
+    static func categorySQL(_ column: String) -> String { "((\(column) >> \(categoryShift)) & \(categoryMask))" }
     static func attachmentSQL(_ column: String) -> String { "((\(column) >> \(attachmentShift)) & 1)" }
     static func yearSQL(_ column: String) -> String { "strftime('%Y', \(column) >> \(secondsShift), 'unixepoch')" }
 }

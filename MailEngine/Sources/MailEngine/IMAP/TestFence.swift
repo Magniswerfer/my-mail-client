@@ -22,11 +22,15 @@ public struct TestFence: Sendable {
     public enum Violation: Error, CustomStringConvertible {
         case mailboxOutsideFence(String)
         case unmarkedMessages([UInt32])
+        /// The mailbox named isn't the one selected, so a marker check would vouch for the wrong one.
+        case mailboxNotSelected(named: String, selected: String?)
 
         public var description: String {
             switch self {
             case .mailboxOutsideFence(let box): "Refusing to touch mailbox '\(box)': outside \(TestFence.rootMailbox)."
             case .unmarkedMessages(let uids): "Refusing to touch UIDs \(uids): not created by this test run."
+            case .mailboxNotSelected(let named, let selected):
+                "Refusing to touch '\(named)': the selected mailbox is '\(selected ?? "none")'."
             }
         }
     }
@@ -51,8 +55,10 @@ public struct TestFence: Sendable {
         return try await session.select(path())
     }
 
+    public static let syntheticBody = "Synthetic test message created by tidings-probe. Safe to delete."
+
     /// Builds a synthetic message carrying this run's marker.
-    public func syntheticMessage(subject: String, body: String = "Synthetic test message created by tidings-probe. Safe to delete.") -> Data {
+    public func syntheticMessage(subject: String, body: String = TestFence.syntheticBody) -> Data {
         let date = Self.rfc5322Date.string(from: Date())
         let messageID = "<\(UUID().uuidString)@tidings.invalid>"
         let raw = [
@@ -90,6 +96,9 @@ public struct TestFence: Sendable {
 
     private func checkMarked(_ uids: [UInt32], selected mailbox: String) async throws {
         try checkMailbox(mailbox)
+        // STORE and MOVE act on the selected mailbox, which is also where `markedUIDs` looks.
+        let selected = session.selected?.path
+        guard selected == mailbox else { throw Violation.mailboxNotSelected(named: mailbox, selected: selected) }
         let marked = Set(try await markedUIDs())
         let unmarked = uids.filter { !marked.contains($0) }
         if !unmarked.isEmpty { throw Violation.unmarkedMessages(unmarked) }

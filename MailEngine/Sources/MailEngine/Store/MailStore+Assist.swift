@@ -108,35 +108,46 @@ extension MailStore {
 
     // MARK: Auto Drafts
 
+    private static let secondsPerDay: TimeInterval = 86_400
+    /// More recipients than this is a blast, not a conversation worth following up.
+    private static let maxFollowUpRecipients = 6
+    /// Shorter than this (in characters of your own words) is a bare "Thanks!", not a question.
+    private static let minFollowUpLength = 40
+    /// Candidates the SQL returns per wanted result: the Swift-side filters drop most of them.
+    private static let followUpOverfetch = 3
+    private static let replyOverfetch = 4
+    /// You're on To, approximated as "one of the first few addresses is yours": `recipients`
+    /// is To + Cc in that order.
+    private static let toAddressesChecked = 3
+
     /// Conversations where you wrote last, to real people, between `minDays` and `maxDays` ago,
     /// with nothing drafted or dismissed for them yet. Newest first.
     public func followUpCandidates(accountID: String, ownAddresses: Set<String>, minDays: Int = 3, maxDays: Int = 21,
                                    now: Date = Date(), limit: Int = 10) throws -> [StoredMessage] {
         let own = Set(ownAddresses.map { $0.lowercased() })
         guard !own.isEmpty else { return [] }
-        let newest = now.addingTimeInterval(-Double(minDays) * 86_400)
-        let oldest = now.addingTimeInterval(-Double(maxDays) * 86_400)
+        let newest = now.addingTimeInterval(-Double(minDays) * Self.secondsPerDay)
+        let oldest = now.addingTimeInterval(-Double(maxDays) * Self.secondsPerDay)
         let rows = try db.read { db in
             try StoredMessage.fetchAll(db, sql: """
                 SELECT m.* FROM message m JOIN (
                     SELECT threadID, max(date) AS d FROM message WHERE accountID = ? AND threadID IS NOT NULL GROUP BY threadID
                 ) t ON m.threadID = t.threadID AND m.date = t.d
                 WHERE m.accountID = ? AND m.reactionTo IS NULL
-                  AND lower(m.fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
+                  AND lower(m.fromAddress) IN (\(own.sqlPlaceholders))
                   AND m.date BETWEEN ? AND ?
                   AND m.threadID NOT IN (SELECT threadID FROM autoDraft)
                   AND m.mailbox NOT IN (SELECT path FROM mailboxState WHERE accountID = ? AND role IN ('drafts', 'trash', 'junk'))
                 ORDER BY m.date DESC LIMIT ?
-                """, arguments: StatementArguments([accountID, accountID] + own.sorted() + [oldest, newest, accountID, limit * 3] as [any DatabaseValueConvertible]))
+                """, arguments: StatementArguments([accountID, accountID] + own.sorted() + [oldest, newest, accountID, limit * Self.followUpOverfetch] as [any DatabaseValueConvertible]))
         }
         var seen = Set<String>()
         return rows.filter { m in
             guard let thread = m.threadID, seen.insert(thread).inserted else { return false }
             let others = AddressParser.parse(m.recipients).filter { !own.contains($0.address.lowercased()) }
-            guard !others.isEmpty, others.count <= 6 else { return false }    // not to yourself, not a blast
+            guard !others.isEmpty, others.count <= Self.maxFollowUpRecipients else { return false }
             guard !others.contains(where: { SignatureInfo.looksAutomated($0.address) }) else { return false }
-            let text = MailStore.ownText(m.plainText ?? m.preview)
-            return text.count >= 40                                              // not a bare "Thanks!"
+            return MailStore.ownText(m.plainText ?? m.preview).count >= Self.minFollowUpLength
         }
         .prefix(limit).map { $0 }
     }
@@ -147,23 +158,21 @@ extension MailStore {
                                 now: Date = Date(), limit: Int = 5) throws -> [StoredMessage] {
         let own = Set(ownAddresses.map { $0.lowercased() })
         guard !own.isEmpty else { return [] }
-        let oldest = now.addingTimeInterval(-Double(maxDays) * 86_400)
+        let oldest = now.addingTimeInterval(-Double(maxDays) * Self.secondsPerDay)
         let rows = try db.read { db in
             try StoredMessage.fetchAll(db, sql: """
                 SELECT m.* FROM message m JOIN (
                     SELECT threadID, max(date) AS d FROM message WHERE accountID = ? AND threadID IS NOT NULL GROUP BY threadID
                 ) t ON m.threadID = t.threadID AND m.date = t.d
                 WHERE m.accountID = ? AND m.mailbox = 'INBOX' AND m.category = 'primary' AND m.date >= ? AND m.reactionTo IS NULL
-                  AND lower(m.fromAddress) NOT IN (\(own.map { _ in "?" }.joined(separator: ",")))
+                  AND lower(m.fromAddress) NOT IN (\(own.sqlPlaceholders))
                   AND m.threadID NOT IN (SELECT threadID FROM autoDraft)
                 ORDER BY m.date DESC LIMIT ?
-                """, arguments: StatementArguments([accountID, accountID, oldest] + own.sorted() + [limit * 4] as [any DatabaseValueConvertible]))
+                """, arguments: StatementArguments([accountID, accountID, oldest] + own.sorted() + [limit * Self.replyOverfetch] as [any DatabaseValueConvertible]))
         }
         return rows.filter { m in
             guard !SignatureInfo.looksAutomated(m.fromAddress), m.riskLevel == .none else { return false }
-            // You're on To. `recipients` is To + Cc, so check the To list isn't just Cc: approximate
-            // with "one of the first three addresses is yours".
-            let listed = AddressParser.parse(m.recipients).prefix(3).map { $0.address.lowercased() }
+            let listed = AddressParser.parse(m.recipients).prefix(Self.toAddressesChecked).map { $0.address.lowercased() }
             guard listed.contains(where: own.contains) else { return false }
             return NeedsReply.likely(subject: m.subject, text: m.plainText ?? m.preview)
         }
@@ -191,13 +200,8 @@ extension MailStore {
     /// "Not needed": the draft goes, and this conversation isn't drafted for again.
     public func dismissAutoDraft(threadID: String) throws {
         try db.write { db in
-            guard var draft = try AutoDraft.fetchOne(db, key: threadID) else { return }
-            if let id = draft.outboxID {
-                try db.execute(sql: "DELETE FROM outbox WHERE id = ? AND state = 'draft'", arguments: [id])
-            }
-            draft.outboxID = nil
-            draft.dismissed = true
-            try draft.save(db)
+            guard let draft = try AutoDraft.fetchOne(db, key: threadID) else { return }
+            try Self.retire(draft, in: db)
         }
     }
 
@@ -210,25 +214,36 @@ extension MailStore {
                 WHERE a.dismissed = 0 AND a.outboxID IS NOT NULL
                   AND EXISTS (SELECT 1 FROM message n WHERE n.threadID = a.threadID AND n.date > m.date)
                 """)
-            for var draft in stale {
-                if let id = draft.outboxID {
-                    try db.execute(sql: "DELETE FROM outbox WHERE id = ? AND state = 'draft'", arguments: [id])
-                }
-                draft.outboxID = nil
-                draft.dismissed = true
-                try draft.save(db)
-            }
+            for draft in stale { try Self.retire(draft, in: db) }
             return stale.count
         }
     }
 
+    /// Deletes the draft if it's still unsent and marks the conversation as not to be drafted for again.
+    private static func retire(_ draft: AutoDraft, in db: Database) throws {
+        var draft = draft
+        if let id = draft.outboxID {
+            try db.execute(sql: "DELETE FROM outbox WHERE id = ? AND state = 'draft'", arguments: [id])
+        }
+        draft.outboxID = nil
+        draft.dismissed = true
+        try draft.save(db)
+    }
+
     // MARK: Contacts
+
+    private static let colleaguesShown = 5
+    /// Short replies often have no signature: look through this many of their latest messages.
+    private static let signatureSearchDepth = 6
+    private static let replyTimeSamples = 200
+    /// Fewer answers than this say nothing about how fast someone replies.
+    private static let minReplyTimeSamples = 3
 
     public func contactProfile(address raw: String, ownAddresses: Set<String>, recentLimit: Int = 8) throws -> ContactProfile {
         let address = raw.lowercased()
         let own = Set(ownAddresses.map { $0.lowercased() })
         let ownList = own.isEmpty ? [""] : own.sorted()
-        let ownMarks = ownList.map { _ in "?" }.joined(separator: ",")
+        let ownMarks = ownList.sqlPlaceholders
         let like = "%\(address)%"
         return try db.read { db in
             let received = try Int.fetchOne(db, sql: "SELECT count(*) FROM message WHERE lower(fromAddress) = ?", arguments: [address]) ?? 0
@@ -255,13 +270,12 @@ extension MailStore {
             if !domain.isEmpty, !SignatureInfo.webmailDomains.contains(domain) {
                 colleagues = try Row.fetchAll(db, sql: """
                     SELECT lower(fromAddress) AS a, max(fromName) AS n, count(*) AS c FROM message
-                    WHERE lower(fromAddress) LIKE ? AND lower(fromAddress) != ? GROUP BY lower(fromAddress) ORDER BY c DESC LIMIT 5
+                    WHERE lower(fromAddress) LIKE ? AND lower(fromAddress) != ? GROUP BY lower(fromAddress) ORDER BY c DESC LIMIT \(Self.colleaguesShown)
                     """, arguments: ["%@\(domain)", address]).map { MailAddress(name: $0["n"], address: $0["a"]) }
                     .filter { !SignatureInfo.looksAutomated($0.address) && !own.contains($0.address) }
             }
-            // Short replies often have no signature: use the newest of their last few that does.
             let signature = try Data.fetchAll(db, sql: """
-                SELECT bodyText FROM message WHERE lower(fromAddress) = ? AND bodyText IS NOT NULL ORDER BY date DESC LIMIT 6
+                SELECT bodyText FROM message WHERE lower(fromAddress) = ? AND bodyText IS NOT NULL ORDER BY date DESC LIMIT \(Self.signatureSearchDepth)
                 """, arguments: [address]).lazy.compactMap(TextCompression.decompress).map(SignatureInfo.extract)
                 .first { !$0.links.isEmpty || !$0.phones.isEmpty } ?? SignatureInfo()
 
@@ -271,14 +285,14 @@ extension MailStore {
                 JOIN message t ON t.threadID = m.threadID AND lower(t.fromAddress) = ? AND t.date > m.date
                 WHERE lower(m.fromAddress) IN (\(ownMarks)) AND lower(m.recipients) LIKE ?
                   AND NOT EXISTS (SELECT 1 FROM message x WHERE x.threadID = m.threadID AND x.date > m.date AND x.date < t.date)
-                LIMIT 200
+                LIMIT \(Self.replyTimeSamples)
                 """, arguments: StatementArguments([address] + ownList + [like])).compactMap { $0["hours"] as Double? }
             let sorted = pairs.sorted()
             return ContactProfile(
                 address: address, name: name, received: received, sent: sent,
                 firstContact: span?["first"], lastContact: span?["last"], recent: recent, colleagues: colleagues,
                 signature: signature,
-                typicalReplyHours: sorted.count >= 3 ? sorted[sorted.count / 2] : nil)
+                typicalReplyHours: sorted.count >= Self.minReplyTimeSamples ? sorted[sorted.count / 2] : nil)
         }
     }
 }
