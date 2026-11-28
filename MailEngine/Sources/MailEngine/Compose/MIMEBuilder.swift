@@ -266,10 +266,25 @@ public enum MIMEBuilder {
             out.append(encodedWords(run.joined(separator: " ")))
             run = []
         }
+        // Empty words are extra spaces. Between two encoded words they must stay inside the
+        // run: decoders drop the whitespace between adjacent encoded words ("æ  ø" → "æø").
+        var spaces: [Substring] = []
         for word in words {
-            if needsEncoding(word) { run.append(word) } else { flush(); out.append(String(word)) }
+            if needsEncoding(word) {
+                if run.isEmpty { out += spaces.map(String.init) } else { run += spaces }
+                spaces = []
+                run.append(word)
+            } else if word.isEmpty, !run.isEmpty {
+                spaces.append(word)
+            } else {
+                flush()
+                out += spaces.map(String.init)
+                spaces = []
+                out.append(String(word))
+            }
         }
         flush()
+        out += spaces.map(String.init)
         return out.joined(separator: " ")
     }
 
