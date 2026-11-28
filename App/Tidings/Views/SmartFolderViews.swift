@@ -68,7 +68,15 @@ struct SmartFolderEditor: View {
             .task(id: folder.query) {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
-                count = try? SearchEngine(store: model.store).conversationCount(SearchQuery(parsing: folder.query))
+                // Counting a broad search can take a while on a big mailbox: off the main actor,
+                // and a stale count never lands over a newer query's.
+                let store = model.store
+                let query = SearchQuery(parsing: folder.query)
+                let found = await Task.detached(priority: .userInitiated) {
+                    try? SearchEngine(store: store).conversationCount(query)
+                }.value
+                guard !Task.isCancelled else { return }
+                count = found
             }
             .onAppear { nameFocused = true }
         }

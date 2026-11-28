@@ -7,7 +7,9 @@ struct CategoryTabs: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let inbox = (try? model.store.threads(mailbox: "INBOX", accountID: model.inboxAccountID, ownAddresses: model.ownAddresses)) ?? []
+        // The Inbox as the model last loaded it (not a fresh store read per body pass), and only
+        // its unread conversations: each tab's count filters this list again.
+        let inbox = model.inboxThreads.filter { $0.unreadCount > 0 && !$0.isReplyLater }
         let current = model.currentCategoryTab
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {

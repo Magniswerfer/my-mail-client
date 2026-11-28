@@ -271,6 +271,10 @@ struct GeneralSettings: View {
     @State private var removing: AccountConfig?
     /// An account from another device that needs its password typed here.
     @State private var signingIn: AccountConfig?
+    /// Read from the store off the main actor (counting every message took a while on a big
+    /// mailbox, and ran on every redraw while mail synced).
+    @State private var junkTotals: JunkFilter.Counts?
+    @State private var messageCount: Int?
 
     var body: some View {
         Form {
@@ -309,7 +313,7 @@ struct GeneralSettings: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Tidings learns from what's in Junk, from mail you move there, and from mail you move back out. New mail that's almost certainly junk goes to Junk; likely junk gets a warning. Mail from people you've written to is never moved.")
-                    if let totals = try? model.store.junkTotals() {
+                    if let totals = junkTotals {
                         Text("Learned from \(totals.spam) junk and \(totals.ham) other messages.")
                     }
                 }
@@ -322,7 +326,7 @@ struct GeneralSettings: View {
                 LabeledContent("Location") {
                     Text(model.dataDirectory.path).textSelection(.enabled).font(.caption)
                 }
-                LabeledContent("Messages", value: "\((try? model.store.count()) ?? 0)")
+                LabeledContent("Messages", value: "\(messageCount ?? 0)")
             }
             Section {
                 Toggle("Sync with iCloud", isOn: Binding(get: { model.isCloudSyncEnabled },
@@ -335,6 +339,15 @@ struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: model.revision) {
+            let store = model.store
+            let (totals, count) = await Task.detached(priority: .utility) {
+                ((try? store.junkTotals()), (try? store.count()) ?? 0)
+            }.value
+            guard !Task.isCancelled else { return }
+            junkTotals = totals
+            messageCount = count
+        }
         .sheet(item: $signingIn) { account in
             AccountPasswordSheet(account: account).environment(model)
         }

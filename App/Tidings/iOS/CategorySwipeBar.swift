@@ -94,9 +94,11 @@ struct CategorySwipeBar: View {
             .onChange(of: model.aiCategories.map(\.id)) { recount() }
     }
 
-    /// Counts every category from the whole Inbox (`model.threads` only holds the one on screen).
+    /// Counts every category from the whole Inbox (`model.threads` only holds the one on screen):
+    /// the one `reload()` already loaded (it runs before `revision` changes), not another store
+    /// read on the main actor; only its unread conversations, which each tab filters again.
     private func recount() {
-        let inbox = (try? model.store.threads(mailbox: "INBOX", accountID: model.inboxAccountID, ownAddresses: model.ownAddresses)) ?? []
+        let inbox = model.inboxThreads.filter { $0.unreadCount > 0 && !$0.isReplyLater }
         var counts: [String: Int] = [:]
         for tab in model.categoryTabs { counts[tab.id] = model.unreadCount(for: tab, inbox: inbox) }
         if counts != unread { unread = counts }

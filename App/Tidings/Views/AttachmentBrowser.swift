@@ -22,6 +22,8 @@ struct AttachmentBrowser: View {
     }
 
     var body: some View {
+        // Filtered once per redraw (each keystroke in the search field), not once per use.
+        let shown = self.shown
         NavigationStack {
             List(shown, selection: $selection) { entry in
                 AttachmentRow(entry: entry)
@@ -59,7 +61,11 @@ struct AttachmentBrowser: View {
             }
         }
         .macFrame(minWidth: 720, minHeight: 520)
-        .task { entries = (try? model.store.attachmentEntries()) ?? [] }
+        .task {
+            // Up to 3,000 rows across all your mail: read off the main actor.
+            let store = model.store
+            entries = await Task.detached(priority: .userInitiated) { (try? store.attachmentEntries()) ?? [] }.value
+        }
     }
 
     private func entry(_ id: AttachmentEntry.ID?) -> AttachmentEntry? {

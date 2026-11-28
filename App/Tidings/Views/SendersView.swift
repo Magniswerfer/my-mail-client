@@ -38,6 +38,8 @@ struct SendersView: View {
     }
 
     var body: some View {
+        // Filtered once per pass (the list and the empty state both need it).
+        let shown = self.shown
         NavigationStack {
             List(shown, selection: $selection) { sender in
                 SenderRow(sender: sender)
@@ -69,7 +71,16 @@ struct SendersView: View {
         .onAppear { model.isSendersWindowOpen = Platform.isMac }
         .onDisappear { model.isSendersWindowOpen = false }
         .task(id: TaskKey(period: period, revision: model.sendersRevision)) {
-            senders = (try? model.store.senderStats(ownAddresses: model.ownAddresses, since: period.since)) ?? []
+            // Totals over all your mail: off the main actor, and a stale result (the period or
+            // revision changed meanwhile) never replaces a newer one.
+            let store = model.store
+            let own = model.ownAddresses
+            let since = period.since
+            let found = await Task.detached(priority: .userInitiated) {
+                (try? store.senderStats(ownAddresses: own, since: since)) ?? []
+            }.value
+            guard !Task.isCancelled else { return }
+            senders = found
         }
     }
 

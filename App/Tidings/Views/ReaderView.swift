@@ -36,7 +36,9 @@ struct ReaderView: View {
                             RiskBanner(message: risky)
                         }
                         JunkBanner(threadID: threadID, messages: messages)
-                        if let found = model.invite(inThread: threadID) {
+                        // The newest invite/update/cancellation (as `model.invite(inThread:)`), from
+                        // the messages already read: no second query of the thread on every redraw.
+                        if let found = Self.newestInvite(in: messages) {
                             InviteCard(message: found.message, invite: found.invite)
                         }
                         DateSuggestionSlot(threadID: threadID)
@@ -66,6 +68,14 @@ struct ReaderView: View {
             ContentUnavailableView("No conversation selected", systemImage: "envelope.open",
                                    description: Text("Use j and k to move through your mail."))
         }
+    }
+
+    /// The conversation's newest invite/update/cancellation; answers from attendees don't count.
+    private static func newestInvite(in messages: [StoredMessage]) -> (message: StoredMessage, invite: CalendarInvite)? {
+        for message in messages.reversed() {
+            if let invite = message.invite, invite.method != .reply { return (message, invite) }
+        }
+        return nil
     }
 }
 
@@ -162,10 +172,12 @@ struct ReactionMenu<Label: View>: View {
     @ViewBuilder let label: () -> Label
 
     var body: some View {
+        // One store lookup, not one per choice on every redraw.
+        let mine = model.myReaction(to: message)
         Menu {
             ForEach(AppModel.reactionChoices, id: \.self) { emoji in
                 Button { model.toggleReaction(emoji, to: message) } label: {
-                    Text(model.myReaction(to: message) == emoji ? "\(emoji) ✓" : emoji)
+                    Text(mine == emoji ? "\(emoji) ✓" : emoji)
                 }
             }
         } label: { label() }
@@ -188,6 +200,8 @@ struct MessageCard: View {
     @State private var originalColors = false
     @State private var readerMode = false
     @State private var isHovered = false
+    /// When you unsubscribed from this sender (kept here: the header redraws on every hover).
+    @State private var unsubscribedAt: Date?
     @Environment(\.colorScheme) private var colorScheme
 
     /// Reactions on this message (likes from Outlook, Gmail and Tidings).
@@ -199,8 +213,10 @@ struct MessageCard: View {
         _expanded = State(initialValue: startsExpanded)
     }
 
-    struct LoadedBody {
+    struct LoadedBody: Sendable {
         var html: PreparedHTML?
+        /// `HTMLDarkMode.canDarken(html)`, worked out once: it runs regexes over the whole HTML.
+        var canDarken: Bool
         var text: String
         var attachments: [AttachmentInfo]
         var to: String
@@ -263,6 +279,7 @@ struct MessageCard: View {
             guard expanded, body_ == nil else { return }
             await load()
         }
+        .onChange(of: model.sendersRevision) { refreshUnsubscribed() }
     }
 
     @ViewBuilder private var header: some View {
@@ -273,7 +290,7 @@ struct MessageCard: View {
     /// once you have. It still asks first.
     @ViewBuilder private var unsubscribeButton: some View {
         if let method = body_?.unsubscribe {
-            if let when = try? model.store.unsubscribedAt(address: message.fromAddress) {
+            if let when = unsubscribedAt {
                 Text("Unsubscribed")
                     .font(.caption).foregroundStyle(.tertiary)
                     .help(Text("You unsubscribed on \(MailDate.long(when))"))
@@ -389,13 +406,13 @@ struct MessageCard: View {
                                model.trustImages(from: scope)
                                showImages = true
                            })
-                let darken = colorScheme == .dark && !originalColors && HTMLDarkMode.canDarken(html.html)
+                let darken = colorScheme == .dark && !originalColors && loaded.canDarken
                 MessageWebView(html: html.html, allowRemoteImages: showImages, inlineParts: loaded.inline, dark: darken)
                     .id("\(showImages)-\(darken)")   // rebuild with the new policy
                     // iPhone: the page keeps a 12pt margin (for mail with its own background);
                     // pulled out by as much, its text lines up with the screen's margin.
                     .padding(.horizontal, Platform.isPhone ? -12 : 0)
-                if colorScheme == .dark, HTMLDarkMode.canDarken(html.html) {
+                if colorScheme == .dark, loaded.canDarken {
                     Button(originalColors ? "Match Dark Mode" : "Original Colours",
                            systemImage: "circle.lefthalf.filled") { originalColors.toggle() }
                         .buttonStyle(.borderless)
@@ -449,21 +466,42 @@ struct MessageCard: View {
         if message.flags.contains(readLaterKeyword) { readerMode = true }
         do {
             let raw = try await model.rawMessage(message)
-            let parsed = MIMEParser.parse(raw)
-            if message.attachmentList == nil, let id = message.id {
-                try? model.store.setAttachmentList(parsed.attachments, messageID: id)
-            }
+            let store = model.store
+            let listMissingFor = message.attachmentList == nil ? message.id : nil
+            // Parsing, cleaning the HTML and finding inline parts can take a while on big mail:
+            // off the main actor, so the reader keeps scrolling and the keyboard keeps working.
+            let loaded = await Task.detached(priority: .userInitiated) { () -> LoadedBody in
+                let parsed = MIMEParser.parse(raw)
+                if let listMissingFor {
+                    try? store.setAttachmentList(parsed.attachments, messageID: listMissingFor)
+                }
+                return MessageCard.prepareBody(parsed, raw: raw)
+            }.value
             showImages = model.allowsRemoteImages(for: message)
-            body_ = LoadedBody(
-                html: parsed.html.map(RemoteContent.prepare), text: parsed.plainText, attachments: parsed.attachments,
-                to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
-                inline: MIMEParser.inlineParts(in: raw),
-                invite: parsed.invite,
-                unsubscribe: Unsubscribe.methods(in: parsed).first
-            )
+            if loaded.unsubscribe != nil {
+                unsubscribedAt = try? store.unsubscribedAt(address: message.fromAddress)
+            }
+            body_ = loaded
         } catch {
             loadError = String(localized: "Couldn't load the full message. Showing the stored text.")
         }
+    }
+
+    nonisolated static func prepareBody(_ parsed: ParsedMessage, raw: Data) -> LoadedBody {
+        let html = parsed.html.map(RemoteContent.prepare)
+        return LoadedBody(
+            html: html, canDarken: html.map { HTMLDarkMode.canDarken($0.html) } ?? false,
+            text: parsed.plainText, attachments: parsed.attachments,
+            to: (parsed.to + parsed.cc).map(\.description).joined(separator: ", "),
+            inline: MIMEParser.inlineParts(in: raw),
+            invite: parsed.invite,
+            unsubscribe: Unsubscribe.methods(in: parsed).first
+        )
+    }
+
+    private func refreshUnsubscribed() {
+        guard body_?.unsubscribe != nil else { return }
+        unsubscribedAt = try? model.store.unsubscribedAt(address: message.fromAddress)
     }
 }
 

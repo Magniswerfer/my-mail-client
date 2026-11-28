@@ -60,12 +60,15 @@ extension MailStore {
         }
     }
 
-    /// The unified Inbox (`threads(mailbox:)` with no account) filters on the mailbox alone, which
-    /// `message_mailbox_thread` (account first) can't serve: SQLite walked every message through
-    /// the thread index, ~275 ms at 250k on each reload. Mailbox first: ~45 ms. Registered last.
-    static func registerMailboxIndexMigrations(_ m: inout DatabaseMigrator) {
-        m.registerMigration("v28-mailbox-thread-index") { db in
-            try db.create(index: "message_mailbox_thread_all", on: "message", columns: ["mailbox", "threadID", "sortKey"])
+    /// The stream's query (`threads(mailbox:)`) for the unified Inbox filters on `mailbox` alone,
+    /// which `message_mailbox_thread` (accountID first) can't serve: every reload scanned the whole
+    /// message table. This covering index answers it (and the per-account form) from the index.
+    /// Registered last: it names columns later migrations added.
+    static func registerStreamIndexMigrations(_ m: inout DatabaseMigrator) {
+        m.registerMigration("v27-stream-index") { db in
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS message_stream ON message(mailbox, threadID, sortKey, surfacedAt, date, reactionTo, accountID)
+                """)
         }
     }
 

@@ -166,8 +166,15 @@ struct ReplySessionView: View {
         compose = nil
         guard let current else { return }
         loading = true
-        defer { loading = false }
-        if let id = await model.prepareDraft(.reply, thread: current) {
+        let id = await model.prepareDraft(.reply, thread: current)
+        // Skipped or jumped on while the draft was being made: that conversation's untouched
+        // reply goes, and this run mustn't show it or end the newer run's spinner.
+        guard !Task.isCancelled else {
+            if let id { try? model.store.deleteOutboxItem(id: id) }
+            return
+        }
+        loading = false
+        if let id {
             compose = ComposeModel(draftID: id, app: model)
         }
     }

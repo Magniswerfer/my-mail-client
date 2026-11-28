@@ -36,8 +36,12 @@ struct FolderRow: Identifiable, Hashable {
 }
 
 extension AppModel {
+    /// Two store reads, asked by every folder name and sidebar row: kept until the next reload.
     func folderLayout(accountID: String) -> (separator: Character?, prefix: String) {
-        AccountSync.folderLayout(store: store, accountID: accountID)
+        if let cached = folderLayoutCache[accountID] { return cached }
+        let layout = AccountSync.folderLayout(store: store, accountID: accountID)
+        folderLayoutCache[accountID] = layout
+        return layout
     }
 
     /// The name a folder shows: its role's title, else its last path component.

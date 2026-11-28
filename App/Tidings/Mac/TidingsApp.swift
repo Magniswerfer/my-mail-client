@@ -88,6 +88,11 @@ struct TidingsApp: App {
                     .keyboardShortcut("f", modifiers: .command)
             }
             CommandMenu("Message") {
+                // Each of these reads the conversation from the store (and the invite from its
+                // messages): once per menu update, not once per item.
+                let hasTarget = !model.targetThreads.isEmpty
+                let canAnswerInvite = model.answerableInvite != nil
+                let hasDateSuggestion = model.selectedDateSuggestion != nil
                 Button("Command Palette…") { model.isPaletteShown.toggle() }
                     .keyboardShortcut("k", modifiers: .command)
                 Divider()
@@ -103,7 +108,7 @@ struct TidingsApp: App {
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                 Divider()
                 Button("Mute Conversation") { model.toggleMute() }
-                    .disabled(model.targetThreads.isEmpty)
+                    .disabled(!hasTarget)
                 Button("Reply Later") { model.toggleReplyLater() }
                     .keyboardShortcut("l", modifiers: [.command, .option])
                 Button("Answer Reply Later Pile…") { model.startReplySession() }
@@ -113,7 +118,7 @@ struct TidingsApp: App {
                 Button("Copy Link to Message") { model.copyLink() }
                 Button("Show Source") { model.showSourceOfSelected() }
                     .keyboardShortcut("u", modifiers: [.command, .option])
-                    .disabled(model.targetThreads.isEmpty)
+                    .disabled(!hasTarget)
                 Button("Copy Latest Login Code") { model.copyLatestCode() }
                 Divider()
                 Button("Next Category") { model.cycleCategory(1) }
@@ -143,16 +148,16 @@ struct TidingsApp: App {
                 Divider()
                 Button("Accept Invitation") { model.respondToSelectedInvite(.accepted) }
                     .keyboardShortcut("y", modifiers: [.command, .control])
-                    .disabled(model.answerableInvite == nil)
+                    .disabled(!canAnswerInvite)
                 Button("Maybe") { model.respondToSelectedInvite(.tentative) }
                     .keyboardShortcut("m", modifiers: [.command, .control])
-                    .disabled(model.answerableInvite == nil)
+                    .disabled(!canAnswerInvite)
                 Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
                     .keyboardShortcut("n", modifiers: [.command, .control])
-                    .disabled(model.answerableInvite == nil)
+                    .disabled(!canAnswerInvite)
                 Button("Add Date to Calendar…") { model.addSelectedDateToCalendar() }
                     .keyboardShortcut("e", modifiers: [.command, .control])
-                    .disabled(model.selectedDateSuggestion == nil)
+                    .disabled(!hasDateSuggestion)
             }
             CommandGroup(after: .toolbar) {
                 Toggle("Reader Mode", isOn: Binding(get: { model.readerMode }, set: { model.readerMode = $0 }))
@@ -589,7 +594,11 @@ struct RootView: View {
         case "u": model.toggleRead()
         case "#": model.perform(.trash)
         case "!": model.toggleJunk()
-        case "i": model.run(commandID: "inbox")
+        // Same as ⌘K's "Move to Inbox", without building every command for one key.
+        case "i":
+            if !model.targetThreads.isEmpty, model.sourceMailbox != "INBOX" {
+                model.perform(model.selection == .snoozed ? .unsnooze : .moveToInbox)
+            }
         case "g": pendingG = Date()
         case "m": if !model.targetThreads.isEmpty { model.isCategoryPickerShown = true }
         case "v": if !model.targetThreads.isEmpty { model.isFolderPickerShown = true }

@@ -20,11 +20,20 @@ final class AvatarImages {
         case icon(PlatformImage)
     }
 
-    /// By lowercased address ("name:<name>" when there's no address); a missing entry is not
-    /// looked up yet, `.none` found nothing.
-    private(set) var pictures: [String: Picture?] = [:]
+    /// One per lowercased address ("name:<name>" when there's no address). Each is observed on
+    /// its own, so a finished lookup redraws only the avatars showing that person, not every
+    /// avatar on screen (a shared dictionary would invalidate all list rows per lookup).
+    @MainActor @Observable
+    final class Slot {
+        /// false: not looked up yet; true with `picture == nil`: found nothing.
+        var resolved = false
+        var picture: Picture? = nil
+    }
+
+    @ObservationIgnored private var slots: [String: Slot] = [:]
     @ObservationIgnored private var looking: Set<String> = []
     @ObservationIgnored private let contacts = CNContactStore()
+    private static let lookupsDisabled = ProcessInfo.processInfo.arguments.contains("-TidingsNoAvatarLookups")
 
     /// Settings › Reading: "Show Website Icons" (on unless turned off).
     static let websiteIconsKey = "avatars.websiteIcons"
@@ -32,14 +41,27 @@ final class AvatarImages {
         get { UserDefaults.standard.object(forKey: Self.websiteIconsKey) as? Bool ?? true }
         set {
             UserDefaults.standard.set(newValue, forKey: Self.websiteIconsKey)
-            pictures = pictures.filter { if case .photo = $0.value { true } else { false } }
+            // Everything but contact photos is looked up again (icons, and misses).
+            for slot in slots.values where slot.resolved {
+                if case .photo = slot.picture { continue }
+                slot.picture = nil
+                slot.resolved = false
+            }
         }
     }
 
     func picture(address: String?, name: String) -> Picture? {
         let key = Self.key(address: address, name: name)
-        if let found = pictures[key] { return found }
-        guard !looking.contains(key), !ProcessInfo.processInfo.arguments.contains("-TidingsNoAvatarLookups") else { return nil }
+        let slot: Slot
+        if let existing = slots[key] {
+            slot = existing
+        } else {
+            slot = Slot()
+            slots[key] = slot
+        }
+        // Reading the slot registers this view with this person only.
+        if slot.resolved { return slot.picture }
+        guard !looking.contains(key), !Self.lookupsDisabled else { return nil }
         looking.insert(key)
         Task { await lookUp(key: key, address: address, name: name) }
         return nil
@@ -52,15 +74,18 @@ final class AvatarImages {
 
     private func lookUp(key: String, address: String?, name: String) async {
         defer { looking.remove(key) }
+        let found: Picture?
         if let photo = await contactPhoto(address: address, name: name) {
-            pictures[key] = .photo(photo)
-            return
+            found = .photo(photo)
+        } else if showsWebsiteIcons, let domain = address.flatMap(Self.domain), let icon = await WebsiteIcons.shared.icon(for: domain) {
+            found = .icon(icon)
+        } else {
+            found = nil
         }
-        if showsWebsiteIcons, let domain = address.flatMap(Self.domain), let icon = await WebsiteIcons.shared.icon(for: domain) {
-            pictures[key] = .icon(icon)
-            return
-        }
-        pictures[key] = .some(nil)
+        let slot = slots[key] ?? Slot()
+        slots[key] = slot
+        slot.picture = found
+        slot.resolved = true
     }
 
     // MARK: Apple Contacts

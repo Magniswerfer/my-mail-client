@@ -113,15 +113,16 @@ final class ComposeModel {
 
     func buildMessage() -> OutgoingMessage {
         let signatures = app?.signaturesByID ?? [:]
+        let full = fullBody   // put together once (it copies the folded quote in)
         var message = OutgoingMessage(
             from: identity.mailAddress, to: recipients(to), cc: recipients(cc), bcc: recipients(bcc),
-            subject: subject, text: MailBodyConverter.plainText(fullBody, signatures: signatures),
-            html: MailBodyConverter.html(fullBody, signatures: signatures),
+            subject: subject, text: MailBodyConverter.plainText(full, signatures: signatures),
+            html: MailBodyConverter.html(full, signatures: signatures),
             attachments: attachments, inReplyTo: inReplyTo, references: references
         )
         // The signature's embedded images go along as parts its HTML points at.
         message.addSignatureImages(Array(signatures.values))
-        message.editorState = EditorArchive.data(fullBody)
+        message.editorState = EditorArchive.data(full)
         return message
     }
 
@@ -236,6 +237,9 @@ final class ComposeModel {
     }
 
     func saveNow() {
+        // Saved now: the debounced save still waiting would only build and write it again.
+        saveTask?.cancel()
+        saveTask = nil
         guard let app, var item = try? app.store.outboxItem(id: draftID), item.state == .draft else { return }
         item.message = buildMessage()
         item.accountID = accountID

@@ -73,28 +73,10 @@ struct SidebarView: View {
             SmartFolderSection()
 
             ForEach(model.accounts, id: \.foldersSectionID) { account in
-                Section {
-                    ForEach(model.folderRows(accountID: account.id)) { row in
-                        folderRow(row, accountID: account.id)
-                    }
-                } header: {
-                    HStack {
-                        Text(model.accounts.count > 1 ? account.displayName : String(localized: "Folders"))
-                        Spacer()
-                        Button("New Folder…", systemImage: "plus") { model.newFolder(accountID: account.id) }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.borderless)
-                            .help("New Folder…")
-                    }
-                    .contextMenu {
-                        Button("New Folder…", systemImage: "folder.badge.plus") { model.newFolder(accountID: account.id) }
-                    }
-                    // Dropped on the header: to the top level.
-                    .dropDestination(for: FolderDrag.self) { items, _ in
-                        guard let item = items.first else { return false }
-                        return model.dropFolder(item, into: nil, accountID: account.id)
-                    }
-                }
+                // A view of its own, so the folder tree (sorted, and read with the account's
+                // folder layout from the store) is rebuilt when folders change, not on every
+                // unread-count, selection or outbox change the rows above follow.
+                AccountFoldersSection(accountID: account.id, title: model.accounts.count > 1 ? account.displayName : String(localized: "Folders"))
             }
 
             if !Platform.isMac {
@@ -120,6 +102,38 @@ struct SidebarView: View {
                 .selectionDisabled()
         }
         .listStyle(.sidebar)
+    }
+}
+
+/// One account's folders in the sidebar, under a header with New Folder.
+struct AccountFoldersSection: View {
+    @Environment(AppModel.self) private var model
+    let accountID: String
+    let title: String
+
+    var body: some View {
+        Section {
+            ForEach(model.folderRows(accountID: accountID)) { row in
+                folderRow(row, accountID: accountID)
+            }
+        } header: {
+            HStack {
+                Text(title)
+                Spacer()
+                Button("New Folder…", systemImage: "plus") { model.newFolder(accountID: accountID) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("New Folder…")
+            }
+            .contextMenu {
+                Button("New Folder…", systemImage: "folder.badge.plus") { model.newFolder(accountID: accountID) }
+            }
+            // Dropped on the header: to the top level.
+            .dropDestination(for: FolderDrag.self) { items, _ in
+                guard let item = items.first else { return false }
+                return model.dropFolder(item, into: nil, accountID: accountID)
+            }
+        }
     }
 
     @ViewBuilder
