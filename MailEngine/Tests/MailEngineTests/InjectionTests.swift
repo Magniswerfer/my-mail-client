@@ -144,4 +144,35 @@ struct InjectionTests {
         #expect(HTMLText.toPlainText("<style>p{}</style><p>Hi<!-- c --> there</p><script>x()</script>") == "Hi there")
         #expect(HTMLText.toPlainText("<p>open <!-- never closed</p>").contains("open"))
     }
+
+    @Test func attachmentNamesCantDisguiseThemselves() {
+        #expect(AttachmentNames.sanitize("invoice\u{202E}fdp.command") == "invoicefdp.command")
+        #expect(AttachmentNames.isRisky("invoice\u{202E}fdp.command"))
+        #expect(AttachmentNames.sanitize("../../.ssh/authorized_keys") == "-..-.ssh-authorized_keys")
+        #expect(AttachmentNames.sanitize("..") == "attachment")
+        #expect(AttachmentNames.sanitize(".hidden") == "hidden")
+        #expect(AttachmentNames.sanitize("a\u{0}b\r\nc.pdf") == "abc.pdf")
+        #expect(AttachmentNames.sanitize(String(repeating: "x", count: 300) + ".pdf").hasSuffix(".pdf"))
+        #expect(!AttachmentNames.isRisky("report.pdf") && AttachmentNames.isRisky("Setup.PKG") && AttachmentNames.isRisky("x.webloc"))
+        let raw = Data("Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nhi\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename*=utf-8''invoice%E2%80%AEfdp.command\r\n\r\nx\r\n--b--\r\n".utf8)
+        #expect(MIMEParser.parse(raw).attachments.first?.filename == "invoicefdp.command")
+    }
+
+    @Test func onlySafeLinkSchemesOpen() {
+        for ok in ["https://shop.dk/x", "http://a.test", "mailto:a@b.dk", "tel:+4512345678", "tidings://message/x"] {
+            #expect(RemoteContent.isOpenable(URL(string: ok)!), "\(ok)")
+        }
+        for bad in ["file:///Applications/Utilities/Terminal.app", "smb://evil.test/share", "x-apple.systempreferences:com.apple.preference.security",
+                    "vnc://evil.test", "ssh://evil.test", "zoommtg://evil", "javascript:alert(1)", "data:text/html,hi", "https:///nohost"] {
+            #expect(!RemoteContent.isOpenable(URL(string: bad)!), "\(bad)")
+        }
+    }
+
+    @Test func metaRefreshAndPrefetchLinksAreRemoved() {
+        let html = #"<meta http-equiv="refresh" content="0;url=https://t.evil/o?id=1"><META HTTP-EQUIV=Refresh CONTENT="1"><link rel="dns-prefetch" href="//t.evil"><p>Hi</p>"#
+        let out = RemoteContent.prepare(html).html
+        #expect(!out.lowercased().contains("refresh"))
+        #expect(!out.contains("t.evil"))
+        #expect(out.contains("<p>Hi</p>"))
+    }
 }

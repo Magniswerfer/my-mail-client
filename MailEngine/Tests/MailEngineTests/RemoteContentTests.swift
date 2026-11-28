@@ -40,6 +40,21 @@ import Testing
         #expect(try store.allowsRemoteImages(from: "news@shop.dk", ownAddresses: mine), "domain approved")
     }
 
+    /// Lookalikes, LIKE wildcards, forged mail from me, Junk and doubtful mail never auto-trust.
+    @Test func imageTrustIsExactAndNotForgeable() throws {
+        let store = try MailStore(path: FileManager.default.temporaryDirectory.appendingPathComponent("rc-\(UUID()).sqlite").path)
+        try store.upsert([(StoredMessage(accountID: "a", mailbox: "Sent", uid: 1, subject: "Hej", fromAddress: "me@x.dk",
+                                         recipients: "John <john@example.com>, ann_b@shop.dk", date: Date()), "hej")])
+        let mine: Set<String> = ["me@x.dk"]
+        #expect(try store.allowsRemoteImages(from: "john@example.com", ownAddresses: mine))
+        #expect(try !store.allowsRemoteImages(from: "john@example.co", ownAddresses: mine), "a substring isn't the address")
+        #expect(try !store.allowsRemoteImages(from: "x%@%", ownAddresses: mine), "% is not a wildcard")
+        #expect(try !store.allowsRemoteImages(from: "annxb@shop.dk", ownAddresses: mine), "_ is not a wildcard")
+        #expect(try !store.allowsRemoteImages(from: "me@x.dk", ownAddresses: mine, isOwnFolder: false), "forged From: me in the Inbox")
+        #expect(try !store.allowsRemoteImages(from: "john@example.com", ownAddresses: mine, isJunk: true))
+        #expect(try !store.allowsRemoteImages(from: "john@example.com", ownAddresses: mine, risk: .caution))
+    }
+
     @Test func inlineImagesWithOnlyAContentIDAreFound() {
         let raw = """
             Content-Type: multipart/related; boundary=b\r\n\r\n--b\r\nContent-Type: text/html\r\n\r\n<img src="cid:logo@x">\r\n--b\r\nContent-Type: image/png\r\nContent-ID: <logo@x>\r\nContent-Transfer-Encoding: base64\r\n\r\niVBORw0KGgo=\r\n--b--\r\n

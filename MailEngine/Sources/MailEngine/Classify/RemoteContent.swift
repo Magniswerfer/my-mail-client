@@ -38,6 +38,10 @@ public enum RemoteContent {
             if let src = attribute("src", in: tag), src.lowercased().hasPrefix("http") { remote += 1 }
             return tag
         }
+        // <meta http-equiv="refresh"> navigates the reader to the sender's page (a read receipt
+        // that ignores image blocking), and DNS prefetching leaks the opening. Both go.
+        output = replacing(in: output, pattern: #"<meta\b[^<>]*http-equiv\s*=\s*["']?\s*(refresh|x-dns-prefetch-control|set-cookie)[^<>]*>"#) { _ in "" }
+        output = replacing(in: output, pattern: #"<link\b[^<>]*>"#) { _ in "" }
         var cleaned = 0
         output = replacing(in: output, pattern: #"href\s*=\s*"([^"]+)""#) { attr in
             guard let value = attribute("href", in: attr), let stripped = stripTracking(value), stripped != value else { return attr }
@@ -45,6 +49,17 @@ public enum RemoteContent {
             return "href=\"\(stripped)\""
         }
         return PreparedHTML(html: output, trackersRemoved: trackers, linksCleaned: cleaned, remoteImages: remote)
+    }
+
+    /// Link schemes a click in a message may open. Anything else (file:, smb:, vnc:, ssh:,
+    /// x-apple.systempreferences:, other apps' schemes) can reach far beyond the browser, so a
+    /// mail link doesn't get to.
+    public static let openableSchemes: Set<String> = ["http", "https", "mailto", "tel", "sms", "facetime", "facetime-audio", "tidings"]
+
+    public static func isOpenable(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), openableSchemes.contains(scheme) else { return false }
+        if scheme == "http" || scheme == "https" { return url.host()?.isEmpty == false }
+        return true
     }
 
     static func isTracker(imgTag tag: String) -> Bool {
@@ -117,10 +132,18 @@ extension MailStore {
         }
     }
 
-    /// Remote images load automatically for people you've written to, or senders/domains you approved.
-    public func allowsRemoteImages(from address: String, ownAddresses: Set<String>) throws -> Bool {
-        let sender = address.lowercased()
-        let domain = sender.split(separator: "@").last.map { "@" + $0 } ?? ""
+    /// Remote images load automatically for people you've written to, or senders/domains you
+    /// approved. Never for a message in Junk or one the phishing check doubts: From can be
+    /// forged, and loading images tells the sender the mail was opened.
+    /// - Parameters:
+    ///   - isOwnFolder: the message is in Sent or Drafts. Mail "from you" elsewhere (Inbox) may be
+    ///     forged, so your own address only counts there.
+    public func allowsRemoteImages(from address: String, ownAddresses: Set<String>, risk: RiskLevel = .none,
+                                   isJunk: Bool = false, isOwnFolder: Bool = true) throws -> Bool {
+        guard risk == .none, !isJunk else { return false }
+        let sender = HeaderText.token(address.lowercased())
+        guard HeaderText.isSafeAddress(sender), let at = sender.lastIndex(of: "@") else { return false }
+        let domain = String(sender[at...])
         return try db.read { db in
             if try Int.fetchOne(db, sql: "SELECT count(*) FROM imageTrust WHERE sender IN (?, ?)", arguments: [sender, domain]) ?? 0 > 0 {
                 return true
@@ -128,12 +151,16 @@ extension MailStore {
             guard !ownAddresses.isEmpty else { return false }
             let mine = ownAddresses.map { $0.lowercased() }
             // Mail you sent (your signature's pictures among them): nothing to protect you from.
-            if mine.contains(sender) { return true }
-            // A message from me with this person among the recipients.
-            return try Int.fetchOne(db, sql: """
-                SELECT count(*) FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))
-                AND lower(recipients) LIKE ? LIMIT 1
-                """, arguments: StatementArguments(mine + ["%\(sender)%"])) ?? 0 > 0
+            if mine.contains(sender) { return isOwnFolder }
+            // A message from me with this person among the recipients: an exact address match,
+            // not a substring ("john@example.co" isn't "john@example.com"; "%" isn't a wildcard).
+            let pattern = "%" + sender.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+                .replacingOccurrences(of: "_", with: "\\_") + "%"
+            let candidates = try String.fetchAll(db, sql: """
+                SELECT recipients FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))
+                AND lower(recipients) LIKE ? ESCAPE '\\' LIMIT 200
+                """, arguments: StatementArguments(mine + [pattern]))
+            return candidates.contains { AddressParser.parse($0).contains { $0.address.lowercased() == sender } }
         }
     }
 

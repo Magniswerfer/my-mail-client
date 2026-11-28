@@ -13,7 +13,7 @@ public struct AttachmentEntry: Sendable, Hashable, Identifiable {
     public var date: Date
     public var mailbox: String
     public var id: String { "\(messageLocalID)-\(index)" }
-    public var filename: String { info.filename ?? "attachment" }
+    public var filename: String { AttachmentNames.sanitize(info.filename ?? "attachment") }
 }
 
 extension MailStore {
@@ -82,9 +82,10 @@ extension MIMEParser {
     /// The bytes of a listed attachment: same file name, closest size (a message can carry
     /// two files with one name, and inline images sit in the same MIME tree).
     public static func attachmentFile(_ info: AttachmentInfo, in raw: Data) -> OutgoingAttachment? {
-        let name = info.filename ?? "attachment"
+        // Lists stored before names were sanitized hold the raw name: compare sanitized.
+        let name = AttachmentNames.sanitize(info.filename ?? "attachment")
         return attachments(in: raw)
-            .filter { $0.filename == name }
+            .filter { AttachmentNames.sanitize($0.filename) == name }
             .min { abs($0.data.count - info.size) < abs($1.data.count - info.size) }
     }
 }

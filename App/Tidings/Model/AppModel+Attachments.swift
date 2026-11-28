@@ -19,8 +19,8 @@ extension AppModel {
             .appendingPathComponent("Attachments", isDirectory: true)
             .appendingPathComponent("\(message.id ?? 0)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let safeName = file.filename.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
-        let url = folder.appendingPathComponent(safeName.isEmpty ? "attachment" : safeName)
+        // No direction overrides, separators or dot names (AttachmentNames).
+        let url = folder.appendingPathComponent(AttachmentNames.sanitize(file.filename))
         try file.data.write(to: url, options: .atomic)
         #if os(macOS)
         var values = URLResourceValues()
@@ -29,7 +29,13 @@ extension AppModel {
             kLSQuarantineTypeKey as String: kLSQuarantineTypeEmailAttachment as String,
         ]
         var quarantined = url
-        try? quarantined.setResourceValues(values)
+        do {
+            try quarantined.setResourceValues(values)
+        } catch {
+            // Unquarantined, Gatekeeper wouldn't check it before it runs: don't hand it out.
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
         #endif
         return url
     }
@@ -39,9 +45,23 @@ extension AppModel {
         withAttachment(info, in: message) { url in self.quickLookURL = url }
     }
 
-    /// Opens it in its default app.
+    /// Opens it in its default app. A file that can run code (an app, a script, an installer,
+    /// a web page) asks first, showing its real name.
     func openAttachment(_ info: AttachmentInfo, in message: StoredMessage) {
-        withAttachment(info, in: message) { url in Platform.openExternally(url) }
+        withAttachment(info, in: message) { url in
+            #if os(macOS)
+            if AttachmentNames.isRisky(url.lastPathComponent) {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = String(localized: "Open “\(url.lastPathComponent)”?")
+                alert.informativeText = String(localized: "This kind of file can run programs or change settings on your Mac. Open it only if you expected it from this sender.")
+                alert.addButton(withTitle: String(localized: "Cancel"))
+                alert.addButton(withTitle: String(localized: "Open Anyway"))
+                guard alert.runModal() == .alertSecondButtonReturn else { return }
+            }
+            #endif
+            Platform.openExternally(url)
+        }
     }
 
     /// Save…: asks where.

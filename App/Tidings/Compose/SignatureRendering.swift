@@ -171,7 +171,8 @@ import UIKit
 
     /// Links in a signature never open from the picture's page.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        navigationAction.navigationType == .other ? .allow : .cancel
+        // Only the page this view loads itself (about:blank); never a refresh or a link.
+        navigationAction.request.url?.scheme == "about" ? .allow : .cancel
     }
 }
 

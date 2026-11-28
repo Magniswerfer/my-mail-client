@@ -1,6 +1,36 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Open “%@”?" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åbn “%@”?"
+          }
+        }
+      }
+    },
+    "This kind of file can run programs or change settings on your Mac. Open it only if you expected it from this sender." : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denne type fil kan køre programmer eller ændre indstillinger på din Mac. Åbn den kun, hvis du ventede den fra denne afsender."
+          }
+        }
+      }
+    },
+    "Open Anyway" : {
+      "localizations" : {
+        "da" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åbn alligevel"
+          }
+        }
+      }
+    },
     "Search Mail" : {
       "localizations" : {
         "da" : {

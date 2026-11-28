@@ -195,9 +195,9 @@ struct Entity {
 
     var filename: String? {
         if let d = header("Content-Disposition"), let name = HeaderParameters.parse(d).parameters["filename"] {
-            return HeaderText.singleLine(EncodedWords.decode(name))
+            return AttachmentNames.sanitize(EncodedWords.decode(name))
         }
-        return contentType.parameters["name"].map { HeaderText.singleLine(EncodedWords.decode($0)) }
+        return contentType.parameters["name"].map { AttachmentNames.sanitize(EncodedWords.decode($0)) }
     }
 
     var decodedBody: [UInt8] {

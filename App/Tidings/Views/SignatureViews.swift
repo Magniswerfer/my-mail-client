@@ -844,7 +844,8 @@ struct SignatureWebEditor: NSViewRepresentable {
 
         /// Clicking a link while editing doesn't leave the signature.
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-            navigationAction.navigationType == .other ? .allow : .cancel
+            // Only the page this view loads itself (about:blank); never a refresh or a link.
+            navigationAction.request.url?.scheme == "about" ? .allow : .cancel
         }
     }
 }
