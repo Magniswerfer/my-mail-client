@@ -126,35 +126,26 @@ enum TextFormat: String, CaseIterable {
                                  typing: [NSAttributedString.Key: Any]) -> Edit {
         let string = text.string as NSString
         let paragraphs = string.paragraphRange(for: selection)
-        let listAttrs = MarkdownShortcuts.attributes(for: .list(marker))
+        let listParagraph = paragraphAttributes(MarkdownShortcuts.attributes(for: .list(marker)))
         let piece = NSMutableAttributedString(attributedString: text.attributedSubstring(from: paragraphs))
 
         // An empty last line: start a list there.
         guard piece.length > 0 else {
             let visible = MarkdownShortcuts.visibleMarker(marker)
             var attrs = typing
-            attrs.merge(paragraphAttributes(listAttrs)) { _, new in new }
+            attrs.merge(listParagraph) { _, new in new }
             let inserted = NSAttributedString(string: visible, attributes: attrs)
             return Edit(range: paragraphs, replacement: inserted,
                         selection: NSRange(location: paragraphs.location + inserted.length, length: 0), typing: attrs)
         }
 
-        var ranges: [NSRange] = []
-        var location = 0
-        let local = piece.string as NSString
-        while location < local.length {
-            let range = local.paragraphRange(for: NSRange(location: location, length: 0))
-            ranges.append(range)
-            location = NSMaxRange(range)
-        }
+        let ranges = paragraphRanges(in: piece.string as NSString)
         let removing = ranges.allSatisfy { listMarker(in: piece, at: $0) == marker }
         var deltas: [Int] = Array(repeating: 0, count: ranges.count)
         for (index, range) in ranges.enumerated().reversed() {
             var length = range.length
             // Take off the marker it has (to remove it, or to swap kinds).
-            if listMarker(in: piece, at: range) != nil,
-               let found = (piece.string as NSString).substring(with: range).range(of: #"^\t[^\t]*\t"#, options: .regularExpression) {
-                let markerLength = NSRange(found, in: (piece.string as NSString).substring(with: range)).length
+            if listMarker(in: piece, at: range) != nil, let markerLength = visibleMarkerLength(in: piece, paragraph: range) {
                 piece.deleteCharacters(in: NSRange(location: range.location, length: markerLength))
                 length -= markerLength
                 deltas[index] -= markerLength
@@ -166,11 +157,11 @@ enum TextFormat: String, CaseIterable {
             } else {
                 let visible = MarkdownShortcuts.visibleMarker(marker, number: index + 1)
                 var attrs = RichTextEditor.baseAttributes
-                attrs.merge(paragraphAttributes(listAttrs)) { _, new in new }
+                attrs.merge(listParagraph) { _, new in new }
                 piece.insert(NSAttributedString(string: visible, attributes: attrs), at: paragraph.location)
                 let inserted = (visible as NSString).length
                 deltas[index] += inserted
-                piece.addAttributes(paragraphAttributes(listAttrs),
+                piece.addAttributes(listParagraph,
                                     range: NSRange(location: paragraph.location, length: length + inserted))
             }
         }
@@ -179,7 +170,7 @@ enum TextFormat: String, CaseIterable {
             after[.tidingsList] = nil
             after[.paragraphStyle] = baseParagraphStyle
         } else {
-            after.merge(paragraphAttributes(listAttrs)) { _, new in new }
+            after.merge(listParagraph) { _, new in new }
         }
         // The caret keeps its place in the text; markers before it move it along.
         let first = deltas.first ?? 0
@@ -187,6 +178,24 @@ enum TextFormat: String, CaseIterable {
         let start = max(paragraphs.location, selection.location + first)
         let newSelection = NSRange(location: start, length: max(0, selection.length + total - first))
         return Edit(range: paragraphs, replacement: piece, selection: newSelection, typing: after)
+    }
+
+    private static func paragraphRanges(in string: NSString) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var location = 0
+        while location < string.length {
+            let range = string.paragraphRange(for: NSRange(location: location, length: 0))
+            ranges.append(range)
+            location = NSMaxRange(range)
+        }
+        return ranges
+    }
+
+    /// The length (UTF-16) of the visible list marker that starts the paragraph, if it has one.
+    private static func visibleMarkerLength(in text: NSAttributedString, paragraph range: NSRange) -> Int? {
+        let paragraph = (text.string as NSString).substring(with: range)
+        guard let found = paragraph.range(of: MarkdownShortcuts.visibleMarkerPattern, options: .regularExpression) else { return nil }
+        return NSRange(found, in: paragraph).length
     }
 
     /// The list kind of the paragraph at `range`, if it's in one.

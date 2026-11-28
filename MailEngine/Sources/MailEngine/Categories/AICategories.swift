@@ -42,6 +42,14 @@ public struct AICategory: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// `aiCategoryMember.source`: who decided a conversation's membership.
+enum AICategoryMembershipSource {
+    static let you = 1
+    static let model = 0
+    /// You took it out; the model never puts it back.
+    static let removedByYou = -1
+}
+
 extension MailStore {
     static func registerAICategoryMigrations(_ m: inout DatabaseMigrator) {
         m.registerMigration("v19-ai-categories") { db in
@@ -133,7 +141,7 @@ extension MailStore {
             try db.execute(sql: """
                 INSERT INTO aiCategoryMember (categoryID, threadID, source, at) VALUES (?, ?, ?, ?)
                 ON CONFLICT(categoryID, threadID) DO \(byYou ? "UPDATE SET source = 1 WHERE source = 0" : "NOTHING")
-                """, arguments: [id, threadID, byYou ? 1 : 0, Date()])
+                """, arguments: [id, threadID, byYou ? AICategoryMembershipSource.you : AICategoryMembershipSource.model, Date()])
         }
     }
 
@@ -176,7 +184,7 @@ extension MailStore {
             try db.execute(sql: """
                 INSERT INTO aiCategoryMember (categoryID, threadID, source, at) VALUES (?, ?, ?, ?)
                 ON CONFLICT(categoryID, threadID) DO UPDATE SET source = excluded.source, at = excluded.at
-                """, arguments: [categoryID, threadID, isMember ? 1 : -1, Date()])
+                """, arguments: [categoryID, threadID, isMember ? AICategoryMembershipSource.you : AICategoryMembershipSource.removedByYou, Date()])
         }
     }
 

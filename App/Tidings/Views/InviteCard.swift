@@ -49,22 +49,7 @@ struct InviteCard: View {
                 DateTile(invite: invite)
                 VStack(alignment: .leading, spacing: 4) {
                     statusLine(mine: mine, isOrganizer: isOrganizer)
-                    Text(invite.summary.isEmpty ? String(localized: "Untitled event") : invite.summary)
-                        .font(.headline)
-                        .strikethrough(invite.isCancelled)
-                        .textSelection(.enabled)
-                    Text(InviteFormat.when(invite)).font(.subheadline)
-                    if let other = InviteFormat.organizerTime(invite) {
-                        Text(other).font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let repeats = InviteFormat.repeats(invite.recurrenceRule) {
-                        Label(repeats, systemImage: "repeat").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let location = invite.location, location != invite.conferenceURL {
-                        Label(location, systemImage: "mappin.and.ellipse")
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
-                    }
-                    people
+                    eventDetails
                 }
                 Spacer(minLength: 0)
                 if let link = invite.conferenceURL.flatMap(URL.init(string:)), !invite.isCancelled {
@@ -117,6 +102,26 @@ struct InviteCard: View {
         Label(text, systemImage: symbol)
             .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
+    }
+
+    /// What, when (also in the organizer's zone), how often, where and who.
+    @ViewBuilder private var eventDetails: some View {
+        Text(invite.summary.isEmpty ? String(localized: "Untitled event") : invite.summary)
+            .font(.headline)
+            .strikethrough(invite.isCancelled)
+            .textSelection(.enabled)
+        Text(InviteFormat.when(invite)).font(.subheadline)
+        if let other = InviteFormat.organizerTime(invite) {
+            Text(other).font(.caption).foregroundStyle(.secondary)
+        }
+        if let repeats = InviteFormat.repeats(invite.recurrenceRule) {
+            Label(repeats, systemImage: "repeat").font(.caption).foregroundStyle(.secondary)
+        }
+        if let location = invite.location, location != invite.conferenceURL {
+            Label(location, systemImage: "mappin.and.ellipse")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
+        }
+        people
     }
 
     @ViewBuilder private var people: some View {
@@ -307,8 +312,12 @@ enum InviteFormat {
 
     static func repeats(_ rule: String?) -> String? {
         guard let rule else { return nil }
-        let freq = rule.uppercased().split(separator: ";").first { $0.hasPrefix("FREQ=") }.map { String($0.dropFirst(5)) } ?? ""
-        let interval = rule.uppercased().split(separator: ";").first { $0.hasPrefix("INTERVAL=") }.flatMap { Int($0.dropFirst(9)) } ?? 1
+        let parts = rule.uppercased().split(separator: ";")
+        func value(_ key: String) -> Substring? {
+            parts.first { $0.hasPrefix(key + "=") }?.dropFirst(key.count + 1)
+        }
+        let freq = value("FREQ").map(String.init) ?? ""
+        let interval = value("INTERVAL").flatMap { Int($0) } ?? 1
         switch (freq, interval) {
         case ("DAILY", 1): return String(localized: "Every day")
         case ("WEEKLY", 1): return String(localized: "Every week")

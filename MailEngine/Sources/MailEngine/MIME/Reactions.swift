@@ -73,10 +73,15 @@ enum ReactionDetector {
         return nil
     }
 
+    static let maxReactionEmoji = 16
+    /// Outlook's own part is just the reaction line; longer text is a real reply quoting a reaction.
+    static let maxOutlookReactionText = 400
+    static let minOutlookRuleLength = 5
+
     /// Only emoji (and spaces), a handful at most: a reaction, not a short reply.
     static func isEmojiText(_ s: String) -> Bool {
         let chars = s.filter { !$0.isWhitespace }
-        guard !chars.isEmpty, chars.count <= 16 else { return false }
+        guard !chars.isEmpty, chars.count <= maxReactionEmoji else { return false }
         return chars.allSatisfy { c in !c.isASCII && c.unicodeScalars.contains { $0.properties.isEmoji } }
     }
 
@@ -87,9 +92,8 @@ enum ReactionDetector {
     /// "" for a removal, nil when this isn't Outlook's reaction mail.
     static func outlookHTML(_ html: String) -> String? {
         let own = ownPart(html)
-        // Outlook's own part is just the reaction line; a long one is a real reply quoting a reaction.
-        guard HTMLText.toPlainText(own).count < 400 else { return nil }
-        for tag in matches(#"<img\b[^<>]*>"#, in: own) {
+        guard HTMLText.toPlainText(own).count < maxOutlookReactionText else { return nil }
+        for tag in imageTags(in: own) {
             let alt = attribute("alt", in: tag)
             let src = attribute("src", in: tag) ?? ""
             if let name = reactionImageName(src), let emoji = outlookEmoji[name] { return emoji }
@@ -132,17 +136,19 @@ enum ReactionDetector {
         let ns = first as NSString
         guard let match = regex.firstMatch(in: first, range: NSRange(location: 0, length: ns.length)) else { return nil }
         let rule = lines[1]
-        guard rule.count >= 5, rule.allSatisfy({ $0 == "_" }) else { return nil }
+        guard rule.count >= minOutlookRuleLength, rule.allSatisfy({ $0 == "_" }) else { return nil }
         let name = ns.substring(with: match.range(at: 1)).lowercased()
         return name == "0" ? "" : outlookEmoji[name]
     }
 
     // MARK: Small HTML helpers
 
-    static func matches(_ pattern: String, in s: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
-        let ns = s as NSString
-        return regex.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
+    static let imageTag = try? NSRegularExpression(pattern: #"<img\b[^<>]*>"#, options: [.caseInsensitive])
+
+    static func imageTags(in html: String) -> [String] {
+        guard let imageTag else { return [] }
+        let ns = html as NSString
+        return imageTag.matches(in: html, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) }
     }
 
     /// An attribute's value in one tag, entities decoded; nil when absent.

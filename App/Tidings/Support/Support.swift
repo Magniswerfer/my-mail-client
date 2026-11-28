@@ -226,7 +226,6 @@ enum MailDate {
 extension StoredMessage {
     var senderDisplay: String { fromName?.isEmpty == false ? fromName! : fromAddress }
     var isUnread: Bool { !flags.contains("\\Seen") }
-    var isFlagged: Bool { flags.contains("\\Flagged") }
 }
 
 /// The person's photo from Apple Contacts, else their website's icon, else a neutral monogram

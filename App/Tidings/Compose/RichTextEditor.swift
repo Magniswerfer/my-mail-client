@@ -248,11 +248,21 @@ extension RichTextEditor {
         return attrs
     }
 
+    /// The keys that finish a `;keyword` snippet.
+    static let snippetTriggers: Set<String> = [" ", "\t", "\n"]
+    /// How far back from the caret a snippet's `;keyword` may start.
+    private static let snippetLookBehind = 40
+
+    /// What replaces `;keyword`: the expansion, then the key that finished it (Tab only expands).
+    static func insertion(expanding expansion: String, typed trigger: String) -> String {
+        expansion + (trigger == "\t" ? "" : trigger)
+    }
+
     /// `;keyword` right before the caret that names a snippet → its range and expanded text.
     static func snippet(in storage: NSTextStorage, caret: Int) -> (NSRange, String)? {
         let string = storage.string as NSString
         guard caret > 1, caret <= string.length else { return nil }
-        let start = max(0, caret - 40)
+        let start = max(0, caret - snippetLookBehind)
         let before = string.substring(with: NSRange(location: start, length: caret - start))
         guard let semicolon = before.lastIndex(of: ";") else { return nil }
         let keyword = String(before[before.index(after: semicolon)...])
@@ -267,6 +277,9 @@ extension RichTextEditor {
     static func visibleMarker(_ marker: NSTextList.MarkerFormat, number: Int = 1) -> String {
         marker == .disc ? "\t•\t" : "\t\(number).\t"
     }
+
+    /// A `visibleMarker` at the start of a paragraph's text.
+    nonisolated static let visibleMarkerPattern = #"^\t[^\t]*\t"#
 
     /// Return on an empty list item or quote line ends the list/quote (Mac). True when handled.
     static func endsBlock(in storage: NSTextStorage, at location: Int) -> Bool {
@@ -300,18 +313,33 @@ struct RichTextEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        // As NSTextView.scrollableTextView() sets it up, with our subclass (quote bars).
+        let view = Self.makeTextView()
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .noBorder
+        scroll.documentView = view
+        scroll.drawsBackground = false
+        view.delegate = context.coordinator
+        view.textStorage?.setAttributedString(text)
+        context.coordinator.textView = view
+        context.coordinator.lastText = text
+        if focusOnAppear {
+            DispatchQueue.main.async {
+                view.window?.makeFirstResponder(view)
+                view.setSelectedRange(NSRange(location: 0, length: 0))
+            }
+        }
+        return scroll
+    }
+
+    /// As NSTextView.scrollableTextView() sets it up, with our subclass (quote bars).
+    private static func makeTextView() -> QuoteBarTextView {
         let view = QuoteBarTextView(usingTextLayoutManager: true)
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
         view.autoresizingMask = [.width]
         view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.textContainer?.widthTracksTextView = true
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.borderType = .noBorder
-        scroll.documentView = view
-        view.delegate = context.coordinator
         view.isRichText = true
         view.allowsUndo = true
         view.importsGraphics = false
@@ -325,17 +353,7 @@ struct RichTextEditor: NSViewRepresentable {
         view.typingAttributes = Self.baseAttributes
         view.textContainerInset = NSSize(width: 4, height: 10)
         view.drawsBackground = false
-        scroll.drawsBackground = false
-        view.textStorage?.setAttributedString(text)
-        context.coordinator.textView = view
-        context.coordinator.lastText = text
-        if focusOnAppear {
-            DispatchQueue.main.async {
-                view.window?.makeFirstResponder(view)
-                view.setSelectedRange(NSRange(location: 0, length: 0))
-            }
-        }
-        return scroll
+        return view
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
@@ -408,35 +426,41 @@ struct RichTextEditor: NSViewRepresentable {
 
         func textView(_ view: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {
             guard let text, let storage = view.textStorage else { return true }
+            if MarkdownShortcuts.snippetTriggers.contains(text), range.length == 0,
+               expandSnippet(in: view, storage: storage, caret: range.location, typed: text) {
+                return false
+            }
+            switch text {
+            case "\n": return !endBlock(in: view, storage: storage, at: range.location)
+            case " ": return !startBlock(in: view, storage: storage, caret: range.location)
+            default: return true
+            }
+        }
+
+        private func expandSnippet(in view: NSTextView, storage: NSTextStorage, caret: Int, typed trigger: String) -> Bool {
+            guard let found = MarkdownShortcuts.snippet(in: storage, caret: caret) else { return false }
+            let (snippetRange, expansion) = found
+            view.insertText(MarkdownShortcuts.insertion(expanding: expansion, typed: trigger), replacementRange: snippetRange)
+            return true
+        }
+
+        private func endBlock(in view: NSTextView, storage: NSTextStorage, at location: Int) -> Bool {
+            guard MarkdownShortcuts.endsBlock(in: storage, at: location) else { return false }
+            view.typingAttributes = RichTextEditor.baseAttributes
+            return true
+        }
+
+        /// `- `, `* `, `1. ` or `> ` at the start of a paragraph: it becomes a list or a quote.
+        private func startBlock(in view: NSTextView, storage: NSTextStorage, caret: Int) -> Bool {
             let string = storage.string as NSString
-
-            if text == " " || text == "\t" || text == "\n", range.length == 0,
-               let found = MarkdownShortcuts.snippet(in: storage, caret: range.location) {
-                let (snippetRange, expansion) = found
-                view.insertText(expansion + (text == "\t" ? "" : text), replacementRange: snippetRange)
-                return false
+            let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+            let prefix = string.substring(with: NSRange(location: paragraph.location, length: caret - paragraph.location))
+            guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return false }
+            replace(prefix: prefix, in: view, at: paragraph.location, attributes: MarkdownShortcuts.attributes(for: block))
+            if case .list(let marker) = block {
+                // Show the marker right away; NSTextView inserts it on the next newline otherwise.
+                view.insertText(MarkdownShortcuts.visibleMarker(marker), replacementRange: NSRange(location: paragraph.location, length: 0))
             }
-
-            if text == "\n" {
-                if MarkdownShortcuts.endsBlock(in: storage, at: range.location) {
-                    view.typingAttributes = RichTextEditor.baseAttributes
-                    return false
-                }
-                return true
-            }
-
-            if text == " " {
-                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
-                let prefix = string.substring(with: NSRange(location: paragraph.location, length: range.location - paragraph.location))
-                guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return true }
-                replace(prefix: prefix, in: view, at: paragraph.location, attributes: MarkdownShortcuts.attributes(for: block))
-                if case .list(let marker) = block {
-                    // Show the marker right away; NSTextView inserts it on the next newline otherwise.
-                    view.insertText(MarkdownShortcuts.visibleMarker(marker), replacementRange: NSRange(location: paragraph.location, length: 0))
-                }
-                return false
-            }
-
             return true
         }
 
@@ -545,10 +569,13 @@ struct RichTextEditor: UIViewRepresentable {
         /// Above the keyboard: Bold, Italic, Underline, the two lists, and hiding the keyboard,
         /// with clear space between the pills and the keyboard.
         func formattingBar() -> UIView {
-            let gap: CGFloat = 10
-            let container = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + gap))
+            // The width is a placeholder: the input accessory is stretched to the keyboard's.
+            let width: CGFloat = 320
+            let barHeight: CGFloat = 44
+            let gapAboveKeyboard: CGFloat = 10
+            let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: barHeight + gapAboveKeyboard))
             container.backgroundColor = .clear
-            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+            let bar = UIToolbar(frame: CGRect(x: 0, y: 0, width: width, height: barHeight))
             bar.autoresizingMask = [.flexibleWidth, .flexibleBottomMargin]
             container.addSubview(bar)
             func item(_ format: TextFormat) -> UIBarButtonItem {
@@ -579,76 +606,98 @@ struct RichTextEditor: UIViewRepresentable {
         }
 
         func textView(_ view: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-            let storage = view.textStorage
-            let string = storage.string as NSString
-
-            if text == " " || text == "\t" || text == "\n", range.length == 0,
-               let found = MarkdownShortcuts.snippet(in: storage, caret: range.location) {
-                let (snippetRange, expansion) = found
-                let inserted = expansion + (text == "\t" ? "" : text)
-                storage.replaceCharacters(in: snippetRange, with: NSAttributedString(string: inserted, attributes: RichTextEditor.baseAttributes))
-                view.selectedRange = NSRange(location: snippetRange.location + (inserted as NSString).length, length: 0)
-                textViewDidChange(view)
+            if MarkdownShortcuts.snippetTriggers.contains(text), range.length == 0,
+               expandSnippet(in: view, caret: range.location, typed: text) {
                 return false
             }
+            switch text {
+            case "\n": return !handleReturn(in: view, at: range)
+            case " ": return !startBlock(in: view, caret: range.location)
+            default: return true
+            }
+        }
 
-            if text == "\n", storage.length > 0 {
-                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
-                let at = min(paragraph.location, storage.length - 1)
-                let line = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
-                if let list = storage.attribute(.tidingsList, at: at, effectiveRange: nil) as? String {
-                    let marker = line.range(of: #"^\t[^\t]*\t"#, options: .regularExpression).map { String(line[$0]) } ?? ""
-                    if line == marker {
-                        // Return on an empty item ends the list.
-                        storage.replaceCharacters(in: paragraph, with: NSAttributedString(
-                            string: paragraph.length > (marker as NSString).length ? "\n" : "", attributes: RichTextEditor.baseAttributes))
-                        view.selectedRange = NSRange(location: paragraph.location, length: 0)
-                        view.typingAttributes = RichTextEditor.baseAttributes
-                    } else {
-                        // Continue the list with the next marker.
-                        let number = Int(marker.trimmingCharacters(in: CharacterSet(charactersIn: "\t."))) ?? 0
-                        let format: NSTextList.MarkerFormat = list == "ol" ? .decimal : .disc
-                        let attrs = MarkdownShortcuts.attributes(for: .list(format))
-                        let next = "\n" + MarkdownShortcuts.visibleMarker(format, number: number + 1)
-                        storage.replaceCharacters(in: range, with: NSAttributedString(string: next, attributes: attrs))
-                        view.selectedRange = NSRange(location: range.location + (next as NSString).length, length: 0)
-                        view.typingAttributes = attrs
-                    }
-                    textViewDidChange(view)
-                    return false
+        private func expandSnippet(in view: UITextView, caret: Int, typed trigger: String) -> Bool {
+            guard let found = MarkdownShortcuts.snippet(in: view.textStorage, caret: caret) else { return false }
+            let (snippetRange, expansion) = found
+            let inserted = MarkdownShortcuts.insertion(expanding: expansion, typed: trigger)
+            view.textStorage.replaceCharacters(in: snippetRange, with: NSAttributedString(string: inserted, attributes: RichTextEditor.baseAttributes))
+            view.selectedRange = NSRange(location: snippetRange.location + (inserted as NSString).length, length: 0)
+            textViewDidChange(view)
+            return true
+        }
+
+        /// Return in a list continues it (or ends it on an empty item); on an empty quote line
+        /// it ends the quote. True when handled.
+        private func handleReturn(in view: UITextView, at range: NSRange) -> Bool {
+            let storage = view.textStorage
+            guard storage.length > 0 else { return false }
+            let string = storage.string as NSString
+            let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
+            let at = min(paragraph.location, storage.length - 1)
+            let line = string.substring(with: paragraph).trimmingCharacters(in: .newlines)
+            if let list = storage.attribute(.tidingsList, at: at, effectiveRange: nil) as? String {
+                let marker = line.range(of: MarkdownShortcuts.visibleMarkerPattern, options: .regularExpression).map { String(line[$0]) } ?? ""
+                if line == marker {
+                    endList(in: view, paragraph: paragraph, marker: marker)
+                } else {
+                    continueList(list, in: view, at: range, after: marker)
                 }
-                if storage.attribute(.tidingsQuote, at: at, effectiveRange: nil) != nil, line.isEmpty {
-                    storage.setAttributes(RichTextEditor.baseAttributes, range: paragraph)
-                    view.typingAttributes = RichTextEditor.baseAttributes
-                    textViewDidChange(view)
-                    return false
-                }
+                textViewDidChange(view)
                 return true
             }
-
-            if text == " " {
-                let paragraph = string.paragraphRange(for: NSRange(location: range.location, length: 0))
-                let prefix = string.substring(with: NSRange(location: paragraph.location, length: range.location - paragraph.location))
-                guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return true }
-                let attrs = MarkdownShortcuts.attributes(for: block)
-                storage.beginEditing()
-                storage.replaceCharacters(in: NSRange(location: paragraph.location, length: (prefix as NSString).length), with: "")
-                var caret = paragraph.location
-                if case .list(let marker) = block {
-                    let visible = MarkdownShortcuts.visibleMarker(marker)
-                    storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 0),
-                                              with: NSAttributedString(string: visible, attributes: attrs))
-                    caret += (visible as NSString).length
-                }
-                let updated = (storage.string as NSString).paragraphRange(for: NSRange(location: paragraph.location, length: 0))
-                storage.addAttributes(attrs, range: updated)
-                storage.endEditing()
-                view.selectedRange = NSRange(location: caret, length: 0)
-                view.typingAttributes = attrs
+            if storage.attribute(.tidingsQuote, at: at, effectiveRange: nil) != nil, line.isEmpty {
+                storage.setAttributes(RichTextEditor.baseAttributes, range: paragraph)
+                view.typingAttributes = RichTextEditor.baseAttributes
                 textViewDidChange(view)
-                return false
+                return true
             }
+            return false
+        }
 
+        /// Return on an empty item: the item's marker goes, and the list ends there.
+        private func endList(in view: UITextView, paragraph: NSRange, marker: String) {
+            view.textStorage.replaceCharacters(in: paragraph, with: NSAttributedString(
+                string: paragraph.length > (marker as NSString).length ? "\n" : "", attributes: RichTextEditor.baseAttributes))
+            view.selectedRange = NSRange(location: paragraph.location, length: 0)
+            view.typingAttributes = RichTextEditor.baseAttributes
+        }
+
+        /// A new item with the next marker (`list`: "ul" or "ol").
+        private func continueList(_ list: String, in view: UITextView, at range: NSRange, after marker: String) {
+            let number = Int(marker.trimmingCharacters(in: CharacterSet(charactersIn: "\t."))) ?? 0
+            let format: NSTextList.MarkerFormat = list == "ol" ? .decimal : .disc
+            let attrs = MarkdownShortcuts.attributes(for: .list(format))
+            let next = "\n" + MarkdownShortcuts.visibleMarker(format, number: number + 1)
+            view.textStorage.replaceCharacters(in: range, with: NSAttributedString(string: next, attributes: attrs))
+            view.selectedRange = NSRange(location: range.location + (next as NSString).length, length: 0)
+            view.typingAttributes = attrs
+        }
+
+        /// `- `, `* `, `1. ` or `> ` at the start of a paragraph: it becomes a list (with its
+        /// marker as text) or a quote.
+        private func startBlock(in view: UITextView, caret: Int) -> Bool {
+            let storage = view.textStorage
+            let string = storage.string as NSString
+            let paragraph = string.paragraphRange(for: NSRange(location: caret, length: 0))
+            let prefix = string.substring(with: NSRange(location: paragraph.location, length: caret - paragraph.location))
+            guard let block = MarkdownShortcuts.block(forPrefix: prefix) else { return false }
+            let attrs = MarkdownShortcuts.attributes(for: block)
+            storage.beginEditing()
+            storage.replaceCharacters(in: NSRange(location: paragraph.location, length: (prefix as NSString).length), with: "")
+            var newCaret = paragraph.location
+            if case .list(let marker) = block {
+                let visible = MarkdownShortcuts.visibleMarker(marker)
+                storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 0),
+                                          with: NSAttributedString(string: visible, attributes: attrs))
+                newCaret += (visible as NSString).length
+            }
+            let updated = (storage.string as NSString).paragraphRange(for: NSRange(location: paragraph.location, length: 0))
+            storage.addAttributes(attrs, range: updated)
+            storage.endEditing()
+            view.selectedRange = NSRange(location: newCaret, length: 0)
+            view.typingAttributes = attrs
+            textViewDidChange(view)
             return true
         }
     }
@@ -659,6 +708,10 @@ struct RichTextEditor: UIViewRepresentable {
 
 /// Turns the editor's attributed text into the two bodies a mail needs.
 enum MailBodyConverter {
+    /// U+FFFC, the character that stands for an attachment: a picture (the signature's) that
+    /// isn't text.
+    private static let attachmentCharacter = "\u{FFFC}"
+
     /// The signature (its id) a paragraph holds, if any.
     static func signatureID(in text: NSAttributedString, paragraph range: NSRange) -> String? {
         var id: String?
@@ -677,7 +730,7 @@ enum MailBodyConverter {
             let range = string.paragraphRange(for: NSRange(location: location, length: 0))
             if let id = signatureID(in: text, paragraph: range) {
                 // The signature's own line; anything typed beside it stays.
-                let rest = string.substring(with: range).replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let rest = string.substring(with: range).replacingOccurrences(of: attachmentCharacter, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if !rest.isEmpty { lines.append(rest) }
                 if let signature = signatures[id] { lines.append(signature.textBlock) }
                 location = NSMaxRange(range)
@@ -706,7 +759,7 @@ enum MailBodyConverter {
             let href = (link as? URL)?.absoluteString ?? (link as? String)
             line += href.map { OutgoingHTML.plainTextLink(text: piece, href: $0) } ?? piece
         }
-        return line.trimmingCharacters(in: .newlines).replacingOccurrences(of: "\u{FFFC}", with: "")
+        return line.trimmingCharacters(in: .newlines).replacingOccurrences(of: attachmentCharacter, with: "")
     }
 
     /// Clean, inline-styled HTML: <p>, <ul>/<ol>, <blockquote>, <b>/<i>/<u>/<s>, links.
@@ -719,7 +772,7 @@ enum MailBodyConverter {
         var location = 0
 
         func closeBlocks(list: String?, quote: Bool) {
-            if openList != nil, openList != list { html += "</\(openList!)>"; openList = nil }
+            if let open = openList, open != list { html += "</\(open)>"; openList = nil }
             if inQuote, !quote { html += "</blockquote>"; inQuote = false }
         }
 
@@ -745,7 +798,7 @@ enum MailBodyConverter {
 
             var content = text.attributedSubstring(from: range)
             // Drop the visible list marker we inserted ("\t•\t", "\t1.\t").
-            if list != nil, let markerEnd = content.string.range(of: #"^\t[^\t]*\t"#, options: .regularExpression) {
+            if list != nil, let markerEnd = content.string.range(of: MarkdownShortcuts.visibleMarkerPattern, options: .regularExpression) {
                 let length = content.string.distance(from: content.string.startIndex, to: markerEnd.upperBound)
                 content = content.attributedSubstring(from: NSRange(location: length, length: content.length - length))
             }
@@ -765,9 +818,8 @@ enum MailBodyConverter {
     static func inlineHTML(_ text: NSAttributedString) -> String {
         var out = ""
         text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attrs, range, _ in
-            // U+FFFC: a picture (the signature's) that isn't text.
             let raw = (text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines)
-                .replacingOccurrences(of: "\u{FFFC}", with: "")
+                .replacingOccurrences(of: attachmentCharacter, with: "")
             guard !raw.isEmpty else { return }
             // Spaces HTML would collapse (several in a row, indents) stay as typed.
             var piece = OutgoingHTML.text(raw, leadingEdge: range.location == 0,

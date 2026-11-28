@@ -93,11 +93,14 @@ struct ServerOptions: ParsableArguments {
             }
             return testPassword
         }
-        return try Keychain.password(service: "Tidings", account: address)
+        return try Keychain.password(service: Keychain.service, account: address)
     }
 }
 
 enum Keychain {
+    /// The service the owner stores the app-specific password under (see `--help`).
+    static let service = "Tidings"
+
     static func password(service: String, account: String) throws -> String {
         #if !canImport(Darwin)
         // No Keychain on Linux (ADR 0007): the password comes from the environment.
@@ -117,8 +120,8 @@ enum Keychain {
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data, let password = String(data: data, encoding: .utf8) else {
             throw ValidationError("""
-                No Keychain item for service 'Tidings', account '\(account)' (OSStatus \(status)).
-                Create one with: security add-generic-password -s Tidings -a \(account) -w
+                No Keychain item for service '\(service)', account '\(account)' (OSStatus \(status)).
+                Create one with: security add-generic-password -s \(service) -a \(account) -w
                 """)
         }
         return password
@@ -136,7 +139,7 @@ struct KeychainCheck: AsyncParsableCommand {
     @Option(help: "Keychain account name used when saving the password.") var address: String
 
     func run() async throws {
-        let password = try Keychain.password(service: "Tidings", account: address)
+        let password = try Keychain.password(service: Keychain.service, account: address)
         let appSpecific = password.range(of: #"^[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}$"#, options: .regularExpression) != nil
         let undashed = password.range(of: #"^[a-z]{16}$"#, options: .regularExpression) != nil
         print("Keychain item found for '\(address)'.")
@@ -254,6 +257,10 @@ struct BenchSearch: AsyncParsableCommand {
         commandName: "bench-search",
         abstract: "Build a synthetic mailbox and measure as-you-type search latency against the 30 ms p95 budget."
     )
+    /// SPEC §15 budgets, in milliseconds at p95.
+    static let hitsBudget = 30.0
+    static let facetsBudget = 100.0
+
     @Option(help: "Number of synthetic messages.") var count = 250_000
     @Option(help: "Database path (default: a temp file).") var database: String?
 
@@ -267,13 +274,14 @@ struct BenchSearch: AsyncParsableCommand {
             let clock = ContinuousClock()
             let start = clock.now
             let all = SyntheticCorpus().messages(count: count)
-            for chunk in stride(from: existing, to: count, by: 5_000) {
-                try store.upsert(Array(all[chunk..<min(chunk + 5_000, count)]))
+            let batchSize = 5_000
+            for chunk in stride(from: existing, to: count, by: batchSize) {
+                try store.upsert(Array(all[chunk..<min(chunk + batchSize, count)]))
             }
             print("Indexed in \(clock.now - start)")
         }
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
-        print("Store: \(try store.count()) messages, \(size / 1_048_576) MB on disk")
+        print("Store: \(try store.count()) messages, \(size >> 20) MB on disk")
 
         let engine = SearchEngine(store: store)
         let typed = ["f", "fa", "fak", "fakt", "faktu", "faktura", "faktura z", "faktura za",
@@ -308,10 +316,10 @@ struct BenchSearch: AsyncParsableCommand {
         }
         let (h50, h95, hMax) = stats(hitSamples)
         let (f50, f95, fMax) = stats(facetSamples)
-        print(String(format: "\nHits   (phase 1) — p50 %.2f ms, p95 %.2f ms, max %.2f ms  budget p95 < 30 ms  %@",
-                     h50, h95, hMax, h95 < 30 ? "✓" : "✗ OVER"))
-        print(String(format: "Facets (phase 2) — p50 %.2f ms, p95 %.2f ms, max %.2f ms  budget p95 < 100 ms %@",
-                     f50, f95, fMax, f95 < 100 ? "✓" : "✗ OVER"))
+        print(String(format: "\nHits   (phase 1) — p50 %.2f ms, p95 %.2f ms, max %.2f ms  budget p95 < %.0f ms  %@",
+                     h50, h95, hMax, Self.hitsBudget, h95 < Self.hitsBudget ? "✓" : "✗ OVER"))
+        print(String(format: "Facets (phase 2) — p50 %.2f ms, p95 %.2f ms, max %.2f ms  budget p95 < %.0f ms %@",
+                     f50, f95, fMax, Self.facetsBudget, f95 < Self.facetsBudget ? "✓" : "✗ OVER"))
     }
 }
 

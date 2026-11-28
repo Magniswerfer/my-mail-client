@@ -5,8 +5,7 @@ import SwiftUI
 /// iPhone: the Inbox's categories as one Liquid Glass bar at the bottom, in place of the tabs
 /// above the list. Swipe it sideways to go to the next or previous category (the neighbours slide
 /// in under your finger, like Safari's address bar), or tap its left or right side to step one;
-/// hold it to pick from all of them. New Message
-/// sits beside it in the same glass group.
+/// hold it to pick from all of them. New Message sits beside it in the same glass group.
 struct PhoneBottomBar: View {
     @Environment(AppModel.self) private var model
     @Namespace private var glass
@@ -249,6 +248,12 @@ private struct CategoryPager: View {
     private let gap: CGFloat = 26
     /// How much of a neighbour must still show beside the widest label.
     private let peek: CGFloat = 22
+    /// A label's width until it has been measured.
+    private let estimatedLabelWidth: CGFloat = 110
+    /// The narrowest a label is ever squeezed to.
+    private let minLabelWidth: CGFloat = 60
+    /// How far from the middle (as a share of the bar) a label fades to its dimmest.
+    private let fadeReach: CGFloat = 0.45
 
     // Feel
     /// Slower than this (pt/s) at release is a drag: it snaps to the nearest category. Faster
@@ -261,14 +266,16 @@ private struct CategoryPager: View {
     private let momentumReach: CGFloat = 0.16
     /// One flick never passes more categories than this.
     private let maxFlickSteps = 4
+    /// Two taps in the middle within this long are a double tap.
+    private let doubleTapInterval: TimeInterval = 0.35
 
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let centres = centres()
             let rest = centres.indices.contains(index) ? centres[index] : 0
-            CategoryStrip(items: items, centres: centres, offset: offset ?? rest, reach: width * 0.45,
-                          maxLabelWidth: max(width - 2 * (gap + peek), 60), presented: presented,
+            CategoryStrip(items: items, centres: centres, offset: offset ?? rest, reach: width * fadeReach,
+                          maxLabelWidth: maxLabelWidth(in: width), presented: presented,
                           measured: { id, w in if widths[id] != w { widths[id] = w } },
                           crossed: { if offset != nil { feedback.selectionChanged() } })
                 // Picked from the list or with VoiceOver: glide there. (After a swipe the strip is
@@ -331,11 +338,16 @@ private struct CategoryPager: View {
         var result: [CGFloat] = []
         var leading: CGFloat = 0
         for item in items {
-            let w = widths[item.id] ?? 110
+            let w = widths[item.id] ?? estimatedLabelWidth
             result.append(leading + w / 2)
             leading += w + gap
         }
         return result
+    }
+
+    /// Leaves room for a peeking neighbour on each side.
+    private func maxLabelWidth(in width: CGFloat) -> CGFloat {
+        max(width - 2 * (gap + peek), minLabelWidth)
     }
 
     private func nearest(to x: CGFloat, in centres: [CGFloat]) -> Int {
@@ -374,7 +386,7 @@ private struct CategoryPager: View {
     private func tapped(at x: CGFloat, width: CGFloat, centres: [CGFloat]) {
         guard !centres.isEmpty, drag == nil else { return }
         let current = min(max(heading ?? index, 0), centres.count - 1)
-        let label = min(widths[items[current].id] ?? 110, max(width - 2 * (gap + peek), 60))
+        let label = min(widths[items[current].id] ?? estimatedLabelWidth, maxLabelWidth(in: width))
         let side = max(label / 2 + 4, width * 0.2)
         let fromMiddle = x - width / 2
         if abs(fromMiddle) > side {
@@ -384,7 +396,7 @@ private struct CategoryPager: View {
             feedback.prepare()
             settle(on: target, from: offset == nil ? centres[index] : presented.value, velocity: 0, steps: 1,
                    centres: centres)
-        } else if let last = lastMiddleTap, Date.now.timeIntervalSince(last) < 0.35 {
+        } else if let last = lastMiddleTap, Date.now.timeIntervalSince(last) < doubleTapInterval {
             lastMiddleTap = nil
             doubleTap()
         } else {

@@ -9,6 +9,15 @@ struct TidingsApp: App {
     @State private var model: AppModel
     @AppStorage(BackgroundMode.menuBarKey) private var showInMenuBar = false
 
+    /// Sidebar 190 + list 320 + reader 460, so the reader's minimum always holds; the contact
+    /// panel's 260 on top while it's open (the window grows instead of the other columns being
+    /// cut off).
+    private enum MainWindow {
+        static let minWidth: CGFloat = 980
+        static let minWidthWithContactPanel: CGFloat = 1240
+        static let minHeight: CGFloat = 560
+    }
+
     init() {
         // Sync runs with the app, not with a window: it keeps going if the window is closed.
         let model = AppModel()
@@ -27,10 +36,8 @@ struct TidingsApp: App {
         WindowGroup(id: "main") {
             RootView()
                 .environment(model)
-                // Sidebar 190 + list 320 + reader 460, so the reader's minimum always holds; the
-                // contact panel's 260 on top while it's open (the window grows instead of the
-                // other columns being cut off).
-                .frame(minWidth: model.isContactPanelShown ? 1240 : 980, minHeight: 560)
+                .frame(minWidth: model.isContactPanelShown ? MainWindow.minWidthWithContactPanel : MainWindow.minWidth,
+                       minHeight: MainWindow.minHeight)
                 .task { model.start() }
         }
         .commands {
@@ -38,127 +45,15 @@ struct TidingsApp: App {
                 Button("Check for Updates…") { model.checkForUpdates?() }
                     .disabled(model.checkForUpdates == nil)
             }
-            // The composer's formatting, whichever composer you're writing in (window or inline).
-            CommandGroup(replacing: .textFormatting) {
-                Button("Bold") { TextFormatting.send(.bold) }
-                    .keyboardShortcut("b", modifiers: .command)
-                Button("Italic") { TextFormatting.send(.italic) }
-                    .keyboardShortcut("i", modifiers: .command)
-                Button("Underline") { TextFormatting.send(.underline) }
-                    .keyboardShortcut("u", modifiers: .command)
-                Divider()
-                Button("Bulleted List") { TextFormatting.send(.bulletList) }
-                    .keyboardShortcut("7", modifiers: [.command, .shift])
-                Button("Numbered List") { TextFormatting.send(.numberedList) }
-                    .keyboardShortcut("9", modifiers: [.command, .shift])
-                Divider()
-                // The message you're writing: its signature (also in ⌘K).
-                Menu("Signature") {
-                    Button("No Signature") { model.activeComposer?.useSignature(nil) }
-                    ForEach(model.signatures) { signature in
-                        Button(signature.name) { model.activeComposer?.useSignature(signature.id) }
-                    }
-                    Divider()
-                    Button("Edit Signatures…") { model.showSignatures(editing: model.activeComposer?.signatureID) }
-                }
-            }
-            CommandGroup(after: .sidebar) {
-                Button("Go to Inbox") { model.goToInbox() }
-                    .keyboardShortcut("1", modifiers: .command)
-                Button("Go to Snoozed") { model.selection = .snoozed }
-                    .keyboardShortcut("2", modifiers: .command)
-                Button("Go to Set Aside") { model.selection = .replyLater }
-                    .keyboardShortcut("3", modifiers: .command)
-                // One account's Inbox: ⌥⌘1 … ⌥⌘9, in the sidebar's order.
-                if model.accounts.count > 1 {
-                    ForEach(Array(model.accounts.prefix(9).enumerated()), id: \.element.id) { index, account in
-                        Button("Go to \(account.displayName) Inbox") { model.goToInbox(account: account.id) }
-                            .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
-                    }
-                }
-                Button("Next Conversation") { model.moveSelection(1) }
-                    .keyboardShortcut(.downArrow, modifiers: .command)
-                Button("Previous Conversation") { model.moveSelection(-1) }
-                    .keyboardShortcut(.upArrow, modifiers: .command)
-            }
+            formatCommands
+            goCommands
             // Single-letter shortcuts are handled in RootView (so they never fire while typing);
             // the menu carries ⌘ equivalents and makes every action discoverable.
             CommandGroup(after: .textEditing) {
                 Button("Search Mail") { model.searchFocusRequest &+= 1 }
                     .keyboardShortcut("f", modifiers: .command)
             }
-            CommandMenu("Message") {
-                // Each of these reads the conversation from the store (and the invite from its
-                // messages): once per menu update, not once per item.
-                let hasTarget = !model.targetThreads.isEmpty
-                let canAnswerInvite = model.answerableInvite != nil
-                let hasDateSuggestion = model.selectedDateSuggestion != nil
-                Button("Command Palette…") { model.isPaletteShown.toggle() }
-                    .keyboardShortcut("k", modifiers: .command)
-                Divider()
-                Button("New Message") { model.composeNew() }
-                    .keyboardShortcut("n", modifiers: .command)
-                Button("Reply") { model.compose(.reply) }
-                    .keyboardShortcut("r", modifiers: .command)
-                Button("Reply All") { model.compose(.replyAll) }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Forward") { model.compose(.forward) }
-                    .keyboardShortcut("f", modifiers: [.command, .shift])
-                Button("Reply to Introduction") { model.replyToIntroduction() }
-                    .keyboardShortcut("i", modifiers: [.command, .shift])
-                Divider()
-                Button("Mute Conversation") { model.toggleMute() }
-                    .disabled(!hasTarget)
-                Button("Reply Later") { model.toggleReplyLater() }
-                    .keyboardShortcut("l", modifiers: [.command, .option])
-                Button("Answer Reply Later Pile…") { model.startReplySession() }
-                    .keyboardShortcut("l", modifiers: [.command, .shift])
-                Button("Add to Reminders") { model.addToReminders() }
-                    .keyboardShortcut("r", modifiers: [.command, .control])
-                Button("Copy Link to Message") { model.copyLink() }
-                Button("Show Source") { model.showSourceOfSelected() }
-                    .keyboardShortcut("u", modifiers: [.command, .option])
-                    .disabled(!hasTarget)
-                Button("Copy Latest Login Code") { model.copyLatestCode() }
-                Divider()
-                Button("Next Category") { model.cycleCategory(1) }
-                    .keyboardShortcut("]", modifiers: .command)
-                Button("Previous Category") { model.cycleCategory(-1) }
-                    .keyboardShortcut("[", modifiers: .command)
-                Button("New AI Category…") {
-                    model.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
-                }
-                Button("Read Later") { model.readLater() }
-                Divider()
-                Button("Mark Done") { model.perform(.done) }
-                    .keyboardShortcut("e", modifiers: [.command, .option])
-                Button("Pin / Unpin") { model.togglePin() }
-                    .keyboardShortcut("p", modifiers: [.command, .option])
-                Button("Snooze…") { model.isSnoozePickerShown = true }
-                    .keyboardShortcut("b", modifiers: [.command, .option])
-                Button("Mark as Read / Unread") { model.toggleRead() }
-                    .keyboardShortcut("u", modifiers: [.command, .shift])
-                // ⌘⌫ is handled in RootView, not here: a menu shortcut fires before the focused
-                // text field sees the key, so it would trash mail instead of deleting the line.
-                Button("Move to Trash") { model.perform(.trash) }
-                Button(model.isInJunk ? "Not Junk" : "Move to Junk") { model.toggleJunk() }
-                    .keyboardShortcut("j", modifiers: [.command, .shift])
-                Button("Move to Folder…") { model.isFolderPickerShown = true }
-                    .keyboardShortcut("m", modifiers: [.command, .shift])
-                Divider()
-                Button("Accept Invitation") { model.respondToSelectedInvite(.accepted) }
-                    .keyboardShortcut("y", modifiers: [.command, .control])
-                    .disabled(!canAnswerInvite)
-                Button("Maybe") { model.respondToSelectedInvite(.tentative) }
-                    .keyboardShortcut("m", modifiers: [.command, .control])
-                    .disabled(!canAnswerInvite)
-                Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
-                    .keyboardShortcut("n", modifiers: [.command, .control])
-                    .disabled(!canAnswerInvite)
-                Button("Add Date to Calendar…") { model.addSelectedDateToCalendar() }
-                    .keyboardShortcut("e", modifiers: [.command, .control])
-                    .disabled(!hasDateSuggestion)
-            }
+            messageMenu
             CommandGroup(after: .toolbar) {
                 Toggle("Reader Mode", isOn: Binding(get: { model.readerMode }, set: { model.readerMode = $0 }))
                 Button(model.isContactPanelShown ? String(localized: "Hide Contact Info") : String(localized: "Show Contact Info")) {
@@ -170,42 +65,7 @@ struct TidingsApp: App {
                 Button("Keyboard Shortcuts") { model.isShortcutsShown = true }
                     .keyboardShortcut("/", modifiers: .command)
             }
-            CommandMenu("Mailbox") {
-                Button("Check for New Mail") { model.checkForNewMail() }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Add Account…") { model.isAddingAccount = true }
-                Divider()
-                Button("New Folder…") { model.newFolder() }
-                    .disabled(model.accounts.isEmpty)
-                Button("Rename Folder…") { if let box = model.selectedFolder { model.renameFolder(box) } }
-                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
-                Button("Move Folder…") { if let box = model.selectedFolder { model.moveFolder(box) } }
-                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
-                Button("Delete Folder…") { if let box = model.selectedFolder { model.requestDeleteFolder(box) } }
-                    .disabled(model.selectedFolder.map(model.canChangeFolder) != true)
-                Divider()
-                Button("Sweep Inbox") { model.requestSweep() }
-                    .keyboardShortcut("e", modifiers: [.command, .shift])
-                Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
-                Toggle("Show Only Unread", isOn: Binding(get: { model.unreadOnly }, set: { model.unreadOnly = $0 }))
-                Divider()
-                Button(model.searchEverywhere ? "Search Only Here" : "Search Everywhere") { model.toggleSearchEverywhere() }
-                    .keyboardShortcut("f", modifiers: [.command, .option])
-                    .disabled(!model.isSearching || (model.searchScope == nil && !model.searchEverywhere))
-                Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .disabled(!model.isSearching)
-                Button("Attachments…") { model.isAttachmentsShown = true }
-                    .keyboardShortcut("a", modifiers: [.command, .control])
-                Button("Senders…") { model.isSendersShown = true }
-                    .keyboardShortcut("s", modifiers: [.command, .option])
-                Button("Unsubscribe…") { if let address = model.listSenderOfSelection { model.requestUnsubscribe(address: address) } }
-                    .disabled(model.listSenderOfSelection == nil)
-                Button("Rules…") { model.isRulesShown = true }
-                    .keyboardShortcut("r", modifiers: [.command, .option])
-                Button("New Rule from Message…") { model.newRule(from: model.targetThreads.first) }
-                    .disabled(model.targetThreads.isEmpty)
-            }
+            mailboxMenu
         }
 
         WindowGroup("New Message", id: "compose", for: Int64.self) { $draftID in
@@ -254,6 +114,173 @@ struct TidingsApp: App {
             Image(systemName: model.inboxUnreadCount > 0 ? "envelope.badge" : "envelope")
         }
     }
+
+    /// The composer's formatting, whichever composer you're writing in (window or inline).
+    private var formatCommands: some Commands {
+        CommandGroup(replacing: .textFormatting) {
+            Button("Bold") { TextFormatting.send(.bold) }
+                .keyboardShortcut("b", modifiers: .command)
+            Button("Italic") { TextFormatting.send(.italic) }
+                .keyboardShortcut("i", modifiers: .command)
+            Button("Underline") { TextFormatting.send(.underline) }
+                .keyboardShortcut("u", modifiers: .command)
+            Divider()
+            Button("Bulleted List") { TextFormatting.send(.bulletList) }
+                .keyboardShortcut("7", modifiers: [.command, .shift])
+            Button("Numbered List") { TextFormatting.send(.numberedList) }
+                .keyboardShortcut("9", modifiers: [.command, .shift])
+            Divider()
+            // The message you're writing: its signature (also in ⌘K).
+            Menu("Signature") {
+                Button("No Signature") { model.activeComposer?.useSignature(nil) }
+                ForEach(model.signatures) { signature in
+                    Button(signature.name) { model.activeComposer?.useSignature(signature.id) }
+                }
+                Divider()
+                Button("Edit Signatures…") { model.showSignatures(editing: model.activeComposer?.signatureID) }
+            }
+        }
+    }
+
+    private var goCommands: some Commands {
+        CommandGroup(after: .sidebar) {
+            Button("Go to Inbox") { model.goToInbox() }
+                .keyboardShortcut("1", modifiers: .command)
+            Button("Go to Snoozed") { model.selection = .snoozed }
+                .keyboardShortcut("2", modifiers: .command)
+            Button("Go to Set Aside") { model.selection = .replyLater }
+                .keyboardShortcut("3", modifiers: .command)
+            // One account's Inbox: ⌥⌘1 … ⌥⌘9, in the sidebar's order.
+            if model.accounts.count > 1 {
+                ForEach(Array(model.accounts.prefix(9).enumerated()), id: \.element.id) { index, account in
+                    Button("Go to \(account.displayName) Inbox") { model.goToInbox(account: account.id) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                }
+            }
+            Button("Next Conversation") { model.moveSelection(1) }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+            Button("Previous Conversation") { model.moveSelection(-1) }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+        }
+    }
+
+    private var messageMenu: some Commands {
+        CommandMenu("Message") {
+            // Each of these reads the conversation from the store (and the invite from its
+            // messages): once per menu update, not once per item.
+            let hasTarget = !model.targetThreads.isEmpty
+            let canAnswerInvite = model.answerableInvite != nil
+            let hasDateSuggestion = model.selectedDateSuggestion != nil
+            Button("Command Palette…") { model.isPaletteShown.toggle() }
+                .keyboardShortcut("k", modifiers: .command)
+            Divider()
+            Button("New Message") { model.composeNew() }
+                .keyboardShortcut("n", modifiers: .command)
+            Button("Reply") { model.compose(.reply) }
+                .keyboardShortcut("r", modifiers: .command)
+            Button("Reply All") { model.compose(.replyAll) }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+            Button("Forward") { model.compose(.forward) }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+            Button("Reply to Introduction") { model.replyToIntroduction() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+            Divider()
+            Button("Mute Conversation") { model.toggleMute() }
+                .disabled(!hasTarget)
+            Button("Reply Later") { model.toggleReplyLater() }
+                .keyboardShortcut("l", modifiers: [.command, .option])
+            Button("Answer Reply Later Pile…") { model.startReplySession() }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+            Button("Add to Reminders") { model.addToReminders() }
+                .keyboardShortcut("r", modifiers: [.command, .control])
+            Button("Copy Link to Message") { model.copyLink() }
+            Button("Show Source") { model.showSourceOfSelected() }
+                .keyboardShortcut("u", modifiers: [.command, .option])
+                .disabled(!hasTarget)
+            Button("Copy Latest Login Code") { model.copyLatestCode() }
+            Divider()
+            Button("Next Category") { model.cycleCategory(1) }
+                .keyboardShortcut("]", modifiers: .command)
+            Button("Previous Category") { model.cycleCategory(-1) }
+                .keyboardShortcut("[", modifiers: .command)
+            Button("New AI Category…") {
+                model.editingAICategory = AICategoryEditing(category: AICategory(name: "", description: ""), isNew: true)
+            }
+            Button("Read Later") { model.readLater() }
+            Divider()
+            Button("Mark Done") { model.perform(.done) }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+            Button("Pin / Unpin") { model.togglePin() }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+            Button("Snooze…") { model.isSnoozePickerShown = true }
+                .keyboardShortcut("b", modifiers: [.command, .option])
+            Button("Mark as Read / Unread") { model.toggleRead() }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+            // ⌘⌫ is handled in RootView, not here: a menu shortcut fires before the focused
+            // text field sees the key, so it would trash mail instead of deleting the line.
+            Button("Move to Trash") { model.perform(.trash) }
+            Button(model.isInJunk ? "Not Junk" : "Move to Junk") { model.toggleJunk() }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+            Button("Move to Folder…") { model.isFolderPickerShown = true }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+            Divider()
+            Button("Accept Invitation") { model.respondToSelectedInvite(.accepted) }
+                .keyboardShortcut("y", modifiers: [.command, .control])
+                .disabled(!canAnswerInvite)
+            Button("Maybe") { model.respondToSelectedInvite(.tentative) }
+                .keyboardShortcut("m", modifiers: [.command, .control])
+                .disabled(!canAnswerInvite)
+            Button("Decline Invitation") { model.respondToSelectedInvite(.declined) }
+                .keyboardShortcut("n", modifiers: [.command, .control])
+                .disabled(!canAnswerInvite)
+            Button("Add Date to Calendar…") { model.addSelectedDateToCalendar() }
+                .keyboardShortcut("e", modifiers: [.command, .control])
+                .disabled(!hasDateSuggestion)
+        }
+    }
+
+    private var mailboxMenu: some Commands {
+        CommandMenu("Mailbox") {
+            Button("Check for New Mail") { model.checkForNewMail() }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("Add Account…") { model.isAddingAccount = true }
+            Divider()
+            Button("New Folder…") { model.newFolder() }
+                .disabled(model.accounts.isEmpty)
+            Button("Rename Folder…") { if let box = model.selectedFolder { model.renameFolder(box) } }
+                .disabled(!canChangeSelectedFolder)
+            Button("Move Folder…") { if let box = model.selectedFolder { model.moveFolder(box) } }
+                .disabled(!canChangeSelectedFolder)
+            Button("Delete Folder…") { if let box = model.selectedFolder { model.requestDeleteFolder(box) } }
+                .disabled(!canChangeSelectedFolder)
+            Divider()
+            Button("Sweep Inbox") { model.requestSweep() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            Toggle("Show Only Pinned", isOn: Binding(get: { model.pinnedOnly }, set: { model.pinnedOnly = $0 }))
+            Toggle("Show Only Unread", isOn: Binding(get: { model.unreadOnly }, set: { model.unreadOnly = $0 }))
+            Divider()
+            Button(model.searchEverywhere ? "Search Only Here" : "Search Everywhere") { model.toggleSearchEverywhere() }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(!model.isSearching || (model.searchScope == nil && !model.searchEverywhere))
+            Button("Save Search as Smart Folder…") { model.saveCurrentSearch() }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(!model.isSearching)
+            Button("Attachments…") { model.isAttachmentsShown = true }
+                .keyboardShortcut("a", modifiers: [.command, .control])
+            Button("Senders…") { model.isSendersShown = true }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+            Button("Unsubscribe…") { if let address = model.listSenderOfSelection { model.requestUnsubscribe(address: address) } }
+                .disabled(model.listSenderOfSelection == nil)
+            Button("Rules…") { model.isRulesShown = true }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            Button("New Rule from Message…") { model.newRule(from: model.targetThreads.first) }
+                .disabled(model.targetThreads.isEmpty)
+        }
+    }
+
+    private var canChangeSelectedFolder: Bool {
+        model.selectedFolder.map(model.canChangeFolder) == true
+    }
 }
 
 struct RootView: View {
@@ -268,101 +295,32 @@ struct RootView: View {
     /// The inline reply's height; 0 until you drag it (then about half the reader).
     @AppStorage("inlineComposerHeight") private var inlineComposerHeight: Double = 0
 
+    /// How long after "g" its second key still counts.
+    private static let goSequenceTimeout: TimeInterval = 1.5
+    /// A real minimum for the reader (the column width alone isn't enforced when the list's
+    /// divider is dragged): mail is laid out for about 600pt, and below ~460 headers start to wrap.
+    private static let readerMinWidth: CGFloat = 460
+
     var body: some View {
         @Bindable var model = model
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
         } content: {
-            Group {
-                if model.isSearching {
-                    SearchResultsView()
-                } else if model.selection == .outbox {
-                    OutboxView()
-                } else {
-                    StreamView()
-                }
-            }
-            .focused($streamFocused)
-            // A wide max: when the list hit a narrow one, dragging the divider further pushed the
-            // extra width into the sidebar instead (it should keep its size, as in Mail).
-            .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 1200)
-            // As in Mail: the list column has its own title, subtitle and buttons, and the
-            // reader's buttons sit over the reader; both follow the divider when you drag it.
-            .navigationTitle(model.listTitle)
-            .navigationSubtitle(model.listSubtitle)
-            .toolbar { listToolbar }
-            .overlay(alignment: .bottom) {
-                if let toast = model.toast {
-                    ToastView(toast: toast).padding(.bottom, 16)
-                }
-            }
-            .animation(.snappy, value: model.toast)
+            listColumn
         } detail: {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    ReaderView(threadID: model.readerThreadID)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Reply / Reply All / Forward open here, under the conversation: about half the
-                    // reader at first, then as tall as you drag it (remembered).
-                    if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
-                        if model.minimizedReplies.contains(threadID) {
-                            Divider()
-                            MinimizedReplyBar(threadID: threadID, draftID: draftID)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        } else {
-                            let height = InlineComposerHeight.clamped(inlineComposerHeight, in: geometry.size.height)
-                            ComposerResizeHandle(height: height, available: geometry.size.height) { inlineComposerHeight = $0 }
-                            InlineComposer(threadID: threadID, draftID: draftID)
-                                .id(draftID)
-                                .frame(height: height)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-                    }
-                }
-                // The whole column (a GeometryReader puts its content top-left otherwise, which
-                // left "No conversation selected" off centre).
-                .frame(width: geometry.size.width, height: geometry.size.height)
-            }
-            .animation(.snappy, value: model.inlineDrafts)
-            .animation(.snappy, value: model.minimizedReplies)
-            // A real minimum (the column width alone isn't enforced when the list's divider is
-            // dragged): mail is laid out for about 600pt, and below ~460 headers start to wrap.
-            .frame(minWidth: 460)
-            .navigationSplitViewColumnWidth(min: 460, ideal: 680)
-            .toolbar { readerToolbar }
-                .inspector(isPresented: $model.isContactPanelShown) {
-                    ContactPanel()
-                        .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
-                }
+            readerColumn
         }
         .overlay(alignment: .top) {
             if model.isPaletteShown {
-                ZStack(alignment: .top) {
-                    Color.black.opacity(0.08).ignoresSafeArea()
-                        .onTapGesture { model.isPaletteShown = false }
-                    CommandPalette().padding(.top, 80)
-                }
+                dimmedOverlay(dismiss: { model.isPaletteShown = false }) { CommandPalette() }
             }
             if model.isFolderPickerShown {
-                ZStack(alignment: .top) {
-                    Color.black.opacity(0.08).ignoresSafeArea()
-                        .onTapGesture { model.isFolderPickerShown = false }
-                    FolderPicker().padding(.top, 80)
-                }
+                dimmedOverlay(dismiss: { model.isFolderPickerShown = false }) { FolderPicker() }
             }
         }
         .onKeyPress(phases: [.down, .repeat]) { press in handleKey(press) }
-        .onKeyPress(.escape) {
-            if model.isPaletteShown { model.isPaletteShown = false; return .handled }
-            if model.isFolderPickerShown { model.isFolderPickerShown = false; return .handled }
-            if !searchFocused, model.clearMultiSelection() { return .handled }
-            guard model.isSearching else { return .ignored }
-            model.searchText = ""
-            searchFocused = false
-            streamFocused = true
-            return .handled
-        }
+        .onKeyPress(.escape) { handleEscape() }
         .sheet(isPresented: $model.isSnoozePickerShown) { SnoozePicker() }
         .sheet(isPresented: $model.isShortcutsShown) { ShortcutsView() }
         // The menu, ⌘K and keys still set these flags; on the Mac they open (or bring forward) a window.
@@ -418,6 +376,95 @@ struct RootView: View {
             commandAMonitor = nil
         }
         .onChange(of: undoManager) { _, manager in model.undoManager = manager }
+    }
+
+    private var listColumn: some View {
+        Group {
+            if model.isSearching {
+                SearchResultsView()
+            } else if model.selection == .outbox {
+                OutboxView()
+            } else {
+                StreamView()
+            }
+        }
+        .focused($streamFocused)
+        // A wide max: when the list hit a narrow one, dragging the divider further pushed the
+        // extra width into the sidebar instead (it should keep its size, as in Mail).
+        .navigationSplitViewColumnWidth(min: 320, ideal: 400, max: 1200)
+        // As in Mail: the list column has its own title, subtitle and buttons, and the
+        // reader's buttons sit over the reader; both follow the divider when you drag it.
+        .navigationTitle(model.listTitle)
+        .navigationSubtitle(model.listSubtitle)
+        .toolbar { listToolbar }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                ToastView(toast: toast).padding(.bottom, 16)
+            }
+        }
+        .animation(.snappy, value: model.toast)
+    }
+
+    private var readerColumn: some View {
+        @Bindable var model = model
+        return GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ReaderView(threadID: model.readerThreadID)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                inlineReply(available: geometry.size.height)
+            }
+            // The whole column (a GeometryReader puts its content top-left otherwise, which
+            // left "No conversation selected" off centre).
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .animation(.snappy, value: model.inlineDrafts)
+        .animation(.snappy, value: model.minimizedReplies)
+        .frame(minWidth: Self.readerMinWidth)
+        .navigationSplitViewColumnWidth(min: Self.readerMinWidth, ideal: 680)
+        .toolbar { readerToolbar }
+            .inspector(isPresented: $model.isContactPanelShown) {
+                ContactPanel()
+                    .inspectorColumnWidth(min: 260, ideal: 300, max: 380)
+            }
+    }
+
+    /// Reply / Reply All / Forward open here, under the conversation: about half the reader at
+    /// first, then as tall as you drag it (remembered).
+    @ViewBuilder private func inlineReply(available: CGFloat) -> some View {
+        if let threadID = model.readerThreadID, let draftID = model.inlineDrafts[threadID] {
+            if model.minimizedReplies.contains(threadID) {
+                Divider()
+                MinimizedReplyBar(threadID: threadID, draftID: draftID)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                let height = InlineComposerHeight.clamped(inlineComposerHeight, in: available)
+                ComposerResizeHandle(height: height, available: available) { inlineComposerHeight = $0 }
+                InlineComposer(threadID: threadID, draftID: draftID)
+                    .id(draftID)
+                    .frame(height: height)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    /// The ⌘K palette or the V folder picker, over a dimmed window that closes it when clicked.
+    private func dimmedOverlay(dismiss: @escaping () -> Void, @ViewBuilder content: () -> some View) -> some View {
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.08).ignoresSafeArea()
+                .onTapGesture(perform: dismiss)
+            content().padding(.top, 80)
+        }
+    }
+
+    private func handleEscape() -> KeyPress.Result {
+        if model.isPaletteShown { model.isPaletteShown = false; return .handled }
+        if model.isFolderPickerShown { model.isFolderPickerShown = false; return .handled }
+        if !searchFocused, model.clearMultiSelection() { return .handled }
+        guard model.isSearching else { return .ignored }
+        model.searchText = ""
+        searchFocused = false
+        streamFocused = true
+        return .handled
     }
 
     /// Over the list: filter and more, at the column's trailing edge.
@@ -569,21 +616,29 @@ struct RootView: View {
         // Holding J or K keeps moving (key repeat); every other key acts once per press.
         if press.phase == .repeat, key != "j", key != "k" { return .ignored }
 
-        if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {
+        if let g = pendingG, Date().timeIntervalSince(g) < Self.goSequenceTimeout {
             pendingG = nil
-            switch key {
-            case "i": model.goToInbox()
-            case "s": model.selection = .snoozed
-            case "l": model.selection = .replyLater
-            case "a": model.goToArchive()
-            case "o": model.selection = .outbox
-            case "p": model.pinnedOnly.toggle()
-            case "u": model.unreadOnly.toggle()
-            default: return .ignored
-            }
-            return .handled
+            return handleGoKey(key)
         }
+        return handleSingleKey(key)
+    }
 
+    /// The second key after "g": where to go.
+    private func handleGoKey(_ key: String) -> KeyPress.Result {
+        switch key {
+        case "i": model.goToInbox()
+        case "s": model.selection = .snoozed
+        case "l": model.selection = .replyLater
+        case "a": model.goToArchive()
+        case "o": model.selection = .outbox
+        case "p": model.pinnedOnly.toggle()
+        case "u": model.unreadOnly.toggle()
+        default: return .ignored
+        }
+        return .handled
+    }
+
+    private func handleSingleKey(_ key: String) -> KeyPress.Result {
         switch key {
         case "j": model.moveSelection(1)
         case "k": model.moveSelection(-1)
@@ -615,6 +670,7 @@ struct RootView: View {
         return .handled
     }
 }
+
 extension NSView {
     /// An editable text view, or a view inside one (some fields hand focus to a subview).
     var isEditableTextResponder: Bool {
@@ -626,16 +682,16 @@ extension NSView {
         return false
     }
 }
-#endif
 
 /// How tall the inline reply is: what you dragged it to, else 55% of the reader, always leaving
 /// room for the conversation above and the composer's own fields.
 enum InlineComposerHeight {
     static let minimum: CGFloat = 260
     static let conversationRoom: CGFloat = 140
+    static let defaultShareOfReader: CGFloat = 0.55
 
     static func clamped(_ stored: Double, in available: CGFloat) -> CGFloat {
-        let wanted = stored > 0 ? CGFloat(stored) : available * 0.55
+        let wanted = stored > 0 ? CGFloat(stored) : available * defaultShareOfReader
         let ceiling = max(minimum, available - conversationRoom)
         return min(max(wanted, minimum), ceiling)
     }
@@ -736,4 +792,4 @@ struct ToolbarSearchField: View {
         .help("Search mail (⌘F or /)")
     }
 }
-
+#endif

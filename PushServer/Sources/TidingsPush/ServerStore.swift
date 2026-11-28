@@ -65,9 +65,13 @@ public final class ServerStore: Sendable {
 
     // MARK: Devices
 
+    static let maxDeviceNameLength = 80
+    /// `lastSeenAt` is informational: writing it on every request would make each call a write.
+    static let lastSeenResolution: TimeInterval = 60
+
     public func addDevice(name: String, secretTag: String? = nil, now: Date = Date()) throws -> (device: Device, token: String) {
         let token = Tokens.random()
-        let device = Device(id: UUID().uuidString, name: String(HeaderText.singleLine(name).prefix(80)), tokenHash: Tokens.hash(token),
+        let device = Device(id: UUID().uuidString, name: String(HeaderText.singleLine(name).prefix(Self.maxDeviceNameLength)), tokenHash: Tokens.hash(token),
                             apnsToken: nil, environment: nil, createdAt: now, lastSeenAt: now, secretTag: secretTag)
         try db.write { try device.insert($0) }
         return (device, token)
@@ -77,7 +81,7 @@ public final class ServerStore: Sendable {
     public func device(token: String, now: Date = Date()) throws -> Device? {
         try db.write { db in
             guard var device = try Device.filter(Column("tokenHash") == Tokens.hash(token)).fetchOne(db) else { return nil }
-            if now.timeIntervalSince(device.lastSeenAt) > 60 {
+            if now.timeIntervalSince(device.lastSeenAt) > Self.lastSeenResolution {
                 device.lastSeenAt = now
                 try device.update(db)
             }
@@ -158,6 +162,12 @@ public final class ServerStore: Sendable {
 
     public func removeScheduled(id: String) throws {
         try db.write { try $0.execute(sql: "DELETE FROM scheduled WHERE id = ?", arguments: [id]) }
+    }
+
+    func removeScheduled(outboxID: Int64, login: String) throws {
+        try db.write {
+            try $0.execute(sql: "DELETE FROM scheduled WHERE outboxID = ? AND login = ?", arguments: [outboxID, login])
+        }
     }
 
     public func scheduledIDs() throws -> [String] {

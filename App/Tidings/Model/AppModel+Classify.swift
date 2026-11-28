@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import MailEngine
 
 extension ClassificationReason {
@@ -86,11 +87,7 @@ extension AppModel {
 
     /// "Always for this sender", by address (the Senders screen).
     func moveSender(to category: MailCategory, address sender: String, name: String) {
-        let previous = (try? store.db.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, category, classificationReason FROM message WHERE lower(fromAddress) = ?",
-                             arguments: [sender.lowercased()])
-        })?.map { MailStore.CategorySnapshot(id: $0["id"], category: MailCategory(rawValue: $0["category"]) ?? .primary,
-                                            reason: $0["classificationReason"]) } ?? []
+        let previous = categorySnapshots(fromSender: sender)
         guard (try? store.remember(category: category, forSender: sender)) != nil else { return }
         let fromSender = { [weak self] in
             self?.threads.filter { $0.latest.fromAddress.lowercased() == sender.lowercased() }.map(\.threadID) ?? []
@@ -111,13 +108,20 @@ extension AppModel {
                    symbol: category.symbol, undo: undoToken))
     }
 
+    /// Where each of the sender's messages is sorted now, for Undo.
+    private func categorySnapshots(fromSender sender: String) -> [MailStore.CategorySnapshot] {
+        (try? store.db.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, category, classificationReason FROM message WHERE lower(fromAddress) = ?",
+                             arguments: [sender.lowercased()])
+        })?.map { MailStore.CategorySnapshot(id: $0["id"], category: MailCategory(rawValue: $0["category"]) ?? .primary,
+                                            reason: $0["classificationReason"]) } ?? []
+    }
+
     /// Registered synchronously (inside the click/key event) so AppKit's undo grouping sees it.
     private func registerCategoryUndo(_ undo: @escaping @MainActor () -> Void) -> UndoToken {
         offerUndo(named: String(localized: "Move"), undo)
     }
 }
-
-import GRDB
 
 extension RiskReason {
     var localized: String {

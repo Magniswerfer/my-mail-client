@@ -28,17 +28,15 @@ public struct RuleEngine: Sendable {
     }
 
     public func matches(_ rule: Rule, _ message: StoredMessage) async -> Bool {
-        let cheap = rule.conditions.filter { if case .about = $0 { false } else { true } }
-        let slow = rule.conditions.compactMap { if case .about(let about) = $0 { about } else { nil } }
         let body = LazyBody(message: message)
-        let cheapResults = cheap.map { evaluate($0, message, body) }
+        let cheapResults = rule.cheapConditions.map { evaluate($0, message, body) }
         if rule.matchAll {
             guard cheapResults.allSatisfy({ $0 }) else { return false }
-            for about in slow { guard await isAbout(about, message) else { return false } }
+            for about in rule.aboutConditions { guard await isAbout(about, message) else { return false } }
             return true
         } else {
             if cheapResults.contains(true) { return true }
-            for about in slow where await isAbout(about, message) { return true }
+            for about in rule.aboutConditions where await isAbout(about, message) { return true }
             return false
         }
     }
@@ -93,10 +91,9 @@ public struct RuleEngine: Sendable {
         guard !probe.conditions.isEmpty else { return [] }
         if probe.actions.isEmpty { probe.actions = [.notify] }   // matching doesn't depend on actions
         var candidates = try store.inboxMessages(limit: limit)
-        let abouts = probe.conditions.compactMap { if case .about(let a) = $0 { a } else { nil } }
-        if let about = abouts.first {
+        if let about = probe.aboutConditions.first {
             if probe.matchAll {
-                let cheap = probe.conditions.filter { if case .about = $0 { false } else { true } }
+                let cheap = probe.cheapConditions
                 candidates = candidates.filter { message in
                     let body = LazyBody(message: message)
                     return cheap.allSatisfy { evaluate($0, message, body) }

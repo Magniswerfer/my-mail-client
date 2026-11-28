@@ -69,6 +69,21 @@ struct TextDates {
     let input: EventExtractor.Input
 
     static let maxText = 8_000
+    /// "onsdag 12:00": at most this many characters between a date and the time that belongs to it…
+    static let maxDateToTimeGap = 12
+    /// …and between a time and the date after it ("kl. 19 på fredag").
+    static let maxTimeToDateGap = 8
+    /// A detected duration longer than this is a misreading, not an event's length.
+    static let maxEventDuration: TimeInterval = 14 * ICalDuration.secondsPerDay
+    /// A timed plan that started up to this long before the message was sent still counts.
+    static let pastGrace: TimeInterval = 3 * 3_600
+    static let maxDaysAhead: TimeInterval = 500 * ICalDuration.secondsPerDay
+    /// A yearless date this far before the message is read as next year's (beyond a recap of
+    /// recent weeks).
+    static let recapWindow: TimeInterval = 60 * ICalDuration.secondsPerDay
+    static let maxSourceTextLength = 240
+    static let maxSubjectTitleLength = 60
+    static let maxLinesSearchedForLocation = 200
 
     enum Day: Equatable {
         case explicit(yearGiven: Bool)
@@ -87,6 +102,18 @@ struct TextDates {
         var day: Day
         var time: (hour: Int, minute: Int)?
         var inSubject: Bool
+
+        var end: Int { range.location + range.length }
+
+        /// This hit with the time (and duration) of `other`, covering both.
+        func joined(withTimeOf other: Hit, in ns: NSString) -> Hit {
+            var joined = self
+            joined.time = other.time
+            joined.duration = other.duration
+            joined.range = NSUnionRange(range, other.range)
+            joined.text = ns.substring(with: joined.range)
+            return joined
+        }
     }
 
     func suggestions() -> [EventSuggestion] {
@@ -104,7 +131,7 @@ struct TextDates {
 
     func hits(in text: String, isSubject: Bool) -> [Hit] {
         let ns = text as NSString
-        var hits: [Hit] = DataDetection.dates(in: text).compactMap { match in
+        let detected: [Hit] = DataDetection.dates(in: text).compactMap { match in
             guard let date = match.date else { return nil }
             let matched = ns.substring(with: match.range)
             var cal = Calendar(identifier: .gregorian)
@@ -114,103 +141,98 @@ struct TextDates {
             return Hit(range: match.range, text: matched, components: c, zone: match.timeZone, duration: match.duration,
                        day: Self.day(in: matched, components: c, time: time), time: time, inSubject: isSubject)
         }
-        // "frokost onsdag 12:00-13:00" comes back as a date and a separate time: join them.
+        return Self.joiningDatesAndTimes(detected, in: ns).filter { $0.day != .none }
+    }
+
+    /// "frokost onsdag 12:00-13:00" and "kl. 19 på fredag" come back as a date and a separate
+    /// time: join each such neighbouring pair into one hit.
+    static func joiningDatesAndTimes(_ hits: [Hit], in ns: NSString) -> [Hit] {
         var merged: [Hit] = []
         var i = 0
         while i < hits.count {
             var hit = hits[i]
-            if hit.day != .none, hit.time == nil, i + 1 < hits.count {
+            if i + 1 < hits.count {
                 let next = hits[i + 1]
-                let gapStart = hit.range.location + hit.range.length
-                let gap = next.range.location - gapStart
-                if next.day == .none, let t = next.time, gap >= 0, gap <= 12,
-                   !ns.substring(with: NSRange(location: gapStart, length: gap)).contains(where: { ".!?\n".contains($0) }) {
-                    hit.time = t
-                    hit.duration = next.duration
-                    hit.range = NSUnionRange(hit.range, next.range)
-                    hit.text = ns.substring(with: hit.range)
-                    i += 1
-                }
-            } else if hit.day == .none, hit.time != nil, i + 1 < hits.count {
-                // "kl. 19 på fredag": the time first.
-                let next = hits[i + 1]
-                let gapStart = hit.range.location + hit.range.length
-                let gap = next.range.location - gapStart
-                if next.day != .none, next.time == nil, gap >= 0, gap <= 8 {
-                    var joined = next
-                    joined.time = hit.time
-                    joined.duration = hit.duration
-                    joined.range = NSUnionRange(hit.range, next.range)
-                    joined.text = ns.substring(with: joined.range)
-                    hit = joined
-                    i += 1
+                let gap = next.range.location - hit.end
+                if hit.day != .none, hit.time == nil {
+                    if next.day == .none, next.time != nil, (0...maxDateToTimeGap).contains(gap),
+                       !ns.substring(with: NSRange(location: hit.end, length: gap)).contains(where: { ".!?\n".contains($0) }) {
+                        hit = hit.joined(withTimeOf: next, in: ns)
+                        i += 1
+                    }
+                } else if hit.day == .none, hit.time != nil {
+                    if next.day != .none, next.time == nil, (0...maxTimeToDateGap).contains(gap) {
+                        hit = next.joined(withTimeOf: hit, in: ns)
+                        i += 1
+                    }
                 }
             }
             merged.append(hit)
             i += 1
         }
-        hits = merged.filter { $0.day != .none }
-        return hits
+        return merged
     }
 
     // MARK: Building a suggestion
 
     func suggestion(for hit: Hit, in text: String, body: String) -> EventSuggestion? {
         let zone = hit.zone ?? input.timeZone
-        guard let (year, month, day) = resolveDay(hit, zone: zone) else { return nil }
-
-        let start: Date
-        var end: Date?
+        guard let (year, month, day) = resolveDay(hit, zone: zone),
+              let (start, end) = interval(of: hit, year: year, month: month, day: day, zone: zone) else { return nil }
         let isAllDay = hit.time == nil
-        if let t = hit.time {
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = zone
-            guard let s = cal.date(from: DateComponents(year: year, month: month, day: day, hour: t.hour, minute: t.minute)) else { return nil }
-            start = s
-            if hit.duration > 0, hit.duration <= 14 * 86_400 { end = s.addingTimeInterval(hit.duration) }
-        } else {
-            var utc = Calendar(identifier: .gregorian)
-            utc.timeZone = TimeZone(identifier: "UTC")!
-            guard let s = utc.date(from: DateComponents(year: year, month: month, day: day)) else { return nil }
-            start = s
-        }
-
-        // Past (relative to the message) or implausibly far ahead: not a plan.
-        let sentDayStart: Date = {
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = isAllDay ? TimeZone(identifier: "UTC")! : zone
-            var c = Calendar(identifier: .gregorian)
-            c.timeZone = zone
-            let d = c.dateComponents([.year, .month, .day], from: input.sent)
-            return cal.date(from: d) ?? input.sent
-        }()
-        if isAllDay ? start < sentDayStart : start < input.sent.addingTimeInterval(-3 * 3_600) { return nil }
-        if start > input.sent.addingTimeInterval(500 * 86_400) { return nil }
+        guard isPlausible(start: start, isAllDay: isAllDay, zone: zone) else { return nil }
 
         let (sentence, sentenceRange) = Self.sentence(around: hit.range, in: text)
         let lower = sentence.lowercased()
-        let subjectLower = input.subject.lowercased()
-        let keyword = Keywords.firstEvent(in: lower) ?? Keywords.firstEvent(in: subjectLower)
+        let keyword = Keywords.firstEvent(in: lower) ?? Keywords.firstEvent(in: input.subject.lowercased())
         if Keywords.hardNegative(in: lower) { return nil }
         if keyword == nil, Keywords.softNegative(in: lower) { return nil }
-
-        var score = 0
-        if hit.time != nil { score += 2 }
-        if keyword != nil { score += 2 }
-        if end != nil { score += 1 }
         if isAllDay && keyword == nil { return nil }
-        guard score >= 2 else { return nil }
-        let confidence: EventSuggestion.Confidence = score >= 4 ? .high : .medium
+        guard let confidence = Self.confidence(hasTime: !isAllDay, hasKeyword: keyword != nil, hasEnd: end != nil) else { return nil }
 
-        let (title, guessed) = Self.title(sentence: sentence, hitRange: NSRange(location: hit.range.location - sentenceRange.location,
-                                                                                 length: hit.range.length),
-                                          subject: input.subject, keyword: keyword)
+        let hitInSentence = NSRange(location: hit.range.location - sentenceRange.location, length: hit.range.length)
+        let (title, guessed) = Self.title(sentence: sentence, hitRange: hitInSentence, subject: input.subject, keyword: keyword)
         return EventSuggestion(
             kind: .event, source: .text, title: title, start: start, end: end, isAllDay: isAllDay,
             timeZoneID: isAllDay ? nil : zone.identifier,
             location: Self.location(sentence: sentence, body: body),
-            sourceText: String(sentence.prefix(240)), confidence: confidence, titleIsGuess: guessed
+            sourceText: String(sentence.prefix(Self.maxSourceTextLength)), confidence: confidence, titleIsGuess: guessed
         )
+    }
+
+    /// Start (and end, when the text gave a sensible duration). All-day starts are UTC midnight.
+    func interval(of hit: Hit, year: Int, month: Int, day: Int, zone: TimeZone) -> (start: Date, end: Date?)? {
+        guard let t = hit.time else {
+            return TimeZoneResolver.utc.date(from: DateComponents(year: year, month: month, day: day)).map { ($0, nil) }
+        }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        guard let start = cal.date(from: DateComponents(year: year, month: month, day: day, hour: t.hour, minute: t.minute)) else { return nil }
+        let hasSensibleDuration = hit.duration > 0 && hit.duration <= Self.maxEventDuration
+        return (start, hasSensibleDuration ? start.addingTimeInterval(hit.duration) : nil)
+    }
+
+    /// Past (relative to the message) or implausibly far ahead: not a plan.
+    func isPlausible(start: Date, isAllDay: Bool, zone: TimeZone) -> Bool {
+        if isAllDay ? start < sentDayStart(zone: zone) : start < input.sent.addingTimeInterval(-Self.pastGrace) { return false }
+        return start <= input.sent.addingTimeInterval(Self.maxDaysAhead)
+    }
+
+    /// The calendar day the message was sent (in `zone`), as UTC midnight to compare with
+    /// all-day starts.
+    func sentDayStart(zone: TimeZone) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        let day = cal.dateComponents([.year, .month, .day], from: input.sent)
+        return TimeZoneResolver.utc.date(from: day) ?? input.sent
+    }
+
+    /// A stated time and an event word make it likely; one of them alone needs a second opinion
+    /// (medium); a bare date is nothing.
+    static func confidence(hasTime: Bool, hasKeyword: Bool, hasEnd: Bool) -> EventSuggestion.Confidence? {
+        let score = (hasTime ? 2 : 0) + (hasKeyword ? 2 : 0) + (hasEnd ? 1 : 0)
+        guard score >= 2 else { return nil }
+        return score >= 4 ? .high : .medium
     }
 
     /// The calendar day the hit means, anchored to the sent date (in the event's zone).
@@ -230,7 +252,7 @@ struct TextDates {
             // No year: the occurrence nearest after the message (allowing for a recap of last week).
             let sentYear = cal.component(.year, from: input.sent)
             guard let candidate = cal.date(from: DateComponents(year: sentYear, month: m, day: d)) else { return nil }
-            return (candidate < sentStart.addingTimeInterval(-60 * 86_400) ? sentYear + 1 : sentYear, m, d)
+            return (candidate < sentStart.addingTimeInterval(-Self.recapWindow) ? sentYear + 1 : sentYear, m, d)
         case .relative(let days):
             return cal.date(byAdding: .day, value: days, to: sentStart).flatMap(ymd)
         case .weekday(let weekday, let next):
@@ -386,7 +408,7 @@ struct TextDates {
 
     static func cleanSubject(_ subject: String) -> String {
         var s = subject.trimmingCharacters(in: .whitespaces)
-        while let m = replyPrefix.firstMatch(in: s, range: NSRange(location: 0, length: (s as NSString).length)) {
+        while let m = replyPrefix.firstMatch(inWhole: s) {
             s = (s as NSString).substring(from: m.range.length).trimmingCharacters(in: .whitespaces)
         }
         return s == "(no subject)" ? "" : s
@@ -405,44 +427,46 @@ struct TextDates {
     /// A short title: the words before the date when they name the plan ("Middag hos os"),
     /// else a meaningful subject, else the event word itself. `guessed` when it's a fallback.
     static func title(sentence: String, hitRange: NSRange, subject: String, keyword: String?) -> (String, Bool) {
-        let ns = sentence as NSString
-        if hitRange.location > 0, hitRange.location <= ns.length {
-            var before = ns.substring(to: hitRange.location).trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;:—–-")))
-            // Only the last clause before the date.
-            if let cut = before.lastIndex(where: { ",;:!?\n".contains($0) }) { before = String(before[before.index(after: cut)...]) }
-            for pattern in [leadingFiller, invitationLeadIn, leadingFiller, hostLeadIn, trailingFiller] {
-                before = pattern.stringByReplacingMatches(in: before, range: NSRange(location: 0, length: (before as NSString).length), withTemplate: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            var words = before.split(whereSeparator: \.isWhitespace)
-            if words.count > 4, let first = Keywords.event.firstMatch(in: before, range: NSRange(location: 0, length: (before as NSString).length)) {
-                // "at vi skal til tandlæge" → "tandlæge"
-                before = (before as NSString).substring(from: first.range.location)
-                words = before.split(whereSeparator: \.isWhitespace)
-            }
-            if (1...7).contains(words.count), Keywords.firstEvent(in: before.lowercased()) != nil {
-                let question = questionStart.firstMatch(in: before, range: NSRange(location: 0, length: (before as NSString).length)) != nil
-                return (capitalized(before), question)
-            }
-        }
+        if let named = titleBeforeDate(in: sentence, hitRange: hitRange) { return named }
         if let head = head(of: sentence), Keywords.firstEvent(in: head.lowercased()) != nil {
             return (capitalized(head), false)
         }
         let cleaned = cleanSubject(subject)
-        if !cleaned.isEmpty, cleaned.count <= 60, !genericSubjects.contains(cleaned.lowercased()),
-           Keywords.firstEvent(in: cleaned.lowercased()) != nil {
-            // The subject names it; drop a trailing date ("Middag fredag kl. 19" → "Middag").
-            let ns = cleaned as NSString
-            if let first = DataDetection.dates(in: cleaned).first, first.range.location > 0 {
-                var head = ns.substring(to: first.range.location)
-                head = trailingFiller.stringByReplacingMatches(in: head, range: NSRange(location: 0, length: (head as NSString).length), withTemplate: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !head.isEmpty { return (capitalized(head), false) }
-            }
-            return (cleaned, false)
-        }
+        if let fromSubject = title(fromSubject: cleaned) { return (fromSubject, false) }
         if let keyword { return (capitalized(keyword), true) }
-        return (cleaned.count <= 60 ? cleaned : "", true)
+        return (cleaned.count <= maxSubjectTitleLength ? cleaned : "", true)
+    }
+
+    /// The last clause before the date, stripped of greetings and filler, when it names a plan.
+    /// A question ("Skal vi …") is usable but marked as a guess.
+    static func titleBeforeDate(in sentence: String, hitRange: NSRange) -> (String, Bool)? {
+        let ns = sentence as NSString
+        guard hitRange.location > 0, hitRange.location <= ns.length else { return nil }
+        var before = ns.substring(to: hitRange.location).trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;:—–-")))
+        if let cut = before.lastIndex(where: { ",;:!?\n".contains($0) }) { before = String(before[before.index(after: cut)...]) }
+        for pattern in [leadingFiller, invitationLeadIn, leadingFiller, hostLeadIn, trailingFiller] {
+            before = pattern.deletingMatches(in: before).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var words = before.split(whereSeparator: \.isWhitespace)
+        if words.count > 4, let first = Keywords.event.firstMatch(inWhole: before) {
+            // "at vi skal til tandlæge" → "tandlæge"
+            before = (before as NSString).substring(from: first.range.location)
+            words = before.split(whereSeparator: \.isWhitespace)
+        }
+        guard (1...7).contains(words.count), Keywords.firstEvent(in: before.lowercased()) != nil else { return nil }
+        return (capitalized(before), questionStart.firstMatch(inWhole: before) != nil)
+    }
+
+    /// A subject that names the plan, without a trailing date ("Middag fredag kl. 19" → "Middag").
+    static func title(fromSubject cleaned: String) -> String? {
+        guard !cleaned.isEmpty, cleaned.count <= maxSubjectTitleLength, !genericSubjects.contains(cleaned.lowercased()),
+              Keywords.firstEvent(in: cleaned.lowercased()) != nil else { return nil }
+        if let first = DataDetection.dates(in: cleaned).first, first.range.location > 0 {
+            let head = trailingFiller.deletingMatches(in: (cleaned as NSString).substring(to: first.range.location))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !head.isEmpty { return capitalized(head) }
+        }
+        return cleaned
     }
 
     /// "Skal vi ses igen", "Can we meet": usable, but the model may find a better title.
@@ -453,12 +477,12 @@ struct TextDates {
     static func head(of sentence: String) -> String? {
         var stripped = sentence
         for pattern in [leadingFiller, invitationLeadIn, leadingFiller, hostLeadIn] {
-            stripped = pattern.stringByReplacingMatches(in: stripped, range: NSRange(location: 0, length: (stripped as NSString).length), withTemplate: "")
+            stripped = pattern.deletingMatches(in: stripped)
         }
         var words: [Substring] = []
         for word in stripped.split(whereSeparator: \.isWhitespace) {
             let w = String(word)
-            if dateWord.firstMatch(in: w, range: NSRange(location: 0, length: (w as NSString).length)) != nil { break }
+            if dateWord.firstMatch(inWhole: w) != nil { break }
             words.append(word)
         }
         guard (1...6).contains(words.count) else { return nil }
@@ -474,7 +498,7 @@ struct TextDates {
 
     /// "Sted: …" / "Location: …" lines, else a postal address in the sentence.
     static func location(sentence: String, body: String) -> String? {
-        for line in body.split(separator: "\n").prefix(200) {
+        for line in body.split(separator: "\n").prefix(maxLinesSearchedForLocation) {
             let l = String(line)
             let lns = l as NSString
             if let m = locationLabel.firstMatch(in: l, range: NSRange(location: 0, length: lns.length)) {
@@ -498,12 +522,10 @@ struct TextDates {
             }
             kept.append(s)
         }
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = TimeZone(identifier: "UTC")!
         let timedOnes = kept.filter { !$0.isAllDay }
         kept.removeAll { allDay in
             guard allDay.isAllDay else { return false }
-            let day = utc.dateComponents([.year, .month, .day], from: allDay.start)
+            let day = TimeZoneResolver.utc.dateComponents([.year, .month, .day], from: allDay.start)
             return timedOnes.contains { timed in
                 var cal = Calendar(identifier: .gregorian)
                 cal.timeZone = timed.timeZone ?? .current
@@ -586,6 +608,16 @@ enum Keywords {
     }
 
     static func softNegative(in text: String) -> Bool {
-        soft.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
+        soft.firstMatch(inWhole: text) != nil
+    }
+}
+
+fileprivate extension NSRegularExpression {
+    func firstMatch(inWhole text: String) -> NSTextCheckingResult? {
+        firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+    }
+
+    func deletingMatches(in text: String) -> String {
+        stringByReplacingMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length), withTemplate: "")
     }
 }

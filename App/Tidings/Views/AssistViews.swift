@@ -229,6 +229,8 @@ struct AvailabilityPicker: View {
 
     enum LoadState { case loading, denied, ready }
 
+    private static let lookAhead: TimeInterval = 14 * 86_400
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Share availability").font(.headline)
@@ -286,7 +288,7 @@ struct AvailabilityPicker: View {
         options.minimumMinutes = minutes
         options.dayStartHour = AssistSettings.workdayStart
         options.dayEndHour = AssistSettings.workdayEnd
-        let busy = calendar.busyIntervals(from: now, to: now.addingTimeInterval(14 * 86_400))
+        let busy = calendar.busyIntervals(from: now, to: now.addingTimeInterval(Self.lookAhead))
         slots = Availability.freeSlots(busy: busy, from: now, options: options)
         chosen = Set(slots)
         state = .ready

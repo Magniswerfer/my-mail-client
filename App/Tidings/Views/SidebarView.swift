@@ -8,12 +8,41 @@ struct SidebarView: View {
     var didPick: (() -> Void)? = nil
 
     var body: some View {
-        @Bindable var model = model
-        // One Inbox row stands for All and every category tab: it stays selected while any of
-        // them shows, and picking it opens Primary.
-        // With more than one account, each has its own Inbox row under it (a filter on the same
-        // Inbox, tabs and all); the unified Inbox stays the default.
-        let selection = Binding<SidebarItem?>(
+        List(selection: selection) {
+            mailboxesSection
+
+            // Categories (built-in and yours) are the tabs above the Inbox list, not sidebar rows.
+            SmartFolderSection()
+
+            ForEach(model.accounts, id: \.foldersSectionID) { account in
+                // A view of its own, so the folder tree (sorted, and read with the account's
+                // folder layout from the store) is rebuilt when folders change, not on every
+                // unread-count, selection or outbox change the rows above follow.
+                AccountFoldersSection(accountID: account.id, title: model.accounts.count > 1 ? account.displayName : String(localized: "Folders"))
+            }
+
+            if !Platform.isMac {
+                phoneRulesSection
+            }
+
+            // Sync status: a small centred line under the last section that scrolls with the
+            // list (as a pinned bar it floated over the rows).
+            SidebarStatus()
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .selectionDisabled()
+        }
+        .listStyle(.sidebar)
+    }
+
+    /// Indent per level: account Inboxes under All Inboxes (Mac), folders inside folders.
+    static let indentStep: CGFloat = 14
+
+    /// One Inbox row stands for All and every category tab: it stays selected while any of them
+    /// shows, and picking it opens Primary. With more than one account, each has its own Inbox
+    /// row under it (a filter on the same Inbox, tabs and all); the unified Inbox stays the default.
+    private var selection: Binding<SidebarItem?> {
+        Binding(
             get: {
                 guard model.isInInbox else { return model.selection }
                 return model.inboxAccountID.map(SidebarItem.accountInbox) ?? .inbox
@@ -27,82 +56,66 @@ struct SidebarView: View {
                 }
                 didPick?()
             })
-        List(selection: selection) {
-            Section {
-                // `.tag` must be the outermost modifier, or the row can't be selected.
-                Label(model.accounts.count > 1 ? "All Inboxes" : "Inbox", systemImage: "tray")
-                    .badge(model.inboxUnreadCount)
-                    .tag(SidebarItem.inbox)
-                if model.accounts.count > 1 {
-                    // Ids of their own: the folder sections below also go by account, and rows
-                    // sharing an id in one List make SwiftUI drop one of them.
-                    ForEach(model.accounts, id: \.inboxRowID) { account in
-                        Label(account.displayName, systemImage: account.isICloud ? "icloud" : "tray")
-                            .padding(.leading, Platform.isMac ? 14 : 0)
-                            .badge(model.accountUnreadCounts[account.id] ?? 0)
-                            .help(account.endpoint.username)
-                            .tag(SidebarItem.accountInbox(account.id))
-                    }
-                }
-                Label("Snoozed", systemImage: "clock")
-                    .dropDestination(for: ThreadDrag.self) { items, _ in
-                        guard !items.isEmpty else { return false }
-                        model.selectedThreadID = items.first?.threadID
-                        model.isSnoozePickerShown = true
-                        return true
-                    }
-                    .tag(SidebarItem.snoozed)
-                Label("Set Aside", systemImage: "arrowshape.turn.up.left.circle")
-                    .badge(model.replyLaterCount)
-                    .dropDestination(for: ThreadDrag.self) { items, _ in
-                        let threads = model.threads(for: items).filter { !$0.isReplyLater }
-                        guard !threads.isEmpty else { return false }
-                        model.perform(.replyLater, on: threads)
-                        return true
-                    }
-                    .help("Conversations you set aside to reply to later (L)")
-                    .tag(SidebarItem.replyLater)
-                if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
-                    Label("Outbox", systemImage: "paperplane")
-                        .badge(model.outboxItems.count)
-                        .tag(SidebarItem.outbox)
-                }
-            }
-
-            // Categories (built-in and yours) are the tabs above the Inbox list, not sidebar rows.
-            SmartFolderSection()
-
-            ForEach(model.accounts, id: \.foldersSectionID) { account in
-                // A view of its own, so the folder tree (sorted, and read with the account's
-                // folder layout from the store) is rebuilt when folders change, not on every
-                // unread-count, selection or outbox change the rows above follow.
-                AccountFoldersSection(accountID: account.id, title: model.accounts.count > 1 ? account.displayName : String(localized: "Folders"))
-            }
-
-            if !Platform.isMac {
-                // iPhone and iPad: Rules here as well as in the More menu (the Mac has it in the
-                // menu bar and ⌘K).
-                Section {
-                    Button { model.isRulesShown = true } label: {
-                        // Looks like the rows above: tinted icon, plain title.
-                        Label {
-                            Text("Rules").foregroundStyle(Color.primary)
-                        } icon: {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                        }
-                    }
-                }
-            }
-
-            // Sync status: a small centred line under the last section that scrolls with the
-            // list (as a pinned bar it floated over the rows).
-            SidebarStatus()
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .selectionDisabled()
-        }
-        .listStyle(.sidebar)
     }
+
+    private var mailboxesSection: some View {
+        Section {
+            // `.tag` must be the outermost modifier, or the row can't be selected.
+            Label(model.accounts.count > 1 ? "All Inboxes" : "Inbox", systemImage: "tray")
+                .badge(model.inboxUnreadCount)
+                .tag(SidebarItem.inbox)
+            if model.accounts.count > 1 {
+                // Ids of their own: the folder sections below also go by account, and rows
+                // sharing an id in one List make SwiftUI drop one of them.
+                ForEach(model.accounts, id: \.inboxRowID) { account in
+                    Label(account.displayName, systemImage: account.isICloud ? "icloud" : "tray")
+                        .padding(.leading, Platform.isMac ? Self.indentStep : 0)
+                        .badge(model.accountUnreadCounts[account.id] ?? 0)
+                        .help(account.endpoint.username)
+                        .tag(SidebarItem.accountInbox(account.id))
+                }
+            }
+            Label("Snoozed", systemImage: "clock")
+                .dropDestination(for: ThreadDrag.self) { items, _ in
+                    guard !items.isEmpty else { return false }
+                    model.selectedThreadID = items.first?.threadID
+                    model.isSnoozePickerShown = true
+                    return true
+                }
+                .tag(SidebarItem.snoozed)
+            Label("Set Aside", systemImage: "arrowshape.turn.up.left.circle")
+                .badge(model.replyLaterCount)
+                .dropDestination(for: ThreadDrag.self) { items, _ in
+                    let threads = model.threads(for: items).filter { !$0.isReplyLater }
+                    guard !threads.isEmpty else { return false }
+                    model.perform(.replyLater, on: threads)
+                    return true
+                }
+                .help("Conversations you set aside to reply to later (L)")
+                .tag(SidebarItem.replyLater)
+            if !model.outboxItems.isEmpty || !model.draftItems.isEmpty {
+                Label("Outbox", systemImage: "paperplane")
+                    .badge(model.outboxItems.count)
+                    .tag(SidebarItem.outbox)
+            }
+        }
+    }
+
+    /// iPhone and iPad: Rules here as well as in the More menu (the Mac has it in the menu bar
+    /// and ⌘K).
+    private var phoneRulesSection: some View {
+        Section {
+            Button { model.isRulesShown = true } label: {
+                // Looks like the rows above: tinted icon, plain title.
+                Label {
+                    Text("Rules").foregroundStyle(Color.primary)
+                } icon: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                }
+            }
+        }
+    }
+
 }
 
 /// One account's folders in the sidebar, under a header with New Folder.
@@ -140,7 +153,7 @@ struct AccountFoldersSection: View {
     private func folderRow(_ row: FolderRow, accountID: String) -> some View {
         let box = row.box
         let label = Label(row.name, systemImage: box.role?.symbol ?? "folder")
-            .padding(.leading, CGFloat(row.depth) * 14)
+            .padding(.leading, CGFloat(row.depth) * SidebarView.indentStep)
             .contextMenu { FolderContextMenu(box: box) }
         if box.role == .archive {
             // Dropping on Archive is "Done".

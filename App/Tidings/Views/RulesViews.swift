@@ -27,30 +27,9 @@ struct RulesView: View {
         @Bindable var model = model
         return Group {
             if model.rules.isEmpty {
-                ContentUnavailableView {
-                    Label("No rules yet", systemImage: "line.3.horizontal.decrease.circle")
-                } description: {
-                    Text("Rules sort new mail as it arrives, after Tidings' own sorting: move it to a category or folder, pin it, mark it read or done.")
-                } actions: {
-                    Button("New Rule") { model.newRule() }.buttonStyle(.glassProminent)
-                }
+                emptyState
             } else {
-                List(selection: $selection) {
-                    ForEach(model.rules) { rule in
-                        RuleRow(rule: rule, count: model.ruleCounts[rule.id] ?? 0)
-                            .tag(rule.id)
-                            .contextMenu { menu(for: rule) }
-                    }
-                    .onMove { model.moveRules(from: $0, to: $1) }
-                }
-                .contextMenu(forSelectionType: Rule.ID.self) { _ in } primaryAction: { ids in
-                    if let id = ids.first, let rule = model.rules.first(where: { $0.id == id }) { model.editingRule = rule }
-                }
-                .onKeyPress(.return) {
-                    guard let id = selection, let rule = model.rules.first(where: { $0.id == id }) else { return .ignored }
-                    model.editingRule = rule
-                    return .handled
-                }
+                rulesList
             }
         }
         .navigationTitle("Rules")
@@ -83,6 +62,40 @@ struct RulesView: View {
         .sheet(isPresented: $isHistoryShown) {
             RuleHistoryView().environment(model)
         }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("No rules yet", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+            Text("Rules sort new mail as it arrives, after Tidings' own sorting: move it to a category or folder, pin it, mark it read or done.")
+        } actions: {
+            Button("New Rule") { model.newRule() }.buttonStyle(.glassProminent)
+        }
+    }
+
+    private var rulesList: some View {
+        List(selection: $selection) {
+            ForEach(model.rules) { rule in
+                RuleRow(rule: rule, count: model.ruleCounts[rule.id] ?? 0)
+                    .tag(rule.id)
+                    .contextMenu { menu(for: rule) }
+            }
+            .onMove { model.moveRules(from: $0, to: $1) }
+        }
+        .contextMenu(forSelectionType: Rule.ID.self) { _ in } primaryAction: { ids in
+            if let opened = rule(withID: ids.first) { model.editingRule = opened }
+        }
+        .onKeyPress(.return) {
+            guard let selected = rule(withID: selection) else { return .ignored }
+            model.editingRule = selected
+            return .handled
+        }
+    }
+
+    private func rule(withID id: Rule.ID?) -> Rule? {
+        guard let id else { return nil }
+        return model.rules.first { $0.id == id }
     }
 
     private var historyButton: some View {
@@ -155,75 +168,22 @@ struct RuleEditor: View {
     @State private var drafting = false
     @State private var draftFailed = false
 
+    /// Matches listed in the preview when the on-device model isn't involved.
+    private static let previewListLimit = 8
+    /// Typing settles this long before the preview goes through the Inbox.
+    private static let previewDelay: Duration = .milliseconds(250)
+
     var body: some View {
         NavigationStack {
             Form {
                 if model.ruleDrafter != nil {
-                    Section {
-                        HStack {
-                            TextField("Describe the rule", text: $sentence,
-                                      prompt: Text("Move mail about shoes from shops to Advertising"))
-                                .onSubmit { draft() }
-                            if drafting {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Button("Draft") { draft() }
-                                    .disabled(sentence.trimmingCharacters(in: .whitespaces).isEmpty)
-                            }
-                        }
-                    } footer: {
-                        Text(draftFailed ? String(localized: "Couldn't turn that into a rule. Try saying what mail it's for and what to do with it.")
-                                         : String(localized: "Write it in your own words; the on-device model fills in the rule below for you to check."))
-                    }
+                    draftSection
                 }
                 Section {
                     TextField("Name", text: $rule.name, prompt: Text("Shoe shops to Advertising"))
                 }
-                Section {
-                    Picker("When", selection: $rule.matchAll) {
-                        Text("All conditions match").tag(true)
-                        Text("Any condition matches").tag(false)
-                    }
-                    ForEach(rule.conditions.indices, id: \.self) { index in
-                        HStack {
-                            ConditionEditor(condition: element(of: \.conditions, at: index, fallback: .hasAttachment(true)))
-                            removeButton { if rule.conditions.indices.contains(index) { rule.conditions.remove(at: index) } }
-                        }
-                    }
-                    Menu {
-                        ForEach(ConditionKind.available(about: model.ruleJudge != nil), id: \.self) { kind in
-                            Button(kind.title) { rule.conditions.append(kind.makeDefault()) }
-                        }
-                    } label: {
-                        Label("Add Condition", systemImage: "plus.circle")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                } header: {
-                    Text("Conditions")
-                }
-                Section {
-                    ForEach(rule.actions.indices, id: \.self) { index in
-                        HStack {
-                            ActionEditor(action: element(of: \.actions, at: index, fallback: .pin))
-                            removeButton { if rule.actions.indices.contains(index) { rule.actions.remove(at: index) } }
-                        }
-                    }
-                    Menu {
-                        ForEach(ActionKind.available, id: \.self) { kind in
-                            Button(kind.title) { rule.actions.append(kind.makeDefault()) }
-                        }
-                    } label: {
-                        Label("Add Action", systemImage: "plus.circle")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    Toggle("Stop processing more rules", isOn: $rule.stopProcessing)
-                } header: {
-                    Text("Actions")
-                } footer: {
-                    Text("Rules run on new mail in the Inbox, after Tidings' own sorting. Only the first action that takes mail out of the Inbox (Done, Snooze, Move to Folder) runs.")
-                }
+                conditionsSection
+                actionsSection
                 Section {
                     previewContent
                 } header: {
@@ -247,6 +207,76 @@ struct RuleEditor: View {
         .macFrame(minWidth: 620, minHeight: 420, idealHeight: 520)
     }
 
+    private var draftSection: some View {
+        Section {
+            HStack {
+                TextField("Describe the rule", text: $sentence,
+                          prompt: Text("Move mail about shoes from shops to Advertising"))
+                    .onSubmit { draft() }
+                if drafting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Draft") { draft() }
+                        .disabled(sentence.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        } footer: {
+            Text(draftFailed ? String(localized: "Couldn't turn that into a rule. Try saying what mail it's for and what to do with it.")
+                             : String(localized: "Write it in your own words; the on-device model fills in the rule below for you to check."))
+        }
+    }
+
+    private var conditionsSection: some View {
+        Section {
+            Picker("When", selection: $rule.matchAll) {
+                Text("All conditions match").tag(true)
+                Text("Any condition matches").tag(false)
+            }
+            ForEach(rule.conditions.indices, id: \.self) { index in
+                HStack {
+                    ConditionEditor(condition: element(of: \.conditions, at: index, fallback: .hasAttachment(true)))
+                    removeButton { if rule.conditions.indices.contains(index) { rule.conditions.remove(at: index) } }
+                }
+            }
+            Menu {
+                ForEach(ConditionKind.available(about: model.ruleJudge != nil), id: \.self) { kind in
+                    Button(kind.title) { rule.conditions.append(kind.makeDefault()) }
+                }
+            } label: {
+                Label("Add Condition", systemImage: "plus.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        } header: {
+            Text("Conditions")
+        }
+    }
+
+    private var actionsSection: some View {
+        Section {
+            ForEach(rule.actions.indices, id: \.self) { index in
+                HStack {
+                    ActionEditor(action: element(of: \.actions, at: index, fallback: .pin))
+                    removeButton { if rule.actions.indices.contains(index) { rule.actions.remove(at: index) } }
+                }
+            }
+            Menu {
+                ForEach(ActionKind.available, id: \.self) { kind in
+                    Button(kind.title) { rule.actions.append(kind.makeDefault()) }
+                }
+            } label: {
+                Label("Add Action", systemImage: "plus.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Toggle("Stop processing more rules", isOn: $rule.stopProcessing)
+        } header: {
+            Text("Actions")
+        } footer: {
+            Text("Rules run on new mail in the Inbox, after Tidings' own sorting. Only the first action that takes mail out of the Inbox (Done, Snooze, Move to Folder) runs.")
+        }
+    }
+
     @ViewBuilder private var previewContent: some View {
         if rule.conditions.isEmpty {
             Text("Add a condition to see what this rule would match.").foregroundStyle(.secondary)
@@ -259,25 +289,29 @@ struct RuleEditor: View {
                 Text("The on-device model checked the \(RuleEngine.modelPreviewLimit) likeliest messages. Mark right ✓ or wrong ✗ to teach it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            ForEach(preview.prefix(rule.usesLanguageModel ? RuleEngine.modelPreviewLimit : 8), id: \.id) { message in
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(message.senderDisplay).font(.callout.weight(.medium))
-                        Text(message.subject).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    if rule.usesLanguageModel {
-                        Spacer()
-                        Button { teach(message, matches: true) } label: { Image(systemName: "checkmark.circle") }
-                            .buttonStyle(.borderless).help("Right: this matches")
-                            .accessibilityLabel("Right: this matches")
-                        Button { teach(message, matches: false) } label: { Image(systemName: "xmark.circle") }
-                            .buttonStyle(.borderless).help("Wrong: this doesn't match")
-                            .accessibilityLabel("Wrong: this doesn't match")
-                    }
-                }
+            ForEach(preview.prefix(rule.usesLanguageModel ? RuleEngine.modelPreviewLimit : Self.previewListLimit), id: \.id) { message in
+                previewRow(message)
             }
             if !preview.isEmpty && rule.isComplete {
                 Toggle("Also apply it to these now", isOn: $applyNow)
+            }
+        }
+    }
+
+    private func previewRow(_ message: StoredMessage) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(message.senderDisplay).font(.callout.weight(.medium))
+                Text(message.subject).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if rule.usesLanguageModel {
+                Spacer()
+                Button { teach(message, matches: true) } label: { Image(systemName: "checkmark.circle") }
+                    .buttonStyle(.borderless).help("Right: this matches")
+                    .accessibilityLabel("Right: this matches")
+                Button { teach(message, matches: false) } label: { Image(systemName: "xmark.circle") }
+                    .buttonStyle(.borderless).help("Wrong: this doesn't match")
+                    .accessibilityLabel("Wrong: this doesn't match")
             }
         }
     }
@@ -301,8 +335,7 @@ struct RuleEditor: View {
         guard !rule.conditions.isEmpty else { preview = []; return }
         previewing = true
         defer { previewing = false }
-        // Let typing settle before going through the Inbox.
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: Self.previewDelay)
         guard !Task.isCancelled else { return }
         let found = (try? await model.ruleEngine.preview(model.calibrated(rule), store: model.store)) ?? []
         guard !Task.isCancelled else { return }
@@ -399,32 +432,28 @@ struct ConditionEditor: View {
             })) {
                 ForEach(ConditionKind.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            .labelsHidden()
-            .fixedSize()
+            .compactPicker()
             switch condition {
             case .sender, .recipient, .subject, .text:
                 Picker("", selection: Binding(get: { textMatch?.operation ?? .contains },
                                               set: { op in setText { $0.operation = op } })) {
                     ForEach(TextMatch.Operation.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
                 TextField("", text: Binding(get: { textMatch?.value ?? "" }, set: { value in setText { $0.value = value } }),
                           prompt: Text(ConditionKind(condition) == .sender ? "@shop.dk" : ""))
             case .category(let category):
                 Picker("", selection: Binding(get: { category }, set: { condition = .category($0) })) {
                     ForEach(MailCategory.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
                 Spacer()
             case .hasAttachment(let has):
                 Picker("", selection: Binding(get: { has }, set: { condition = .hasAttachment($0) })) {
                     Text("has some").tag(true)
                     Text("has none").tag(false)
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
                 Spacer()
             case .about(let about):
                 TextField("", text: Binding(get: { about.description }, set: { text in
@@ -515,30 +544,26 @@ struct ActionEditor: View {
             Picker("", selection: Binding(get: { ActionKind(action) }, set: { action = $0.makeDefault() })) {
                 ForEach(ActionKind.available, id: \.self) { Text($0.title).tag($0) }
             }
-            .labelsHidden()
-            .fixedSize()
+            .compactPicker()
             switch action {
             case .setCategory(let category):
                 Picker("", selection: Binding(get: { category }, set: { action = .setCategory($0) })) {
                     ForEach(MailCategory.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
             case .snooze(let hours):
                 Picker("", selection: Binding(get: { hours }, set: { action = .snooze(hours: $0) })) {
                     ForEach(Self.snoozeChoices, id: \.self) { choice in
                         Text(choice.map(Self.duration) ?? String(localized: "someday")).tag(choice)
                     }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
             case .moveToFolder(let path):
                 Picker("", selection: Binding(get: { path }, set: { action = .moveToFolder($0) })) {
                     Text("Choose…").tag("")
                     ForEach(folders, id: \.self) { Text(MailboxState.displayName($0)).tag($0) }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .compactPicker()
             case .forward(let to):
                 TextField("address", text: Binding(get: { to }, set: { action = .forward(to: $0) }),
                           prompt: Text(verbatim: "anna@example.com"))
@@ -591,31 +616,7 @@ struct RuleHistoryView: View {
                     ContentUnavailableView("Nothing yet", systemImage: "clock.arrow.circlepath",
                                            description: Text("When a rule acts on new mail, it shows up here."))
                 } else {
-                    List(runs) { run in
-                        HStack(alignment: .top, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(run.sender).font(.headline).lineLimit(1)
-                                    Spacer()
-                                    Text(run.at.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                                Text(run.subject).lineLimit(1)
-                                Text("\(run.ruleNames.joined(separator: ", ")): \(run.actions.map(\.summary).joined(separator: ", "))")
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            }
-                            if run.undoneAt != nil {
-                                Text("Undone").font(.caption).foregroundStyle(.secondary)
-                            } else {
-                                Button("Undo") {
-                                    model.undo(run)
-                                    if let index = runs.firstIndex(of: run) { runs[index].undoneAt = Date() }
-                                }
-                                .buttonStyle(.glass)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
+                    List(runs) { run in runRow(run) }
                 }
             }
             .navigationTitle("Rule History")
@@ -628,5 +629,38 @@ struct RuleHistoryView: View {
         }
         .macFrame(minWidth: 560, minHeight: 420, idealHeight: 440)
         .task { runs = (try? model.store.ruleRuns()) ?? [] }
+    }
+
+    private func runRow(_ run: RuleRun) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(run.sender).font(.headline).lineLimit(1)
+                    Spacer()
+                    Text(run.at.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text(run.subject).lineLimit(1)
+                Text("\(run.ruleNames.joined(separator: ", ")): \(run.actions.map(\.summary).joined(separator: ", "))")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            if run.undoneAt != nil {
+                Text("Undone").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Button("Undo") {
+                    model.undo(run)
+                    if let index = runs.firstIndex(of: run) { runs[index].undoneAt = Date() }
+                }
+                .buttonStyle(.glass)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private extension View {
+    /// A picker inside a condition or action row: no label, only as wide as its choice.
+    func compactPicker() -> some View {
+        labelsHidden().fixedSize()
     }
 }

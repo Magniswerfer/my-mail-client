@@ -64,7 +64,7 @@ public struct MailboxChanges: Sendable {
 extension MailSession {
     /// `UID FETCH <uids|1:*> (UID FLAGS RFC822.SIZE INTERNALDATE [MODSEQ]) [(CHANGEDSINCE n)]`.
     public func fetchSummaries(uids: [UInt32]? = nil, changedSince: UInt64? = nil) async throws -> [MessageSummary] {
-        guard let set = try allOrSome(uids) else { return [] }
+        guard let set = uidSetOrAll(uids) else { return [] }
         var modifiers: [FetchModifier] = []
         if let changedSince, supports("CONDSTORE") {
             modifiers.append(.changedSince(ChangedSinceModifier(modificationSequence: ModificationSequenceValue(changedSince))))
@@ -78,7 +78,7 @@ extension MailSession {
     /// with `vanished` (QRESYNC enabled), expunges. RFC 7162 §3.1.4.1 and §3.2.6.
     public func fetchChanges(since modSeq: UInt64, vanished: Bool) async throws -> MailboxChanges {
         var changes = MailboxChanges(summaries: [], vanished: vanished ? UIDRanges() : nil)
-        guard let set = try allOrSome(nil) else {
+        guard let set = uidSetOrAll(nil) else {
             changes.exists = 0
             return changes
         }
@@ -183,24 +183,7 @@ extension MailSession {
         let responses = try await run(
             .uidFetch(set, [.uid, .bodySection(peek: true, .complete, partial)], []), name: "UID FETCH BODY.PEEK[]"
         )
-        var result: [UInt32: Data] = [:]
-        var uid: UInt32?
-        var bytes = ByteBuffer()
-        for response in responses {
-            guard case .fetch(let part) = response else { continue }
-            switch part {
-            case .start, .startUID:
-                uid = nil
-                bytes.clear()
-                if case .startUID(let u) = part { uid = u.rawValue }
-            case .simpleAttribute(.uid(let u)): uid = u.rawValue
-            case .streamingBytes(var chunk): bytes.writeBuffer(&chunk)
-            case .finish:
-                if let uid { result[uid] = Data(bytes.readableBytesView) }
-            default: break
-            }
-        }
-        return result
+        return Self.bodySections(in: responses).mapValues { Data($0.readableBytesView) }
     }
 
     /// IDLEs on the selected mailbox until the server reports a change, `wake` fires, or
@@ -234,12 +217,6 @@ extension MailSession {
                 return changed
             }
         }
-    }
-
-    func allOrSome(_ uids: [UInt32]?) throws -> LastCommandSet<UID>? {
-        if let uids { return Self.uidSet(uids) }
-        if selected?.exists == 0 { return nil }
-        return .set(MessageIdentifierSetNonEmpty(set: MessageIdentifierSet<UID>(UID(rawValue: 1)...UID.max))!)
     }
 
     static func date(from server: ServerMessageDate) -> Date? {

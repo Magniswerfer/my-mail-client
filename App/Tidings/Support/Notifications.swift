@@ -16,6 +16,8 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
     static let readAction = "read"
     /// More than this in one sync pass become one summary ("6 new messages").
     static let burstLimit = 4
+    /// The summary names this many senders.
+    static let burstSenderCount = 4
 
     init(model: AppModel) {
         self.model = model
@@ -44,7 +46,7 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
         if notifications.count > Self.burstLimit {
             let content = UNMutableNotificationContent()
             content.title = String(localized: "\(notifications.count) new messages")
-            content.body = Array(Set(notifications.map(\.sender))).sorted().prefix(4).joined(separator: ", ")
+            content.body = Array(Set(notifications.map(\.sender))).sorted().prefix(Self.burstSenderCount).joined(separator: ", ")
             content.sound = .default
             try? await center.add(UNNotificationRequest(identifier: "burst-\(UUID().uuidString)", content: content, trigger: nil))
             return
@@ -57,8 +59,8 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
             content.threadIdentifier = n.threadID
             content.categoryIdentifier = Self.category
             content.sound = .default
-            var info: [String: String] = ["threadID": n.threadID, "accountID": n.accountID]
-            if let url = link(n) { info["link"] = url.absoluteString }
+            var info: [String: String] = [NotificationInfoKey.threadID: n.threadID, NotificationInfoKey.accountID: n.accountID]
+            if let url = link(n) { info[NotificationInfoKey.link] = url.absoluteString }
             content.userInfo = info
             try? await center.add(UNNotificationRequest(identifier: "mail-\(n.localID)", content: content, trigger: nil))
         }
@@ -82,9 +84,9 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
         let action = response.actionIdentifier
-        var threadID = info["threadID"] as? String
-        var accountID = info["accountID"] as? String
-        var link = (info["link"] as? String).flatMap(URL.init(string:))
+        var threadID = info[NotificationInfoKey.threadID] as? String
+        var accountID = info[NotificationInfoKey.accountID] as? String
+        var link = (info[NotificationInfoKey.link] as? String).flatMap(URL.init(string:))
         // From the push server: the message by Message-ID and account login (ADR 0007).
         let pushedMessageID = info[PushAPI.PayloadKey.messageID] as? String
         let pushedAccount = info[PushAPI.PayloadKey.account] as? String
@@ -110,6 +112,13 @@ final class MailNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
+/// What a notification of ours carries for its tap and buttons (mail and wake-up reminders alike).
+enum NotificationInfoKey {
+    static let threadID = "threadID"
+    static let accountID = "accountID"
+    static let link = "link"
+}
+
 /// Notification settings, kept with the app's preferences.
 enum NotificationPolicyStorage {
     static let key = "notificationPolicy.v1"
@@ -124,7 +133,6 @@ enum NotificationPolicyStorage {
         UserDefaults.standard.set(try? JSONEncoder().encode(policy), forKey: key)
     }
 }
-
 
 // MARK: - Focus filter
 

@@ -55,8 +55,7 @@ public enum PushServerAPI {
         api.put("devices/me") { request, context -> HTTPResponse.Status in
             let device = try authenticate(request, store, tag: tag)
             let body = try await decode(PushAPI.DeviceUpdate.self, request)
-            guard body.apnsToken.count >= 32, body.apnsToken.count <= 200,
-                  body.apnsToken.allSatisfy(\.isHexDigit) else { throw HTTPError(.badRequest, message: "apnsToken must be hex") }
+            guard isPlausibleAPNsToken(body.apnsToken) else { throw HTTPError(.badRequest, message: "apnsToken must be hex") }
             try store.setPushToken(deviceID: device.id, token: body.apnsToken.lowercased(), environment: body.environment.rawValue)
             return .noContent
         }
@@ -74,14 +73,14 @@ public enum PushServerAPI {
         }
         api.put("state") { request, context -> HTTPResponse.Status in
             _ = try authenticate(request, store, tag: tag)
-            let body = try await decode(PushAPI.StateUpload.self, request, limit: 16 << 20)
+            let body = try await decode(PushAPI.StateUpload.self, request, limit: BodyLimit.stateSnapshot)
             try await engine.applyState(body.records)
             return .noContent
         }
         api.put("scheduled/:id") { request, context -> HTTPResponse.Status in
             _ = try authenticate(request, store, tag: tag)
             let id = try context.parameters.require("id")
-            let body = try await decode(PushAPI.ScheduledSend.self, request, limit: 40 << 20)
+            let body = try await decode(PushAPI.ScheduledSend.self, request, limit: BodyLimit.scheduledMessage)
             try await map { try await engine.schedule(id: id, body) }
             return .noContent
         }
@@ -105,10 +104,27 @@ public enum PushServerAPI {
 
     // MARK: Helpers
 
+    /// Upper bounds on request bodies, so a client can't make the server buffer without end.
+    enum BodyLimit {
+        static let standard = 1 << 20
+        static let stateSnapshot = 16 << 20
+        /// A send-later message carries its attachments.
+        static let scheduledMessage = 40 << 20
+    }
+
+    /// In hex digits. Tokens are 64 today, and Apple says not to rely on their length.
+    static let apnsTokenHexLength = 32...200
+
+    static func isPlausibleAPNsToken(_ token: String) -> Bool {
+        apnsTokenHexLength.contains(token.count) && token.allSatisfy(\.isHexDigit)
+    }
+
+    static let bearerPrefix = "Bearer "
+
     /// The calling device. Its token must be current and from the current pairing secret.
     static func authenticate(_ request: Request, _ store: ServerStore, tag: String) throws -> ServerStore.Device {
-        guard let header = request.headers[.authorization], header.hasPrefix("Bearer "),
-              let device = try store.device(token: String(header.dropFirst("Bearer ".count))),
+        guard let header = request.headers[.authorization], header.hasPrefix(bearerPrefix),
+              let device = try store.device(token: String(header.dropFirst(bearerPrefix.count))),
               device.secretTag == tag else {
             throw HTTPError(.unauthorized)
         }
@@ -122,7 +138,7 @@ public enum PushServerAPI {
         return forwarded.split(separator: ",").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? "direct"
     }
 
-    static func decode<T: Decodable>(_ type: T.Type, _ request: Request, limit: Int = 1 << 20) async throws -> T {
+    static func decode<T: Decodable>(_ type: T.Type, _ request: Request, limit: Int = BodyLimit.standard) async throws -> T {
         let buffer = try await request.body.collect(upTo: limit)
         do {
             return try PushAPI.decoder.decode(type, from: Data(buffer.readableBytesView))

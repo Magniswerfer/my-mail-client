@@ -82,25 +82,32 @@ public enum SMTPClient {
     /// Delivers one message. Returns the server's final reply (often a queue id).
     @discardableResult
     public static func send(endpoint: SMTPEndpoint, password: String, from: String, recipients: [String], message: Data) async throws -> SMTPResponse {
-        let connection = try await SMTPConnection.connect(endpoint)
-        do {
-            let response = try await connection.deliver(endpoint: endpoint, password: password, from: from,
-                                                        recipients: recipients, message: message)
-            _ = try? await connection.command("QUIT")
-            try? await connection.close()
-            return response
-        } catch {
-            try? await connection.close()
-            throw error
+        try await withSession(endpoint) { connection in
+            try await connection.deliver(endpoint: endpoint, password: password, from: from,
+                                         recipients: recipients, message: message)
         }
     }
 
     /// Opens a connection and authenticates without sending anything (account setup check).
     public static func verify(endpoint: SMTPEndpoint, password: String) async throws {
+        try await withSession(endpoint) { connection in
+            _ = try await connection.handshake(endpoint: endpoint, password: password)
+        }
+    }
+
+    /// Runs `work` on a fresh connection, says QUIT after it succeeds and always closes.
+    static func withSession<Result>(_ endpoint: SMTPEndpoint,
+                                    _ work: (SMTPConnection) async throws -> Result) async throws -> Result {
         let connection = try await SMTPConnection.connect(endpoint)
-        defer { Task { try? await connection.close() } }
-        _ = try await connection.handshake(endpoint: endpoint, password: password)
-        _ = try? await connection.command("QUIT")
+        do {
+            let result = try await work(connection)
+            _ = try? await connection.command("QUIT")
+            try? await connection.close()
+            return result
+        } catch {
+            try? await connection.close()
+            throw error
+        }
     }
 
     /// Dot-stuffs and terminates the DATA payload, normalizing line endings to CRLF. A bare CR
@@ -118,6 +125,12 @@ public enum SMTPClient {
 }
 
 final class SMTPConnection: Sendable {
+    static let connectTimeout = TimeAmount.seconds(20)
+    /// Every wait for a reply is bounded so a silent server can't hang a send.
+    static let replyTimeout = TimeAmount.seconds(60)
+    /// After the DATA payload: big attachments take a while to accept.
+    static let dataAcceptTimeout = TimeAmount.minutes(5)
+
     let channel: any Channel
     let decoder: NIOLoopBound<SMTPResponseDecoder>
 
@@ -131,7 +144,7 @@ final class SMTPConnection: Sendable {
         let host = endpoint.host
         let immediateTLS = endpoint.security == .tls
         let channel = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-            .connectTimeout(.seconds(20))
+            .connectTimeout(Self.connectTimeout)
             .channelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
                     if immediateTLS {
@@ -192,30 +205,43 @@ final class SMTPConnection: Sendable {
             extensions = try await ehlo()   // capabilities must be re-read after TLS (RFC 3207)
         }
 
-        let auth = extensions.first { $0.uppercased().hasPrefix("AUTH") }?.uppercased().split(separator: " ").map(String.init) ?? []
-        if auth.contains("PLAIN") {
-            let token = Data("\0\(endpoint.username)\0\(password)".utf8).base64EncodedString()
-            let reply = try await command("AUTH PLAIN \(token)", redacted: "AUTH PLAIN ***")
-            guard reply.code == 235 else { throw SMTPError.authenticationFailed(reply.text) }
-        } else if auth.contains("LOGIN") {
-            var reply = try await command("AUTH LOGIN")
-            guard reply.code == 334 else { throw SMTPError.authenticationFailed(reply.text) }
-            reply = try await command(Data(endpoint.username.utf8).base64EncodedString(), redacted: "***")
-            guard reply.code == 334 else { throw SMTPError.authenticationFailed(reply.text) }
-            reply = try await command(Data(password.utf8).base64EncodedString(), redacted: "***")
-            guard reply.code == 235 else { throw SMTPError.authenticationFailed(reply.text) }
-        }
+        try await authenticate(username: endpoint.username, password: password, extensions: extensions)
         return extensions
     }
 
-    func deliver(endpoint: SMTPEndpoint, password: String, from: String, recipients: [String], message: Data) async throws -> SMTPResponse {
-        let extensions = try await handshake(endpoint: endpoint, password: password)
-        if let size = extensions.first(where: { $0.uppercased().hasPrefix("SIZE ") }).flatMap({ Int($0.split(separator: " ")[1]) }),
-           size > 0, message.count > size {
-            throw SMTPError.tooLarge(size: message.count, limit: size)
+    /// AUTH PLAIN when offered, else AUTH LOGIN (RFC 4954); nothing when the server offers neither.
+    func authenticate(username: String, password: String, extensions: [String]) async throws {
+        let mechanisms = extensions.first { $0.uppercased().hasPrefix("AUTH") }?.uppercased().split(separator: " ").map(String.init) ?? []
+        if mechanisms.contains("PLAIN") {
+            let token = Data("\0\(username)\0\(password)".utf8).base64EncodedString()
+            try await expectAuth(235, "AUTH PLAIN \(token)")
+        } else if mechanisms.contains("LOGIN") {
+            try await expectAuth(334, "AUTH LOGIN")
+            try await expectAuth(334, Data(username.utf8).base64EncodedString())
+            try await expectAuth(235, Data(password.utf8).base64EncodedString())
         }
+    }
+
+    private func expectAuth(_ code: Int, _ line: String) async throws {
+        let reply = try await command(line)
+        guard reply.code == code else { throw SMTPError.authenticationFailed(reply.text) }
+    }
+
+    /// The SIZE limit from EHLO (RFC 1870); nil when absent or 0 (no limit).
+    static func sizeLimit(in extensions: [String]) -> Int? {
+        guard let line = extensions.first(where: { $0.uppercased().hasPrefix("SIZE ") }),
+              let limit = line.split(separator: " ").dropFirst().first.flatMap({ Int($0) }), limit > 0 else { return nil }
+        return limit
+    }
+
+    func deliver(endpoint: SMTPEndpoint, password: String, from: String, recipients: [String], message: Data) async throws -> SMTPResponse {
+        // Checked before connecting: a bad address shouldn't cost a login.
         for address in [from] + recipients where !Self.isSafeEnvelopeAddress(address) {
             throw SMTPError.unsafeInput("the address \"\(HeaderText.singleLine(address).prefix(80))\"")
+        }
+        let extensions = try await handshake(endpoint: endpoint, password: password)
+        if let limit = Self.sizeLimit(in: extensions), message.count > limit {
+            throw SMTPError.tooLarge(size: message.count, limit: limit)
         }
         try await expect(250, "MAIL FROM:<\(from)>")
         var accepted = 0
@@ -232,7 +258,7 @@ final class SMTPConnection: Sendable {
         guard accepted > 0 else { throw SMTPError.rejected(command: "RCPT TO", code: 0, message: "no recipients") }
         try await expect(354, "DATA")
         try await channel.writeAndFlush(SMTPClient.dataPayload(message))
-        let final = try await response(timeout: .minutes(5))   // big attachments take a while to accept
+        let final = try await response(timeout: Self.dataAcceptTimeout)
         guard final.code == 250 else { throw SMTPError.rejected(command: "DATA", code: final.code, message: final.text) }
         return final
     }
@@ -261,7 +287,7 @@ final class SMTPConnection: Sendable {
         return reply
     }
 
-    func command(_ line: String, redacted: String? = nil) async throws -> SMTPResponse {
+    func command(_ line: String) async throws -> SMTPResponse {
         guard !line.unicodeScalars.contains(where: { $0 == "\r" || $0 == "\n" }) else {
             throw SMTPError.unsafeInput("a command")
         }
@@ -269,8 +295,7 @@ final class SMTPConnection: Sendable {
         return try await response()
     }
 
-    /// Waits for the next reply. Every wait is bounded so a silent server can't hang a send.
-    func response(timeout: TimeAmount = .seconds(60)) async throws -> SMTPResponse {
+    func response(timeout: TimeAmount = SMTPConnection.replyTimeout) async throws -> SMTPResponse {
         let promise = channel.eventLoop.makePromise(of: SMTPResponse.self)
         let decoder = self.decoder
         let channel = self.channel

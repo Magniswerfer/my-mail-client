@@ -85,7 +85,8 @@ public enum RemoteContent {
         return trackerPathHints.contains(where: path.contains) && (w ?? 0) <= 10 && (h ?? 0) <= 10
     }
 
-    /// Removes tracking query parameters; nil if the URL can't be parsed.
+    /// Removes tracking query parameters. A link that can't be parsed comes back unchanged; nil
+    /// only when the cleaned components can't be put back together.
     public static func stripTracking(_ link: String) -> String? {
         let decoded = link.replacingOccurrences(of: "&amp;", with: "&")
         guard var components = URLComponents(string: decoded), let items = components.queryItems, !items.isEmpty else { return link }
@@ -148,19 +149,10 @@ extension MailStore {
             if try Int.fetchOne(db, sql: "SELECT count(*) FROM imageTrust WHERE sender IN (?, ?)", arguments: [sender, domain]) ?? 0 > 0 {
                 return true
             }
-            guard !ownAddresses.isEmpty else { return false }
-            let mine = ownAddresses.map { $0.lowercased() }
             // Mail you sent (your signature's pictures among them): nothing to protect you from.
-            if mine.contains(sender) { return isOwnFolder }
-            // A message from me with this person among the recipients: an exact address match,
-            // not a substring ("john@example.co" isn't "john@example.com"; "%" isn't a wildcard).
-            let pattern = "%" + sender.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
-                .replacingOccurrences(of: "_", with: "\\_") + "%"
-            let candidates = try String.fetchAll(db, sql: """
-                SELECT recipients FROM message WHERE lower(fromAddress) IN (\(mine.map { _ in "?" }.joined(separator: ",")))
-                AND lower(recipients) LIKE ? ESCAPE '\\' LIMIT 200
-                """, arguments: StatementArguments(mine + [pattern]))
-            return candidates.contains { AddressParser.parse($0).contains { $0.address.lowercased() == sender } }
+            if ownAddresses.contains(where: { $0.lowercased() == sender }) { return isOwnFolder }
+            // A message from me with exactly this person among the recipients.
+            return try Self.hasWritten(to: sender, from: ownAddresses, in: db)
         }
     }
 

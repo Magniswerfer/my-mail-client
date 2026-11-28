@@ -44,6 +44,16 @@ public struct MessageSnapshot: Sendable, Hashable, Codable {
 /// UIDs at or above this are local placeholders for messages whose move hasn't reached the server.
 public let provisionalUIDBase: UInt32 = 0xF000_0000
 
+/// What sync must not touch yet in one mailbox: source UIDs of queued moves, and rows with
+/// queued changes (their local state already shows the result).
+struct InFlightChanges {
+    var sourceUIDs: Set<UInt32> = []
+    var localIDs: Set<Int64> = []
+
+    /// Real (non-provisional) source UIDs: messages still on the server that a queued move takes out.
+    var serverSourceUIDs: Set<UInt32> { sourceUIDs.filter { $0 < provisionalUIDBase } }
+}
+
 extension MailStore {
     static func registerTriageMigrations(_ m: inout DatabaseMigrator) {
         m.registerMigration("v3-triage") { db in
@@ -68,15 +78,17 @@ extension MailStore {
     // MARK: Snapshots
 
     public func snapshots(localIDs: [Int64]) throws -> [MessageSnapshot] {
+        try db.read { try snapshotsIn($0, localIDs: localIDs) }
+    }
+
+    func snapshotsIn(_ db: Database, localIDs: [Int64]) throws -> [MessageSnapshot] {
         guard !localIDs.isEmpty else { return [] }
-        return try db.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT id, mailbox, uid, flags, surfacedAt, snoozedUntil FROM message
-                WHERE id IN (\(localIDs.map { _ in "?" }.joined(separator: ",")))
-                """, arguments: StatementArguments(localIDs)).map {
-                MessageSnapshot(localID: $0["id"], mailbox: $0["mailbox"], uid: $0["uid"], flags: $0["flags"],
-                                surfacedAt: $0["surfacedAt"], snoozedUntil: $0["snoozedUntil"])
-            }
+        return try Row.fetchAll(db, sql: """
+            SELECT id, mailbox, uid, flags, surfacedAt, snoozedUntil FROM message
+            WHERE id IN (\(localIDs.sqlPlaceholders))
+            """, arguments: StatementArguments(localIDs)).map {
+            MessageSnapshot(localID: $0["id"], mailbox: $0["mailbox"], uid: $0["uid"], flags: $0["flags"],
+                            surfacedAt: $0["surfacedAt"], snoozedUntil: $0["snoozedUntil"])
         }
     }
 
@@ -84,14 +96,37 @@ extension MailStore {
     public func localIDs(threadIDs: [String], mailbox: String?, accountID: String) throws -> [Int64] {
         guard !threadIDs.isEmpty else { return [] }
         return try db.read { db in
-            var sql = "SELECT id FROM message WHERE accountID = ? AND threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ",")))"
+            var sql = "SELECT id FROM message WHERE accountID = ? AND threadID IN (\(threadIDs.sqlPlaceholders))"
             var args: [any DatabaseValueConvertible] = [accountID] + threadIDs
             if let mailbox { sql += " AND mailbox = ?"; args.append(mailbox) }
             return try Int64.fetchAll(db, sql: sql, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? }))
         }
     }
 
+    /// The conversations these messages belong to.
+    func threadIDs(localIDs: [Int64]) throws -> [String] {
+        guard !localIDs.isEmpty else { return [] }
+        return try db.read { db in
+            try String.fetchAll(db, sql: "SELECT DISTINCT threadID FROM message WHERE id IN (\(localIDs.sqlPlaceholders))",
+                                arguments: StatementArguments(localIDs))
+        }
+    }
+
+    func locations(localIDs: [Int64]) throws -> [(mailbox: String, uid: UInt32)] {
+        guard !localIDs.isEmpty else { return [] }
+        return try db.read { db in
+            try Row.fetchAll(db, sql: "SELECT mailbox, uid FROM message WHERE id IN (\(localIDs.sqlPlaceholders))",
+                             arguments: StatementArguments(localIDs)).map { ($0["mailbox"], $0["uid"]) }
+        }
+    }
+
     // MARK: Optimistic local changes
+
+    /// The placeholder UID a moved row carries until the server reports the real one; unique
+    /// per row because it comes from the row id.
+    static func provisionalUID(forRow id: Int64) -> UInt32 {
+        provisionalUIDBase + UInt32(truncatingIfNeeded: id & Int64(~provisionalUIDBase))
+    }
 
     /// Applies a move locally: the row moves now, with a provisional UID until the server answers.
     func applyLocalMove(localIDs: [Int64], to mailbox: String, flagsAdd: [String], flagsRemove: [String],
@@ -100,7 +135,7 @@ extension MailStore {
             guard let row = try Row.fetchOne(db, sql: "SELECT flags FROM message WHERE id = ?", arguments: [id]) else { continue }
             let flags = Self.edit(flags: row["flags"], add: flagsAdd, remove: flagsRemove)
             try db.execute(sql: "UPDATE message SET mailbox = ?, uid = ?, flags = ? WHERE id = ?",
-                           arguments: [mailbox, provisionalUIDBase + UInt32(truncatingIfNeeded: id & 0x0FFF_FFFF), flags, id])
+                           arguments: [mailbox, Self.provisionalUID(forRow: id), flags, id])
             if let surfacedAt {
                 try db.execute(sql: "UPDATE message SET surfacedAt = ? WHERE id = ?", arguments: [surfacedAt, id])
             }
@@ -125,6 +160,38 @@ extension MailStore {
                              snapshot.snoozedUntil != nil || snapshot.flags.contains(SnoozeKeywords.marker), snapshot.localID])
     }
 
+    /// An undone move: the row's snooze and surfacing state as before, whatever the flags say now.
+    func restoreSnoozeState(_ snapshot: MessageSnapshot, in db: Database) throws {
+        try db.execute(sql: "UPDATE message SET surfacedAt = ?, snoozedUntil = ?, isSnoozed = ? WHERE id = ?",
+                       arguments: [snapshot.surfacedAt, snapshot.snoozedUntil,
+                                   snapshot.flags.contains(SnoozeKeywords.marker), snapshot.localID])
+    }
+
+    /// Rows queued for a folder that the server spells differently (`Snoozed` → `INBOX.Snoozed`)
+    /// follow the server's spelling.
+    func relabelMailbox(accountID: String, from old: String, to new: String) throws {
+        try db.write { db in
+            try db.execute(sql: "UPDATE message SET mailbox = ? WHERE accountID = ? AND mailbox = ?",
+                           arguments: [new, accountID, old])
+        }
+    }
+
+    /// Replaces provisional UIDs with the server's (from COPYUID). Without a mapping, or if sync
+    /// already stored the destination copy, the placeholder row is dropped and sync refetches it.
+    func applyMoveResult(accountID: String, target: String, items: [QueuedAction.MoveItem], mapping: [UInt32: UInt32]) throws {
+        try db.write { db in
+            for item in items {
+                if let newUID = mapping[item.fromUID],
+                   try Int64.fetchOne(db, sql: "SELECT id FROM message WHERE accountID = ? AND mailbox = ? AND uid = ?",
+                                      arguments: [accountID, target, newUID]) == nil {
+                    try db.execute(sql: "UPDATE message SET uid = ? WHERE id = ?", arguments: [newUID, item.localID])
+                } else {
+                    try deleteRowsIn(db, ids: [item.localID])
+                }
+            }
+        }
+    }
+
     static func edit(flags: String, add: [String], remove: [String]) -> String {
         var set = Set(flags.split(separator: " ").map(String.init))
         set.subtract(remove)
@@ -146,23 +213,29 @@ extension MailStore {
         }
     }
 
-    /// What sync must not touch yet: source UIDs of queued moves, and rows with queued flag changes.
-    func inFlight(accountID: String, mailbox: String) throws -> (sourceUIDs: Set<UInt32>, localIDs: Set<Int64>) {
-        var uids = Set<UInt32>()
-        var ids = Set<Int64>()
+    func deletePending(id: Int64) throws {
+        _ = try db.write { try PendingAction.deleteOne($0, key: id) }
+    }
+
+    func savePending(_ pending: PendingAction) throws {
+        try db.write { try pending.update($0) }
+    }
+
+    func inFlight(accountID: String, mailbox: String) throws -> InFlightChanges {
+        var inFlight = InFlightChanges()
         for pending in try pendingActions(accountID: accountID) {
             switch pending.action {
             case .move(let items, _, _, _, _):
                 for item in items {
-                    if item.fromMailbox == mailbox { uids.insert(item.fromUID) }
-                    ids.insert(item.localID)
+                    if item.fromMailbox == mailbox { inFlight.sourceUIDs.insert(item.fromUID) }
+                    inFlight.localIDs.insert(item.localID)
                 }
             case .flags(let localIDs, _, _):
-                ids.formUnion(localIDs)
+                inFlight.localIDs.formUnion(localIDs)
             case nil: break
             }
         }
-        return (uids, ids)
+        return inFlight
     }
 
     // MARK: Snoozes
@@ -216,5 +289,15 @@ public enum SnoozeKeywords {
             .flatMap { TimeInterval($0.dropFirst(wakePrefix.count)) }
             .map { Date(timeIntervalSince1970: $0) }
         return (true, wake)
+    }
+}
+
+extension QueuedAction {
+    /// The messages this change touches.
+    var localIDs: Set<Int64> {
+        switch self {
+        case .move(let items, _, _, _, _): Set(items.map(\.localID))
+        case .flags(let ids, _, _): Set(ids)
+        }
     }
 }

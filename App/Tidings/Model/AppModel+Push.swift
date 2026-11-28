@@ -29,13 +29,18 @@ extension AppModel {
 
     /// The API client, once this device is paired.
     var pushServer: PushServerClient? {
-        guard !ProcessInfo.processInfo.arguments.contains("-TidingsNoPushServer"),
+        guard !Self.isPushServerTurnedOff,
               let pairing = pushServerPairing,
               let token = Keychain.secret(account: Self.pushDeviceTokenKey) else { return nil }
         return PushServerClient(baseURL: pairing.url, token: token)
     }
 
     var isPushServerPaired: Bool { pushServer != nil }
+
+    /// `-TidingsNoPushServer`: a run that must not talk to the paired server (tests, the dev copy).
+    private static var isPushServerTurnedOff: Bool {
+        ProcessInfo.processInfo.arguments.contains("-TidingsNoPushServer")
+    }
 
     // MARK: Pairing
 
@@ -71,8 +76,7 @@ extension AppModel {
     /// A device whose other half paired already (the secret came through iCloud Keychain)
     /// pairs itself at launch.
     func pairWithSharedPushServerIfNeeded() {
-        guard !isPushServerPaired, let pairing = pushServerPairing,
-              !ProcessInfo.processInfo.arguments.contains("-TidingsNoPushServer") else { return }
+        guard !isPushServerPaired, let pairing = pushServerPairing, !Self.isPushServerTurnedOff else { return }
         Task { try? await pairPushServer(url: pairing.url, secret: pairing.secret) }
     }
 
@@ -122,7 +126,7 @@ extension AppModel {
     func uploadAccountsToPushServer() async {
         guard let server = pushServer else { return }
         let known = Set((try? await server.status())?.accounts.filter(\.hasPassword).map(\.login) ?? [])
-        for account in accounts where account.id != "dev" && known.contains(account.login.lowercased()) {
+        for account in accounts where account.id != Self.devAccountID && known.contains(account.login.lowercased()) {
             do {
                 try await server.putAccount(login: account.login.lowercased(),
                                             PushAPI.AccountUpload(record: CloudAccountRecord(account), password: nil))
@@ -199,7 +203,7 @@ extension AppModel {
     func handOffToPushServer(_ item: OutboxItem) {
         guard let server = pushServer, let id = item.id, let sendAt = item.sendAt, let message = item.message,
               sendAt.timeIntervalSinceNow > Self.handOffMargin,
-              let account = accounts.first(where: { $0.id == item.accountID }),
+              let account = account(id: item.accountID),
               pushServerStatus?.accounts.contains(where: { $0.login == account.login.lowercased() && $0.hasPassword }) == true,
               let sync = syncs[item.accountID] else { return }
         let send = PushAPI.ScheduledSend(account: account.login.lowercased(), sendAt: sendAt, kind: item.kind, message: message)

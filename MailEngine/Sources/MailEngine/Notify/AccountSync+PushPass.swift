@@ -19,7 +19,7 @@ extension AccountSync {
             // Last category wins, as in `runRules`.
             for case .setCategory(let category) in actions { message.category = category }
             // Mail a rule files away (Done, Snooze, a folder) never notifies, unless it also says so.
-            let leaves = actions.contains { if case .done = $0 { true } else if case .snooze = $0 { true } else if case .moveToFolder = $0 { true } else { false } }
+            let leaves = actions.contains(where: \.leavesInbox)
             if actions.contains(.notify), let id = message.id, let thread = message.threadID {
                 runs.append(RuleRun(id: 0, at: now, accountID: account.id, messageID: id, threadID: thread,
                                     subject: message.subject, sender: message.fromAddress,

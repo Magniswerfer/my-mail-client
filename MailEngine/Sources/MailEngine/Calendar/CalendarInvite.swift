@@ -108,7 +108,7 @@ extension CalendarInvite {
         if end == nil, let duration = event.property("DURATION").flatMap({ ICalDuration.seconds($0.value) }) {
             end = start.date.addingTimeInterval(duration)
         }
-        if end == nil, start.isAllDay { end = start.date.addingTimeInterval(86_400) }
+        if end == nil, start.isAllDay { end = start.date.addingTimeInterval(ICalDuration.secondsPerDay) }
 
         let methodName = calendar.property("METHOD")?.value.uppercased().trimmingCharacters(in: .whitespaces)
         let method = methodName.flatMap(Method.init(rawValue:)) ?? .publish
@@ -270,31 +270,44 @@ struct TimeZoneResolver {
         guard let rule = observance.property("RRULE")?.value else {
             return start.year.map { $0 <= year } == true ? utc.date(from: start) : nil
         }
+        let parts = ruleParts(rule)
+        guard let month = parts["BYMONTH"].flatMap({ Int($0) }) ?? start.month, (1...12).contains(month) else { return nil }
+        guard let byday = parts["BYDAY"], let weekday = weekdays[String(byday.suffix(2)).uppercased()] else {
+            return utc.date(from: DateComponents(year: year, month: month, day: start.day, hour: start.hour, minute: start.minute))
+        }
+        let ordinal = Int(byday.dropLast(2)) ?? 1
+        // RFC 5545 allows at most 53 weeks either way; a crafted value must not overflow below.
+        guard (-maxWeekdayOrdinal...maxWeekdayOrdinal).contains(ordinal) else { return nil }
+        if ordinal < 0 {
+            return nthLastWeekday(weekday, fromEnd: -ordinal, month: month, year: year, hour: start.hour, minute: start.minute)
+        }
+        return utc.date(from: DateComponents(year: year, month: month, hour: start.hour, minute: start.minute,
+                                             weekday: weekday, weekdayOrdinal: ordinal))
+    }
+
+    static let maxWeekdayOrdinal = 53
+
+    /// `FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU` → ["FREQ": "YEARLY", "BYMONTH": "10", "BYDAY": "-1SU"].
+    static func ruleParts(_ rule: String) -> [String: String] {
         var parts: [String: String] = [:]
         for piece in rule.split(separator: ";") {
             let kv = piece.split(separator: "=", maxSplits: 1)
             if kv.count == 2 { parts[kv[0].uppercased()] = String(kv[1]) }
         }
-        guard let month = parts["BYMONTH"].flatMap({ Int($0) }) ?? start.month else { return nil }
-        var c = DateComponents(year: year, month: month, hour: start.hour, minute: start.minute)
-        if let byday = parts["BYDAY"], let weekday = weekdays[String(byday.suffix(2)).uppercased()] {
-            let n = Int(byday.dropLast(2)) ?? 1
-            c.weekday = weekday
-            c.weekdayOrdinal = n
-            if n < 0 {
-                // Last (or n-th last) weekday of the month: walk back from the month's end.
-                guard let firstOfNext = utc.date(from: DateComponents(year: year, month: month + 1, day: 1)) else { return nil }
-                var day = firstOfNext.addingTimeInterval(-86_400)
-                while utc.component(.weekday, from: day) != weekday { day.addTimeInterval(-86_400) }
-                day.addTimeInterval(TimeInterval((-n - 1) * -7 * 86_400))
-                var dc = utc.dateComponents([.year, .month, .day], from: day)
-                dc.hour = start.hour; dc.minute = start.minute
-                return utc.date(from: dc)
-            }
-            return utc.date(from: c)
-        }
-        c.day = start.day
-        return utc.date(from: c)
+        return parts
+    }
+
+    /// `-1SU` (the last Sunday), `-2SU` (the one before): walked back from the month's end.
+    static func nthLastWeekday(_ weekday: Int, fromEnd n: Int, month: Int, year: Int, hour: Int?, minute: Int?) -> Date? {
+        guard let firstOfNext = utc.date(from: DateComponents(year: year, month: month + 1, day: 1)) else { return nil }
+        let day = ICalDuration.secondsPerDay
+        var date = firstOfNext.addingTimeInterval(-day)
+        while utc.component(.weekday, from: date) != weekday { date.addTimeInterval(-day) }
+        date.addTimeInterval(-TimeInterval((n - 1) * 7) * day)
+        var components = utc.dateComponents([.year, .month, .day], from: date)
+        components.hour = hour
+        components.minute = minute
+        return utc.date(from: components)
     }
 
     static let weekdays = ["SU": 1, "MO": 2, "TU": 3, "WE": 4, "TH": 5, "FR": 6, "SA": 7]
@@ -358,6 +371,8 @@ struct TimeZoneResolver {
 }
 
 enum ICalDuration {
+    static let secondsPerDay: TimeInterval = 86_400
+
     /// ISO 8601 / RFC 5545 durations: `PT1H30M`, `P1D`, `P2W`, `-PT15M`.
     static func seconds(_ raw: String) -> TimeInterval? {
         var s = Substring(raw.trimmingCharacters(in: .whitespaces).uppercased())
@@ -372,8 +387,8 @@ enum ICalDuration {
             if c == "T" { continue }
             guard let n = Double(number) else { return nil }
             switch c {
-            case "W": total += n * 604_800
-            case "D": total += n * 86_400
+            case "W": total += n * 7 * secondsPerDay
+            case "D": total += n * secondsPerDay
             case "H": total += n * 3_600
             case "M": total += n * 60
             case "S": total += n

@@ -11,10 +11,15 @@ public struct ContactHit: Sendable, Hashable {
 extension SearchEngine {
     // MARK: Semantic second tier
 
+    /// Fewer scores than this say too little about what's typical to pick standouts.
+    static let relatedMinimumSample = 20
+    /// How many standard deviations above the mean a related message must score.
+    static let relatedCutDeviations: Float = 2
+
     /// Messages close in meaning to `text` that keyword search may have missed (SPEC §7):
     /// the query's embedding against the stored ones for the newest `sample` messages. Only
-    /// clear standouts count: at least the mean + 2 standard deviations of this query's scores,
-    /// which adapts to how high embedding similarities run for everything.
+    /// clear standouts count: at least `relatedCutDeviations` standard deviations above this
+    /// query's mean score, which adapts to how high embedding similarities run for everything.
     public func related(to text: String, embedder: any TextEmbedder, excluding: Set<Int64> = [],
                         limit: Int = 8, sample: Int = 20_000) throws -> [SearchHit] {
         guard let query = embedder.embed(text), query.count == embedder.dimension else { return [] }
@@ -34,9 +39,9 @@ extension SearchEngine {
             ids.append(row["messageID"])
             scores.append(VectorMath.dot(query, vector))
         }
-        guard scores.count >= 20 else { return [] }
+        guard scores.count >= Self.relatedMinimumSample else { return [] }
         let (mean, std) = VectorMath.meanAndDeviation(scores)
-        let cut = mean + 2 * std
+        let cut = mean + Self.relatedCutDeviations * std
         let best = scores.indices
             .filter { scores[$0] >= cut && !excluding.contains(ids[$0]) }
             .sorted { scores[$0] > scores[$1] }
@@ -53,6 +58,10 @@ extension SearchEngine {
 
     // MARK: Entity
 
+    /// A name is a word or three; more reads as a topic.
+    static let contactTermCount = 1...3
+    static let contactMinimumTermLength = 2
+
     /// The person the query most likely means: plain words that prefix-match a sender's name or
     /// address, ranked by how much mail they've sent lately (among the newest `contactSampleSize`
     /// matches), with an exact count of everything from them. nil for operator queries or long
@@ -61,8 +70,8 @@ extension SearchEngine {
     public func contact(for query: SearchQuery) throws -> ContactHit? {
         var bare = query
         bare.terms = []
-        guard bare == SearchQuery(), (1...3).contains(query.terms.count),
-              query.terms.allSatisfy({ $0.count >= 2 }) else { return nil }
+        guard bare == SearchQuery(), Self.contactTermCount.contains(query.terms.count),
+              query.terms.allSatisfy({ $0.count >= Self.contactMinimumTermLength }) else { return nil }
         let match = query.terms.map { "sender:\"\(SearchQuery.ftsSafe($0))\"*" }.joined(separator: " ")
         return try store.db.read { db in
             let rows = try Row.fetchAll(db, sql: """

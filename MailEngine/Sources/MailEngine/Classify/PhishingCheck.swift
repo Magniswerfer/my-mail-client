@@ -88,64 +88,85 @@ public enum PhishingCheck {
         "borger.dk": ["borger.dk"],
     ]
 
-    static var brandDomains: [String] { Array(Set(brands.values.flatMap { $0 })) }
+    static let brandDomains: [String] = Array(Set(brands.values.flatMap { $0 }))
+    /// A couple of mismatched links make the point; more would only crowd the warning.
+    static let maxLinkMismatchesReported = 2
 
     public static func evaluate(_ parsed: ParsedMessage, trustedDomains: Set<String> = []) -> RiskAssessment {
-        var reasons: [RiskReason] = []
-        let from = parsed.from.first
-        let fromAddress = from?.address.lowercased() ?? ""
-        let fromDomain = fromAddress.split(separator: "@").last.map(String.init) ?? ""
-        let fromBase = registrable(fromDomain)
-        let displayName = (from?.name ?? "").lowercased()
-
-        // 1. What the receiving server measured.
-        if let auth = parsed.header("Authentication-Results")?.lowercased() {
-            if auth.contains("dmarc=fail") { reasons.append(.dmarcFailed) }
-            if auth.contains("dkim=fail") { reasons.append(.dkimFailed) }
-            if auth.contains("spf=fail") { reasons.append(.spfFailed) }
-        }
-
-        // 2. Display name claims a brand the domain doesn't belong to.
-        if !trustedDomains.contains(fromBase) {
-            // Whole words only: "Apple Support" counts, "Appleby Bakery" doesn't.
-            for (brand, domains) in brands where displayName.range(of: #"(^|[^a-z0-9])\#(NSRegularExpression.escapedPattern(for: brand))($|[^a-z0-9])"#, options: .regularExpression) != nil {
-                if !domains.contains(where: { fromDomain == $0 || fromDomain.hasSuffix("." + $0) || registrable($0) == fromBase }) {
-                    reasons.append(.brandInDisplayName(brand: brand, domain: fromDomain))
-                    break
-                }
-            }
-        }
-        // ... or contains an address on another domain ("service@apple.com" <x@evil.example>).
-        if let shown = displayName.range(of: #"[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,})"#, options: .regularExpression) {
-            let shownAddress = String(displayName[shown])
-            let shownDomain = shownAddress.split(separator: "@").last.map(String.init) ?? ""
-            if registrable(shownDomain) != fromBase { reasons.append(.addressInDisplayName(shown: shownAddress)) }
-        }
-
-        // 3. Look-alike sender domain.
-        if fromDomain.hasPrefix("xn--") || fromDomain.contains(".xn--") {
-            reasons.append(.punycodeDomain(domain: fromDomain))
-        } else if !trustedDomains.contains(fromBase), let target = lookalike(of: fromBase, among: brandDomains.map(registrable) + Array(trustedDomains)) {
-            reasons.append(.lookalikeDomain(domain: fromDomain, resembles: target))
-        }
-
-        // 4. Links whose visible text names another domain.
+        let sender = Sender(parsed.from.first)
+        var reasons = authenticationFailures(parsed)
+        if !trustedDomains.contains(sender.base), let reason = brandImpersonation(by: sender) { reasons.append(reason) }
+        if let reason = foreignAddressInDisplayName(of: sender) { reasons.append(reason) }
+        if let reason = lookalikeDomain(of: sender, trustedDomains: trustedDomains) { reasons.append(reason) }
         if let html = parsed.html {
-            for (shown, actual) in mismatchedLinks(in: html) {
+            for (shown, actual) in mismatchedLinks(in: html).prefix(maxLinkMismatchesReported) {
                 reasons.append(.linkMismatch(shown: shown, actual: actual))
-                if reasons.filter({ if case .linkMismatch = $0 { true } else { false } }).count >= 2 { break }
             }
         }
-
-        // 5. Replies would go to a different organisation.
-        if let replyTo = parsed.replyTo.first?.address.lowercased(),
-           let replyDomain = replyTo.split(separator: "@").last.map(String.init),
-           registrable(replyDomain) != fromBase, !reasons.isEmpty {
-            reasons.append(.replyToElsewhere(domain: replyDomain))
-        }
-
+        // On its own a different Reply-To is common (support desks, lists); it only adds to other signs.
+        if !reasons.isEmpty, let reason = replyToElsewhere(parsed, sender: sender) { reasons.append(reason) }
         return RiskAssessment(level: level(for: reasons), reasons: reasons)
     }
+
+    struct Sender {
+        let domain: String
+        /// The registrable domain (`registrable(domain)`).
+        let base: String
+        let displayName: String
+
+        init(_ address: MailAddress?) {
+            domain = address?.address.lowercased().split(separator: "@").last.map(String.init) ?? ""
+            base = registrable(domain)
+            displayName = (address?.name ?? "").lowercased()
+        }
+    }
+
+    /// What the receiving server measured.
+    static func authenticationFailures(_ parsed: ParsedMessage) -> [RiskReason] {
+        guard let auth = parsed.header("Authentication-Results")?.lowercased() else { return [] }
+        var reasons: [RiskReason] = []
+        if auth.contains("dmarc=fail") { reasons.append(.dmarcFailed) }
+        if auth.contains("dkim=fail") { reasons.append(.dkimFailed) }
+        if auth.contains("spf=fail") { reasons.append(.spfFailed) }
+        return reasons
+    }
+
+    /// The display name claims a brand the sending domain doesn't belong to. Whole words only:
+    /// "Apple Support" counts, "Appleby Bakery" doesn't.
+    static func brandImpersonation(by sender: Sender) -> RiskReason? {
+        for (brand, domains) in brands where sender.displayName.range(of: #"(^|[^a-z0-9])\#(NSRegularExpression.escapedPattern(for: brand))($|[^a-z0-9])"#, options: .regularExpression) != nil {
+            if !domains.contains(where: { sender.domain == $0 || sender.domain.hasSuffix("." + $0) || registrable($0) == sender.base }) {
+                return .brandInDisplayName(brand: brand, domain: sender.domain)
+            }
+        }
+        return nil
+    }
+
+    /// `"service@apple.com" <x@evil.example>`: the display name shows an address on another domain.
+    static func foreignAddressInDisplayName(of sender: Sender) -> RiskReason? {
+        guard let shown = sender.displayName.range(of: #"[a-z0-9._%+-]+@([a-z0-9.-]+\.[a-z]{2,})"#, options: .regularExpression) else { return nil }
+        let shownAddress = String(sender.displayName[shown])
+        let shownDomain = shownAddress.split(separator: "@").last.map(String.init) ?? ""
+        return registrable(shownDomain) != sender.base ? .addressInDisplayName(shown: shownAddress) : nil
+    }
+
+    static func lookalikeDomain(of sender: Sender, trustedDomains: Set<String>) -> RiskReason? {
+        if sender.domain.hasPrefix("xn--") || sender.domain.contains(".xn--") { return .punycodeDomain(domain: sender.domain) }
+        guard !trustedDomains.contains(sender.base),
+              let target = lookalike(of: sender.base, among: brandDomains.map(registrable) + Array(trustedDomains)) else { return nil }
+        return .lookalikeDomain(domain: sender.domain, resembles: target)
+    }
+
+    /// Replies would go to a different organisation.
+    static func replyToElsewhere(_ parsed: ParsedMessage, sender: Sender) -> RiskReason? {
+        guard let replyTo = parsed.replyTo.first?.address.lowercased(),
+              let replyDomain = replyTo.split(separator: "@").last.map(String.init),
+              registrable(replyDomain) != sender.base else { return nil }
+        return .replyToElsewhere(domain: replyDomain)
+    }
+
+    static let dangerScore = 4
+    static let cautionScore = 2
 
     static func level(for reasons: [RiskReason]) -> RiskLevel {
         var score = 0
@@ -159,7 +180,7 @@ public enum PhishingCheck {
             case .replyToElsewhere: score += 1
             }
         }
-        return score >= 4 ? .danger : score >= 2 ? .caution : .none
+        return score >= dangerScore ? .danger : score >= cautionScore ? .caution : .none
     }
 
     // MARK: Helpers

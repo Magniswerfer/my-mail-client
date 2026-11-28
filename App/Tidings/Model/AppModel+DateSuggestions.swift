@@ -20,6 +20,9 @@ struct EventDraft: Identifiable {
     var timeZoneID: String?
     var url: String?
 
+    private static let day: TimeInterval = 86_400
+    private static let minimumLength: TimeInterval = 60
+
     /// As a calendar event for the EventKit bridge.
     var calendarInvite: CalendarInvite {
         var utc = Calendar(identifier: .gregorian)
@@ -28,7 +31,7 @@ struct EventDraft: Identifiable {
             utc.date(from: Calendar.current.dateComponents([.year, .month, .day], from: d)) ?? d
         }
         let start = isAllDay ? utcMidnight(start) : start
-        let end = isAllDay ? utcMidnight(end).addingTimeInterval(86_400) : max(end, start.addingTimeInterval(60))
+        let end = isAllDay ? utcMidnight(end).addingTimeInterval(Self.day) : max(end, start.addingTimeInterval(Self.minimumLength))
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPlace = location.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -56,6 +59,8 @@ struct EventDraft: Identifiable {
 /// after each sync, shown as a quiet card in the reader, added through the editable sheet.
 extension AppModel {
     private var center: DateSuggestionCenter { .shared }
+    /// Opening older mail scans this many of the conversation's newest messages.
+    private static let messagesScannedOnOpen = 5
 
     private func eventScanner() -> EventScanner {
         if let scanner = center.scanner { return scanner }
@@ -83,7 +88,7 @@ extension AppModel {
         let scanner = eventScanner()
         let own = ownAddresses
         var found = false
-        for message in messages(inThread: threadID).suffix(5) where message.invite == nil {
+        for message in messages(inThread: threadID).suffix(Self.messagesScannedOnOpen) where message.invite == nil {
             guard (try? store.eventSuggestions(for: message)) == nil else { continue }
             if let record = try? await scanner.scanNow(message, ownAddresses: own), !record.visible().isEmpty { found = true }
         }

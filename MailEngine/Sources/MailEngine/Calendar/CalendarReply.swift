@@ -68,14 +68,22 @@ extension CalendarInvite {
     static func property(_ name: String, _ parameters: [String: String], _ value: String) -> String {
         var line = name
         for rawKey in parameters.keys.sorted() {
+            // Parameter names come from the invite (a sender): letters, digits and "-" only.
             let key = String(rawKey.unicodeScalars.filter { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-") }
                 .map(Character.init))
             guard !key.isEmpty else { continue }
-            let v = HeaderText.singleLine(parameters[rawKey] ?? "")
-            let needsQuotes = v.contains { ":;,".contains($0) } || v.contains(" ")
-            line += ";\(key)=" + (needsQuotes ? "\"\(v.replacingOccurrences(of: "\"", with: "'"))\"" : v)
+            line += ";\(key)=" + parameterValue(HeaderText.singleLine(parameters[rawKey] ?? ""))
         }
         return line + ":" + HeaderText.singleLine(value)
+    }
+
+    /// RFC 5545 §3.2: a parameter value can't hold a DQUOTE or a control character, and is quoted
+    /// when it contains ":", ";", "," or a space. The CN of a received invite is unescaped text
+    /// that may contain a line break; left in, it would start a new line of our reply.
+    static func parameterValue(_ raw: String) -> String {
+        let v = String(raw.map { $0 == "\"" ? "'" : $0.isNewline ? " " : $0 })
+        let needsQuotes = v.contains { ":;, ".contains($0) }
+        return needsQuotes ? "\"\(v)\"" : v
     }
 
     static func utcStamp(_ date: Date) -> String {

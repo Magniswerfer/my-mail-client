@@ -162,9 +162,18 @@ final class AvatarImages {
 actor WebsiteIcons {
     static let shared = WebsiteIcons()
 
+    private static let iconLifetime: TimeInterval = 30 * 86_400
+    private static let missLifetime: TimeInterval = 7 * 86_400
+    private static let requestTimeout: TimeInterval = 8
+    /// The <link rel="icon"> is in the head: only the start of a page is read.
+    private static let pageBytesRead = 200_000
+    private static let maximumDownload = 1_000_000
+    /// Smaller than this (a 1×1 placeholder) isn't worth showing.
+    private static let minimumIconSide: CGFloat = 16
+
     private let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForRequest = WebsiteIcons.requestTimeout
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
         config.urlCache = nil
@@ -190,8 +199,8 @@ actor WebsiteIcons {
     private func load(_ domain: String) async -> PlatformImage? {
         let file = folder.appendingPathComponent(domain + ".img")
         let miss = folder.appendingPathComponent(domain + ".none")
-        if let age = Self.age(of: file), age < 30 * 86_400, let data = try? Data(contentsOf: file) { return PlatformImage(data: data) }
-        if let age = Self.age(of: miss), age < 7 * 86_400 { return nil }
+        if let age = Self.age(of: file), age < Self.iconLifetime, let data = try? Data(contentsOf: file) { return PlatformImage(data: data) }
+        if let age = Self.age(of: miss), age < Self.missLifetime { return nil }
         // Already the registrable domain (`AvatarImages.domain(of:)`): never a sender's subdomain.
         for host in [domain] {
             if let data = await fetchIcon(host: host), let image = PlatformImage(data: data), Self.isUsable(image) {
@@ -207,7 +216,8 @@ actor WebsiteIcons {
     private func fetchIcon(host: String) async -> Data? {
         guard let base = URL(string: "https://\(host)/") else { return nil }
         if let data = await fetch(base.appendingPathComponent("apple-touch-icon.png"), image: true) { return data }
-        if let page = await fetch(base, image: false), let html = String(data: page.prefix(200_000), encoding: .utf8) ?? String(data: page.prefix(200_000), encoding: .isoLatin1),
+        if let page = await fetch(base, image: false),
+           let html = String(data: page.prefix(Self.pageBytesRead), encoding: .utf8) ?? String(data: page.prefix(Self.pageBytesRead), encoding: .isoLatin1),
            let href = Self.iconLink(in: html), let url = URL(string: href, relativeTo: base)?.absoluteURL,
            url.scheme == "https", let data = await fetch(url, image: true) {
             return data
@@ -220,7 +230,7 @@ actor WebsiteIcons {
         request.setValue("Tidings", forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              data.count > 0, data.count < 1_000_000 else { return nil }
+              data.count > 0, data.count < Self.maximumDownload else { return nil }
         if image, let type = http.value(forHTTPHeaderField: "Content-Type")?.lowercased(),
            type.hasPrefix("text/") { return nil }
         return data
@@ -246,8 +256,9 @@ actor WebsiteIcons {
         return String(value).replacingOccurrences(of: "&amp;", with: "&")
     }
 
-    /// Big enough to show, and not a 1×1 placeholder.
-    static func isUsable(_ image: PlatformImage) -> Bool { image.size.width >= 16 && image.size.height >= 16 }
+    static func isUsable(_ image: PlatformImage) -> Bool {
+        image.size.width >= minimumIconSide && image.size.height >= minimumIconSide
+    }
 
     static func age(of url: URL) -> TimeInterval? {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { Date().timeIntervalSince($0) }

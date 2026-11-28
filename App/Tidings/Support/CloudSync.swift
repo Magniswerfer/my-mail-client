@@ -16,6 +16,16 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     static let environmentKey = "environment"
     static let environment = Data("Production".utf8)
     static let recordType = "State"
+    /// Where CKSyncEngine's own state is kept between launches (in the store's cloud metadata).
+    private static let engineStateKey = "engineState"
+
+    /// The fields of a `State` record.
+    private enum Field {
+        static let type = "type"
+        static let key = "key"
+        static let payload = "payload"
+        static let modifiedAt = "modifiedAt"
+    }
 
     let store: MailStore
     let container: CKContainer
@@ -75,7 +85,7 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             try? store.resetCloudState()
             try? store.setCloudMeta(Self.environmentKey, Self.environment)
         }
-        let saved = (try? store.cloudMeta("engineState")).flatMap { try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
+        let saved = (try? store.cloudMeta(Self.engineStateKey)).flatMap { try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
         let configuration = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: saved, delegate: self)
         let engine = CKSyncEngine(configuration)
         lock.withLock { self.engine = engine }
@@ -143,18 +153,10 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let update):
-            if let data = try? JSONEncoder().encode(update.stateSerialization) { try? store.setCloudMeta("engineState", data) }
+            if let data = try? JSONEncoder().encode(update.stateSerialization) { try? store.setCloudMeta(Self.engineStateKey, data) }
 
         case .accountChange(let change):
-            switch change.changeType {
-            case .signIn:
-                await MainActor.run { onStatus(.syncing) }
-            case .signOut, .switchAccounts:
-                // Another person's (or no) iCloud: forget what we knew about the cloud.
-                try? store.resetCloudState()
-                await MainActor.run { onStatus(.unavailable(String(localized: "Sign in to iCloud to sync"))) }
-            @unknown default: break
-            }
+            await accountChanged(change)
 
         case .fetchedDatabaseChanges(let changes):
             for deletion in changes.deletions where deletion.zoneID == Self.zoneID {
@@ -164,65 +166,10 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             }
 
         case .fetchedRecordZoneChanges(let changes):
-            var saves: [StateRecord] = []
-            for modification in changes.modifications {
-                let record = modification.record
-                guard let state = Self.state(from: record) else { continue }
-                try? rememberName(record.recordID.recordName, type: state.type, key: state.key)
-                try? rememberSystemFields(of: record)
-                saves.append(state)
-            }
-            let deletions = changes.deletions.compactMap { deletion -> (type: String, key: String)? in
-                try? forgetSystemFields(deletion.recordID.recordName)
-                return try? name(deletion.recordID.recordName)
-            }
-            guard !saves.isEmpty || !deletions.isEmpty else { return }
-            do {
-                let report = try store.applyCloudChanges(saves: saves, deletions: deletions, accounts: currentAccounts)
-                SyncLog.cloud("fetched \(saves.count) saves, \(deletions.count) deletions: applied \(report.applied), waiting \(report.deferred), kept local \(report.skipped)")
-                await MainActor.run { onApplied(report) }
-            } catch {
-                SyncLog.cloud("apply failed: \(error)")
-            }
+            await applyFetched(changes)
 
         case .sentRecordZoneChanges(let sent):
-            for record in sent.savedRecords {
-                try? rememberSystemFields(of: record)
-                if let state = Self.state(from: record) { try? store.cloudSaved(state) }
-            }
-            for id in sent.deletedRecordIDs {
-                try? forgetSystemFields(id.recordName)
-                if let (type, key) = try? name(id.recordName) { try? store.cloudDeleted(type: type, key: key) }
-            }
-            var retry: [CKSyncEngine.PendingRecordZoneChange] = []
-            var newerOnServer: [StateRecord] = []
-            for failure in sent.failedRecordSaves {
-                let id = failure.record.recordID
-                switch failure.error.code {
-                case .serverRecordChanged:
-                    // Someone else saved it first: the newer one wins (the engine decides).
-                    if let server = failure.error.serverRecord {
-                        try? rememberSystemFields(of: server)
-                        if let state = Self.state(from: server) { newerOnServer.append(state) }
-                    }
-                    retry.append(.saveRecord(id))
-                case .zoneNotFound:
-                    syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: Self.zoneID))])
-                    retry.append(.saveRecord(id))
-                case .unknownItem:
-                    try? forgetSystemFields(id.recordName)
-                    retry.append(.saveRecord(id))
-                case .networkFailure, .networkUnavailable, .zoneBusy, .serviceUnavailable, .requestRateLimited, .notAuthenticated:
-                    break   // CKSyncEngine retries these itself
-                default:
-                    SyncLog.cloud("save failed for \(id.recordName): \(failure.error)")
-                }
-            }
-            if !newerOnServer.isEmpty, let report = try? store.applyCloudChanges(saves: newerOnServer, deletions: [], accounts: currentAccounts) {
-                await MainActor.run { onApplied(report) }
-            }
-            // Whatever's still ours to send goes again (nextRecordZoneChangeBatch skips the rest).
-            if !retry.isEmpty { syncEngine.state.add(pendingRecordZoneChanges: retry) }
+            await handleSent(sent, syncEngine: syncEngine)
             await MainActor.run { onStatus(.upToDate(Date())) }
 
         case .didFetchChanges:
@@ -236,6 +183,81 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         }
     }
 
+    private func accountChanged(_ change: CKSyncEngine.Event.AccountChange) async {
+        switch change.changeType {
+        case .signIn:
+            await MainActor.run { onStatus(.syncing) }
+        case .signOut, .switchAccounts:
+            // Another person's (or no) iCloud: forget what we knew about the cloud.
+            try? store.resetCloudState()
+            await MainActor.run { onStatus(.unavailable(String(localized: "Sign in to iCloud to sync"))) }
+        @unknown default: break
+        }
+    }
+
+    private func applyFetched(_ changes: CKSyncEngine.Event.FetchedRecordZoneChanges) async {
+        var saves: [StateRecord] = []
+        for modification in changes.modifications {
+            let record = modification.record
+            guard let state = Self.state(from: record) else { continue }
+            try? rememberName(record.recordID.recordName, type: state.type, key: state.key)
+            try? rememberSystemFields(of: record)
+            saves.append(state)
+        }
+        let deletions = changes.deletions.compactMap { deletion -> (type: String, key: String)? in
+            try? forgetSystemFields(deletion.recordID.recordName)
+            return try? name(deletion.recordID.recordName)
+        }
+        guard !saves.isEmpty || !deletions.isEmpty else { return }
+        do {
+            let report = try store.applyCloudChanges(saves: saves, deletions: deletions, accounts: currentAccounts)
+            SyncLog.cloud("fetched \(saves.count) saves, \(deletions.count) deletions: applied \(report.applied), waiting \(report.deferred), kept local \(report.skipped)")
+            await MainActor.run { onApplied(report) }
+        } catch {
+            SyncLog.cloud("apply failed: \(error)")
+        }
+    }
+
+    private func handleSent(_ sent: CKSyncEngine.Event.SentRecordZoneChanges, syncEngine: CKSyncEngine) async {
+        for record in sent.savedRecords {
+            try? rememberSystemFields(of: record)
+            if let state = Self.state(from: record) { try? store.cloudSaved(state) }
+        }
+        for id in sent.deletedRecordIDs {
+            try? forgetSystemFields(id.recordName)
+            if let (type, key) = try? name(id.recordName) { try? store.cloudDeleted(type: type, key: key) }
+        }
+        var retry: [CKSyncEngine.PendingRecordZoneChange] = []
+        var newerOnServer: [StateRecord] = []
+        for failure in sent.failedRecordSaves {
+            let id = failure.record.recordID
+            switch failure.error.code {
+            case .serverRecordChanged:
+                // Someone else saved it first: the newer one wins (the engine decides).
+                if let server = failure.error.serverRecord {
+                    try? rememberSystemFields(of: server)
+                    if let state = Self.state(from: server) { newerOnServer.append(state) }
+                }
+                retry.append(.saveRecord(id))
+            case .zoneNotFound:
+                syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: Self.zoneID))])
+                retry.append(.saveRecord(id))
+            case .unknownItem:
+                try? forgetSystemFields(id.recordName)
+                retry.append(.saveRecord(id))
+            case .networkFailure, .networkUnavailable, .zoneBusy, .serviceUnavailable, .requestRateLimited, .notAuthenticated:
+                break   // CKSyncEngine retries these itself
+            default:
+                SyncLog.cloud("save failed for \(id.recordName): \(failure.error)")
+            }
+        }
+        if !newerOnServer.isEmpty, let report = try? store.applyCloudChanges(saves: newerOnServer, deletions: [], accounts: currentAccounts) {
+            await MainActor.run { onApplied(report) }
+        }
+        // Whatever's still ours to send goes again (nextRecordZoneChangeBatch skips the rest).
+        if !retry.isEmpty { syncEngine.state.add(pendingRecordZoneChanges: retry) }
+    }
+
     // MARK: Records
 
     /// Record names are a hash of type and key (keys can be long or contain any character).
@@ -245,8 +267,8 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     }
 
     static func state(from record: CKRecord) -> StateRecord? {
-        guard let type = record["type"] as? String, let key = record["key"] as? String,
-              let payload = record["payload"] as? Data, let modifiedAt = record["modifiedAt"] as? Date else { return nil }
+        guard let type = record[Field.type] as? String, let key = record[Field.key] as? String,
+              let payload = record[Field.payload] as? Data, let modifiedAt = record[Field.modifiedAt] as? Date else { return nil }
         return StateRecord(type: type, key: key, payload: payload, modifiedAt: modifiedAt)
     }
 
@@ -256,19 +278,20 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         guard let (type, key) = try? name(id.recordName),
               case .save(let state)? = try? store.pendingCloudRecord(type: type, key: key) else { return nil }
         let record = (try? systemFields(id.recordName)) ?? CKRecord(recordType: Self.recordType, recordID: id)
-        record["type"] = state.type
-        record["key"] = state.key
-        record["payload"] = state.payload
-        record["modifiedAt"] = state.modifiedAt
+        record[Field.type] = state.type
+        record[Field.key] = state.key
+        record[Field.payload] = state.payload
+        record[Field.modifiedAt] = state.modifiedAt
         return record
     }
 
+    /// Record names are hashes, so what each stands for is kept beside it.
     private func rememberName(_ name: String, type: String, key: String) throws {
-        try store.setCloudMeta("name:\(name)", Data("\(type)\n\(key)".utf8))
+        try store.setCloudMeta(Self.nameKey(name), Data("\(type)\n\(key)".utf8))
     }
 
     private func name(_ name: String) throws -> (type: String, key: String)? {
-        guard let data = try store.cloudMeta("name:\(name)"), let text = String(data: data, encoding: .utf8),
+        guard let data = try store.cloudMeta(Self.nameKey(name)), let text = String(data: data, encoding: .utf8),
               let newline = text.firstIndex(of: "\n") else { return nil }
         return (String(text[..<newline]), String(text[text.index(after: newline)...]))
     }
@@ -277,11 +300,11 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         let coder = NSKeyedArchiver(requiringSecureCoding: true)
         record.encodeSystemFields(with: coder)
         coder.finishEncoding()
-        try store.setCloudMeta("sys:\(record.recordID.recordName)", coder.encodedData)
+        try store.setCloudMeta(Self.systemFieldsKey(record.recordID.recordName), coder.encodedData)
     }
 
     private func systemFields(_ name: String) throws -> CKRecord? {
-        guard let data = try store.cloudMeta("sys:\(name)") else { return nil }
+        guard let data = try store.cloudMeta(Self.systemFieldsKey(name)) else { return nil }
         let coder = try NSKeyedUnarchiver(forReadingFrom: data)
         coder.requiresSecureCoding = true
         defer { coder.finishDecoding() }
@@ -289,6 +312,9 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     }
 
     private func forgetSystemFields(_ name: String) throws {
-        try store.setCloudMeta("sys:\(name)", nil)
+        try store.setCloudMeta(Self.systemFieldsKey(name), nil)
     }
+
+    private static func nameKey(_ recordName: String) -> String { "name:\(recordName)" }
+    private static func systemFieldsKey(_ recordName: String) -> String { "sys:\(recordName)" }
 }

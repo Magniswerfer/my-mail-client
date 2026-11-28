@@ -53,4 +53,21 @@ import Testing
             try await session.expunge(uids: [uid])
         }
     }
+
+    @Test func fenceRefusesWhenTheNamedMailboxIsNotSelected() async throws {
+        guard await Self.serverAvailable else { return }
+        try await MailSession.open(endpoint: Self.endpoint, password: Self.password, profile: .iCloudSimulation) { session in
+            let fence = TestFence(session: session)
+            _ = try await fence.prepare()
+            // A marked message outside the fence (test server only): naming the fenced mailbox
+            // while INBOX is selected must not reach it.
+            let stray = try await session.append(to: "INBOX", message: fence.syntheticMessage(subject: "stray"))
+            _ = try await session.select("INBOX")
+            let uid = try #require(stray)
+            await #expect(throws: TestFence.Violation.self) {
+                try await fence.store(uids: [uid], in: TestFence.rootMailbox, .add, flags: ["\\Flagged"])
+            }
+            try await session.expunge(uids: [uid])
+        }
+    }
 }

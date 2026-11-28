@@ -2,11 +2,20 @@ import Foundation
 import MailEngine
 import SwiftUI
 
+/// What sending a reply did to its conversation, for the toast's Undo.
+private struct AnsweredConversation {
+    var changes: [ChangeBox] = []
+    var markedDone = false
+}
+
 extension AppModel {
+    /// Address suggestions start after this many typed characters.
+    private static let minimumSuggestionLength = 2
+
     // MARK: Identities
 
     func identities(for accountID: String) -> [Identity] {
-        accounts.first { $0.id == accountID }?.sendingIdentities ?? []
+        account(id: accountID)?.sendingIdentities ?? []
     }
 
     /// New mail comes from the account whose Inbox you're looking at, else the first one.
@@ -68,8 +77,7 @@ extension AppModel {
 
     /// Reply, reply all or forward the newest message of the selected conversation (SPEC §9).
     func compose(_ kind: ComposeKind, thread: ThreadSummary? = nil) {
-        guard let thread = thread ?? targetThreads.first,
-              let account = accounts.first(where: { $0.id == thread.latest.accountID }) else { return }
+        guard let thread = thread ?? targetThreads.first, let account = replyingAccount(thread) else { return }
         // A reply (or follow-up) Tidings drafted for this conversation is what Reply opens, ready
         // to edit; the editor's Clear Suggestion starts over.
         if kind == .reply, let suggested = autoDraft(forThread: thread.threadID)?.outboxID {
@@ -92,8 +100,8 @@ extension AppModel {
         minimizedReplies.remove(thread.threadID)
         guard item.kind != kind else { return true }
         Task {
-            guard let account = accounts.first(where: { $0.id == (message?.accountID ?? thread.latest.accountID) }) else { return }
-            let original = message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+            guard let account = replyingAccount(thread, message: message) else { return }
+            let original = originalMessage(in: thread, account: account, message: message)
             guard let raw = try? await rawMessage(original) else { return }
             let draft = self.draft(kind, replyingTo: MIMEParser.parse(raw), raw: raw, account: account)
             inlineConversions[thread.threadID] = InlineConversion(kind: kind, message: draft.message, body: draft.body,
@@ -173,8 +181,8 @@ extension AppModel {
     /// Builds and stores a reply/forward draft for a conversation without opening it.
     /// `message`: reply to that one (the reader's ribbon), not the conversation's newest.
     func prepareDraft(_ kind: ComposeKind, thread: ThreadSummary, account: AccountConfig? = nil, message: StoredMessage? = nil) async -> Int64? {
-        guard let account = account ?? accounts.first(where: { $0.id == (message?.accountID ?? thread.latest.accountID) }) else { return nil }
-        let original = message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+        guard let account = account ?? replyingAccount(thread, message: message) else { return nil }
+        let original = originalMessage(in: thread, account: account, message: message)
         do {
             let raw = try await rawMessage(original)
             let parsed = MIMEParser.parse(raw)
@@ -184,6 +192,17 @@ extension AppModel {
             lastError = String(localized: "Couldn't open the original message: \(String(describing: error))")
             return nil
         }
+    }
+
+    /// The account a reply goes from: the one `message` (else the conversation's newest) came to.
+    private func replyingAccount(_ thread: ThreadSummary, message: StoredMessage? = nil) -> AccountConfig? {
+        account(id: message?.accountID ?? thread.latest.accountID)
+    }
+
+    /// What a reply or forward quotes: `message` when given, else the conversation's newest
+    /// message in that account.
+    private func originalMessage(in thread: ThreadSummary, account: AccountConfig, message: StoredMessage? = nil) -> StoredMessage {
+        message ?? messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
     }
 
     private func openDraft(_ message: OutgoingMessage, body: NSAttributedString, accountID: String, kind: ComposeKind, originalLocalID: Int64?) {
@@ -211,9 +230,8 @@ extension AppModel {
 
     /// "Anna, meet Bob" → reply to Bob (and anyone Cc'd), Anna moved to Bcc, opening with a thank-you.
     func replyToIntroduction(thread: ThreadSummary? = nil) {
-        guard let thread = thread ?? targetThreads.first,
-              let account = accounts.first(where: { $0.id == thread.latest.accountID }) else { return }
-        let original = messages(inThread: thread.threadID).filter { $0.accountID == account.id }.last ?? thread.latest
+        guard let thread = thread ?? targetThreads.first, let account = replyingAccount(thread) else { return }
+        let original = originalMessage(in: thread, account: account)
         Task {
             do {
                 let raw = try await rawMessage(original)
@@ -311,29 +329,37 @@ extension AppModel {
         reloadOutbox()
         // Sending later: the push server sends it even with every device asleep (ADR 0007).
         if sendAt != nil { handOffToPushServer(item) }
+        let answered = kind == .reply || kind == .replyAll
+            ? finishAnswering(originalLocalID: originalLocalID, accountID: accountID, markDone: markDone)
+            : AnsweredConversation()
+        showSendToast(for: item, accountID: accountID, sendAt: sendAt, answered: answered)
+    }
 
-        // Answering takes the conversation off the Reply Later pile, and (Send and Done) out of the Inbox.
-        var boxes: [ChangeBox] = []
-        var markedDone = false
-        if kind == .reply || kind == .replyAll, let originalLocalID,
-           let original = try? store.message(id: originalLocalID), let threadID = original.threadID {
-            if messages(inThread: threadID).contains(where: { $0.flags.contains(replyLaterKeyword) }) {
-                boxes.append(performQuietly(.clearReplyLater, threadID: threadID, accountID: accountID))
-            }
-            if markDone, messages(inThread: threadID).contains(where: { $0.mailbox == "INBOX" }) {
-                boxes.append(performQuietly(.done, threadID: threadID, accountID: accountID))
-                markedDone = true
-            }
+    /// Answering takes the conversation off the Reply Later pile, and (Send and Done) out of the Inbox.
+    private func finishAnswering(originalLocalID: Int64?, accountID: String, markDone: Bool) -> AnsweredConversation {
+        var answered = AnsweredConversation()
+        guard let originalLocalID, let original = try? store.message(id: originalLocalID), let threadID = original.threadID else {
+            return answered
         }
+        if messages(inThread: threadID).contains(where: { $0.flags.contains(replyLaterKeyword) }) {
+            answered.changes.append(performQuietly(.clearReplyLater, threadID: threadID, accountID: accountID))
+        }
+        if markDone, messages(inThread: threadID).contains(where: { $0.mailbox == "INBOX" }) {
+            answered.changes.append(performQuietly(.done, threadID: threadID, accountID: accountID))
+            answered.markedDone = true
+        }
+        return answered
+    }
 
+    private func showSendToast(for item: OutboxItem, accountID: String, sendAt: Date?, answered: AnsweredConversation) {
         if sendAt == nil, accountErrors[accountID] != nil {
             // It can't go out until this account connects: no "Sending…" that never ends.
-            let name = accounts.first { $0.id == accountID }?.displayName ?? ""
-            show(Toast(message: String(localized: "Not sent yet: can't connect to \(name). It's waiting in the Outbox."),
+            let name = account(id: accountID)?.displayName ?? ""
+            show(Toast(message: Self.waitingInOutboxMessage(accountName: name),
                        symbol: "exclamationmark.triangle", undoSend: item.id))
         } else if let id = item.id, sendAt == nil {
-            let allBoxes = boxes
-            if markedDone {
+            let allBoxes = answered.changes
+            if answered.markedDone {
                 let undo: @MainActor () -> Void = { [weak self] in
                     self?.undoSend(id)
                     allBoxes.forEach { self?.undo(box: $0) }
@@ -355,7 +381,7 @@ extension AppModel {
         Task {
             // Handed to the push server: it has to let go first.
             if item.state == .remote, await !takeBackFromPushServer(outboxID) {
-                show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
+                showTooLateToTakeBack()
                 return
             }
             if let draft = try? await sync.cancelSend(id: outboxID), let id = draft.id {
@@ -363,9 +389,13 @@ extension AppModel {
                 reloadOutbox()
                 openComposeWindow?(id)
             } else {
-                show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
+                showTooLateToTakeBack()
             }
         }
+    }
+
+    private func showTooLateToTakeBack() {
+        show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
     }
 
     func retrySend(_ outboxID: Int64) {
@@ -379,7 +409,7 @@ extension AppModel {
         if let item = try? store.outboxItem(id: outboxID), item.state == .remote {
             Task {
                 guard await takeBackFromPushServer(outboxID) else {
-                    show(Toast(message: String(localized: "Too late, it's already sent"), symbol: "paperplane"))
+                    showTooLateToTakeBack()
                     return
                 }
                 try? store.deleteOutboxItem(id: outboxID)
@@ -399,7 +429,7 @@ extension AppModel {
 
     func suggestions(for query: String) -> [MailAddress] {
         let last = query.split(separator: ",").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
-        guard last.count >= 2 else { return [] }
+        guard last.count >= Self.minimumSuggestionLength else { return [] }
         return (try? store.contacts(matching: last)) ?? []
     }
 }

@@ -45,58 +45,21 @@ extension AppModel {
                 show(Toast(message: String(localized: "\(message.senderDisplay) doesn't offer a way to unsubscribe"), symbol: "xmark.circle"))
                 return
             }
-            let inbox = ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? [])
-                .filter { $0.latest.fromAddress.lowercased() == address.lowercased() }
             unsubscribeCandidate = UnsubscribeRequest(address: address, name: message.senderDisplay, accountID: message.accountID,
-                                                      method: method, inboxCount: inbox.count)
+                                                      method: method, inboxCount: inboxThreads(from: address).count)
         }
     }
 
     /// From the reader, which already knows how (no second fetch).
     func requestUnsubscribe(message: StoredMessage, method: UnsubscribeMethod) {
-        let inbox = ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? [])
-            .filter { $0.latest.fromAddress.lowercased() == message.fromAddress.lowercased() }
         unsubscribeCandidate = UnsubscribeRequest(address: message.fromAddress, name: message.senderDisplay, accountID: message.accountID,
-                                                  method: method, inboxCount: inbox.count)
+                                                  method: method, inboxCount: inboxThreads(from: message.fromAddress).count)
     }
 
     func confirmUnsubscribe(_ request: UnsubscribeRequest, archiveInbox: Bool) {
         unsubscribeCandidate = nil
         Task {
-            var methodName = ""
-            switch request.method {
-            // The dev copy's seed mail carries real senders' unsubscribe links; never contact
-            // them. Mail unsubscribes are fine: they go to Mailpit.
-            case .oneClick(let url) where isDevServer, .web(let url) where isDevServer:
-                show(Toast(message: String(localized: "Dev copy: didn't contact \(url.host() ?? url.absoluteString)"),
-                           symbol: "hammer"))
-                methodName = "dev"
-            case .oneClick(let url):
-                do {
-                    try await Unsubscribe.postOneClick(url)
-                    methodName = "oneClick"
-                } catch {
-                    show(Toast(message: String(localized: "Their server didn't accept it. Try their unsubscribe link in the message."),
-                               symbol: "exclamationmark.triangle"))
-                    return
-                }
-            case .web(let url):
-                Platform.openExternally(url)
-                methodName = "web"
-            case .mail(let to, let subject, let body):
-                guard let sync = syncs[request.accountID],
-                      let from = accounts.first(where: { $0.id == request.accountID })?.identities?.first?.mailAddress else { return }
-                let message = OutgoingMessage(from: from, to: [MailAddress(name: nil, address: to)], subject: subject,
-                                              text: body.isEmpty ? "unsubscribe" : body)
-                do {
-                    _ = try await sync.queue(message)
-                    reloadOutbox()
-                    methodName = "mail"
-                } catch {
-                    lastError = String(localized: "Couldn't send the unsubscribe email: \(String(describing: error))")
-                    return
-                }
-            }
+            guard let methodName = await unsubscribe(request) else { return }
             try? store.recordUnsubscribe(address: request.address, method: methodName)
             if archiveInbox { archiveInboxMail(from: request.address) }
             show(Toast(message: String(localized: "Unsubscribed from \(request.name)"), symbol: "hand.raised"))
@@ -104,10 +67,47 @@ extension AppModel {
         }
     }
 
+    /// Leaves their list the way the request says. Returns the method as recorded, or nil when
+    /// it didn't work (already said why).
+    private func unsubscribe(_ request: UnsubscribeRequest) async -> String? {
+        switch request.method {
+        // The dev copy's seed mail carries real senders' unsubscribe links; never contact
+        // them. Mail unsubscribes are fine: they go to Mailpit.
+        case .oneClick(let url) where isDevServer, .web(let url) where isDevServer:
+            show(Toast(message: String(localized: "Dev copy: didn't contact \(url.host() ?? url.absoluteString)"),
+                       symbol: "hammer"))
+            return "dev"
+        case .oneClick(let url):
+            do {
+                try await Unsubscribe.postOneClick(url)
+                return "oneClick"
+            } catch {
+                show(Toast(message: String(localized: "Their server didn't accept it. Try their unsubscribe link in the message."),
+                           symbol: "exclamationmark.triangle"))
+                return nil
+            }
+        case .web(let url):
+            Platform.openExternally(url)
+            return "web"
+        case .mail(let to, let subject, let body):
+            guard let sync = syncs[request.accountID],
+                  let from = account(id: request.accountID)?.identities?.first?.mailAddress else { return nil }
+            let message = OutgoingMessage(from: from, to: [MailAddress(name: nil, address: to)], subject: subject,
+                                          text: body.isEmpty ? "unsubscribe" : body)
+            do {
+                _ = try await sync.queue(message)
+                reloadOutbox()
+                return "mail"
+            } catch {
+                lastError = String(localized: "Couldn't send the unsubscribe email: \(String(describing: error))")
+                return nil
+            }
+        }
+    }
+
     /// Done for every Inbox conversation whose newest message is from this sender.
     func archiveInboxMail(from address: String) {
-        let threads = ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? [])
-            .filter { $0.latest.fromAddress.lowercased() == address.lowercased() }
+        let threads = inboxThreads(from: address)
         guard !threads.isEmpty else { return }
         for (accountID, group) in Dictionary(grouping: threads, by: \.latest.accountID) {
             guard let sync = syncs[accountID] else { continue }
@@ -117,6 +117,12 @@ extension AppModel {
                 sendersRevision &+= 1
             }
         }
+    }
+
+    /// Every account's Inbox conversations whose newest message is from this sender.
+    private func inboxThreads(from address: String) -> [ThreadSummary] {
+        ((try? store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)) ?? [])
+            .filter { $0.latest.fromAddress.lowercased() == address.lowercased() }
     }
 
     /// All mail from a sender, in search.

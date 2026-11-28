@@ -114,49 +114,10 @@ struct AICategoryEditor: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if !senders.isEmpty {
-                    Section {
-                        ForEach(senders, id: \.self) { address in
-                            HStack {
-                                Text(address)
-                                Spacer()
-                                Button("Remove", systemImage: "minus.circle") { senders.removeAll { $0 == address } }
-                                    .labelStyle(.iconOnly).buttonStyle(.borderless)
-                            }
-                        }
-                    } header: {
-                        Text("Always includes mail from")
-                    } footer: {
-                        Text("Set with “Always for” when you move a conversation here.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    sendersSection
                 }
-                Section("Symbol") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                        ForEach(Self.symbols, id: \.self) { s in
-                            Button { symbol = s } label: {
-                                Image(systemName: s).frame(width: 30, height: 30)
-                                    .background(symbol == s ? AnyShapeStyle(Color.indigo.opacity(0.2)) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 7))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                Section("Preview") {
-                    if previewing {
-                        ProgressView()
-                    } else if let preview {
-                        Text(preview.isEmpty ? "Nothing in your recent Inbox matches yet." : "Would catch \(preview.count) recent conversations:")
-                            .foregroundStyle(.secondary)
-                        ForEach(preview.prefix(8), id: \.id) { m in
-                            VStack(alignment: .leading) {
-                                Text(m.subject).lineLimit(1)
-                                Text("\(m.fromName ?? m.fromAddress) · \(MailDate.short(m.date))").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    Button("Preview") { Task { await runPreview() } }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || model.assistant == nil || previewing)
-                }
+                symbolSection
+                previewSection
             }
             .formStyle(.grouped)
             .navigationTitle(editing.isNew ? String(localized: "New AI Category") : String(localized: "Edit Category"))
@@ -170,10 +131,69 @@ struct AICategoryEditor: View {
         .macFrame(width: 520, height: 600)
         .onAppear {
             name = editing.category.name
-            description = editing.category.about.description == editing.category.name ? "" : editing.category.about.description
+            description = Self.userDescription(of: editing.category)
             symbol = editing.category.symbol
             senders = editing.category.senders
         }
+    }
+
+    private var sendersSection: some View {
+        Section {
+            ForEach(senders, id: \.self) { address in
+                HStack {
+                    Text(address)
+                    Spacer()
+                    Button("Remove", systemImage: "minus.circle") { senders.removeAll { $0 == address } }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless)
+                }
+            }
+        } header: {
+            Text("Always includes mail from")
+        } footer: {
+            Text("Set with “Always for” when you move a conversation here.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var symbolSection: some View {
+        Section("Symbol") {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                ForEach(Self.symbols, id: \.self) { s in
+                    Button { symbol = s } label: {
+                        Image(systemName: s).frame(width: 30, height: 30)
+                            .background(symbol == s ? AnyShapeStyle(Color.indigo.opacity(0.2)) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var previewSection: some View {
+        Section("Preview") {
+            if previewing {
+                ProgressView()
+            } else if let preview {
+                Text(preview.isEmpty ? "Nothing in your recent Inbox matches yet." : "Would catch \(preview.count) recent conversations:")
+                    .foregroundStyle(.secondary)
+                ForEach(preview.prefix(8), id: \.id) { m in
+                    VStack(alignment: .leading) {
+                        Text(m.subject).lineLimit(1)
+                        Text("\(m.fromName ?? m.fromAddress) · \(MailDate.short(m.date))").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Button("Preview") { Task { await runPreview() } }
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || model.assistant == nil || previewing)
+        }
+    }
+
+    /// What you wrote, without the "Name: " the saved description starts with.
+    private static func userDescription(of category: AICategory) -> String {
+        let full = category.about.description
+        guard full != category.name else { return "" }
+        let prefix = "\(category.name): "
+        return full.hasPrefix(prefix) ? String(full.dropFirst(prefix.count)) : full
     }
 
     private var built: AICategory {

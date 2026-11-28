@@ -142,4 +142,18 @@ import Testing
         #expect(found.first?.filename == "Kontrakt æøå.pdf")
         #expect(found.first?.data == pdf)
     }
+
+    @Test func lineBreaksInHeaderTextCannotInjectHeaders() {
+        // A reply's subject or a forwarded file's name can come from an encoded word with a CRLF in it.
+        var message = OutgoingMessage(
+            from: MailAddress(name: "Evil\r\nBcc: x@evil.example", address: "m@gnus.hk"),
+            to: [MailAddress(name: nil, address: "lars@moeller.dk")],
+            subject: "Re: hi\r\nBcc: victim@example.dk", text: "body",
+            attachments: [OutgoingAttachment(filename: "a.pdf\r\nX-Injected: 1", mimeType: "application/pdf", data: Data([1]))])
+        message.inReplyTo = "parent@x\r\nX-Injected: 2"
+        let raw = String(decoding: MIMEBuilder.build(message), as: UTF8.self)
+        let lines = raw.components(separatedBy: "\r\n")
+        #expect(!lines.contains { $0.hasPrefix("Bcc:") || $0.hasPrefix("X-Injected:") })
+        #expect(MIMEParser.parse(Data(raw.utf8)).subject == "Re: hi Bcc: victim@example.dk")
+    }
 }

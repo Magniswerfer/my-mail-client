@@ -15,12 +15,23 @@ struct OtherAccountForm: View {
     @State private var address = ""
     @State private var password = ""
 
+    /// The usual ports, swapped for each other when the security choice changes.
+    private enum Port {
+        static let imapTLS = "993"
+        static let imapPlain = "143"
+        static let smtpTLS = "465"
+        static let smtpSubmission = "587"
+    }
+
+    /// Typing pauses this long before the domain is looked up.
+    private static let lookupDelay: Duration = .milliseconds(600)
+
     @State private var imapHost = ""
-    @State private var imapPort = "993"
+    @State private var imapPort = Port.imapTLS
     @State private var imapUser = ""
     @State private var imapTLS = true
     @State private var smtpHost = ""
-    @State private var smtpPort = "587"
+    @State private var smtpPort = Port.smtpSubmission
     @State private var smtpUser = ""
     @State private var smtpSecurity: SMTPEndpoint.Security = .startTLS
 
@@ -36,60 +47,9 @@ struct OtherAccountForm: View {
 
     var body: some View {
         Form {
-            Section {
-                field("Name", text: $name, prompt: Text("Work"))
-                field("Email address", text: $address, prompt: Text(verbatim: "you@example.com"), kind: .email)
-                Group {
-                    #if os(iOS)
-                    LabeledContent("Password") {
-                        SecureField("Password", text: $password).multilineTextAlignment(.trailing)
-                    }
-                    #else
-                    SecureField("Password", text: $password)
-                    #endif
-                }
-                .textContentType(.password)
-                .onSubmit { Task { await connect() } }
-            } footer: {
-                providerFooter
-            }
-
-            Section {
-                field("Server", text: edit($imapHost), prompt: Text(verbatim: "imap.example.com"), kind: .host)
-                field("Port", text: edit($imapPort), kind: .number)
-                field("Username", text: edit($imapUser), kind: .host)
-                Picker("Security", selection: edit($imapTLS)) {
-                    Text("SSL/TLS").tag(true)
-                    Text("None").tag(false)
-                }
-                .onChange(of: imapTLS) { _, tls in
-                    if tls, imapPort == "143" { imapPort = "993" } else if !tls, imapPort == "993" { imapPort = "143" }
-                }
-            } header: {
-                Text("Incoming Mail (IMAP)")
-            } footer: {
-                Text("Tidings connects to IMAP with SSL/TLS (usually port 993). STARTTLS for incoming mail isn't supported yet. No encryption only works for a server on this device.")
-            }
-
-            Section {
-                field("Server", text: edit($smtpHost), prompt: Text(verbatim: "smtp.example.com"), kind: .host)
-                field("Port", text: edit($smtpPort), kind: .number)
-                field("Username", text: edit($smtpUser), kind: .host)
-                Picker("Security", selection: edit($smtpSecurity)) {
-                    Text("SSL/TLS").tag(SMTPEndpoint.Security.tls)
-                    Text("STARTTLS").tag(SMTPEndpoint.Security.startTLS)
-                    Text("None").tag(SMTPEndpoint.Security.none)
-                }
-                .onChange(of: smtpSecurity) { _, security in
-                    if security == .tls, smtpPort == "587" { smtpPort = "465" }
-                    if security == .startTLS, smtpPort == "465" { smtpPort = "587" }
-                }
-            } header: {
-                Text("Outgoing Mail (SMTP)")
-            } footer: {
-                Text("The same password is used for both servers. It's kept in your Keychain.")
-            }
-
+            accountSection
+            incomingSection
+            outgoingSection
             if let error {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -98,20 +58,15 @@ struct OtherAccountForm: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
             if model.isDevServer {
-                Section {
-                    Button("Fill In Local Test Server") { fillInTestServer() }
-                } footer: {
-                    Text(verbatim: "Dev copy: a second account on the local Dovecot (user \"work\") with Mailpit for sending.")
-                }
+                devServerSection
             }
         }
         .formStyle(.grouped)
         .onChange(of: address) { _, new in addressChanged(new) }
         .sheetButtons {
             if !model.needsAccountSetup {
-                Button("Cancel") { model.isAddingAccount = false; closeAccountSetup?(); dismiss() }
+                Button("Cancel") { closeAddAccount(model: model, close: closeAccountSetup, dismiss: dismiss) }
                     .keyboardShortcut(.cancelAction)
             }
         } trailing: {
@@ -120,6 +75,74 @@ struct OtherAccountForm: View {
                 .buttonStyle(.glassProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canConnect)
+        }
+    }
+
+    private var accountSection: some View {
+        Section {
+            field("Name", text: $name, prompt: Text("Work"))
+            field("Email address", text: $address, prompt: Text(verbatim: "you@example.com"), kind: .email)
+            Group {
+                #if os(iOS)
+                LabeledContent("Password") {
+                    SecureField("Password", text: $password).multilineTextAlignment(.trailing)
+                }
+                #else
+                SecureField("Password", text: $password)
+                #endif
+            }
+            .textContentType(.password)
+            .onSubmit { Task { await connect() } }
+        } footer: {
+            providerFooter
+        }
+    }
+
+    private var incomingSection: some View {
+        Section {
+            field("Server", text: edit($imapHost), prompt: Text(verbatim: "imap.example.com"), kind: .host)
+            field("Port", text: edit($imapPort), kind: .number)
+            field("Username", text: edit($imapUser), kind: .host)
+            Picker("Security", selection: edit($imapTLS)) {
+                Text("SSL/TLS").tag(true)
+                Text("None").tag(false)
+            }
+            .onChange(of: imapTLS) { _, tls in
+                if tls, imapPort == Port.imapPlain { imapPort = Port.imapTLS } else if !tls, imapPort == Port.imapTLS { imapPort = Port.imapPlain }
+            }
+        } header: {
+            Text("Incoming Mail (IMAP)")
+        } footer: {
+            Text("Tidings connects to IMAP with SSL/TLS (usually port 993). STARTTLS for incoming mail isn't supported yet. No encryption only works for a server on this device.")
+        }
+    }
+
+    private var outgoingSection: some View {
+        Section {
+            field("Server", text: edit($smtpHost), prompt: Text(verbatim: "smtp.example.com"), kind: .host)
+            field("Port", text: edit($smtpPort), kind: .number)
+            field("Username", text: edit($smtpUser), kind: .host)
+            Picker("Security", selection: edit($smtpSecurity)) {
+                Text("SSL/TLS").tag(SMTPEndpoint.Security.tls)
+                Text("STARTTLS").tag(SMTPEndpoint.Security.startTLS)
+                Text("None").tag(SMTPEndpoint.Security.none)
+            }
+            .onChange(of: smtpSecurity) { _, security in
+                if security == .tls, smtpPort == Port.smtpSubmission { smtpPort = Port.smtpTLS }
+                if security == .startTLS, smtpPort == Port.smtpTLS { smtpPort = Port.smtpSubmission }
+            }
+        } header: {
+            Text("Outgoing Mail (SMTP)")
+        } footer: {
+            Text("The same password is used for both servers. It's kept in your Keychain.")
+        }
+    }
+
+    private var devServerSection: some View {
+        Section {
+            Button("Fill In Local Test Server") { fillInTestServer() }
+        } footer: {
+            Text(verbatim: "Dev copy: a second account on the local Dovecot (user \"work\") with Mailpit for sending.")
         }
     }
 
@@ -169,8 +192,8 @@ struct OtherAccountForm: View {
         Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; edited = true })
     }
 
-    private var isLocal: (String) -> Bool {
-        { host in ["127.0.0.1", "localhost", "::1"].contains(host.trimmingCharacters(in: .whitespaces).lowercased()) }
+    private func isLocal(_ host: String) -> Bool {
+        ["127.0.0.1", "localhost", "::1"].contains(host.trimmingCharacters(in: .whitespaces).lowercased())
     }
 
     private var canConnect: Bool {
@@ -194,7 +217,7 @@ struct OtherAccountForm: View {
         }
         if let guess = MailProvider.guess(for: trimmed) { apply(guess, source: .some(nil)) }
         lookup = Task {
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Task.sleep(for: Self.lookupDelay)
             guard !Task.isCancelled else { return }
             isLookingUp = true
             let found = await MailProvider.lookUp(trimmed)

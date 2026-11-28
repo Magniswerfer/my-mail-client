@@ -33,20 +33,13 @@ extension AppModel {
     /// Accept / Maybe / Decline: mails the answer to the organizer (through the outbox, so the
     /// usual undo-send window applies) and adds, updates or removes the calendar copy.
     func respond(_ status: CalendarInvite.ParticipationStatus, to invite: CalendarInvite, message: StoredMessage) {
-        guard let account = accounts.first(where: { $0.id == message.accountID }), let sync = syncs[account.id] else {
+        guard let account = account(id: message.accountID), let sync = syncs[account.id] else {
             lastError = String(localized: "This account is offline, so the answer can't be sent yet.")
             return
         }
-        let invited = Set(invite.attendees.map { $0.address.lowercased() })
-        let identity = account.sendingIdentities.first { invited.contains($0.address.lowercased()) }
-            ?? account.sendingIdentities.first ?? Identity(address: account.endpoint.username, name: "")
-        let me = identity.mailAddress
+        let me = answeringIdentity(in: account, for: invite).mailAddress
         let who = me.name.flatMap { $0.isEmpty ? nil : $0 } ?? me.address
-        let (subject, text, symbol): (String, String, String) = switch status {
-        case .accepted: (String(localized: "Accepted: \(invite.summary)"), String(localized: "\(who) has accepted this invitation."), "checkmark.circle")
-        case .tentative: (String(localized: "Tentative: \(invite.summary)"), String(localized: "\(who) might attend."), "questionmark.circle")
-        default: (String(localized: "Declined: \(invite.summary)"), String(localized: "\(who) has declined this invitation."), "xmark.circle")
-        }
+        let (subject, text, symbol) = Self.answerWording(status, summary: invite.summary, who: who)
         var references = [String]()
         if let id = message.messageID { references.append(id) }
         guard let reply = invite.replyMessage(from: me, status: status, subject: subject, text: text,
@@ -78,6 +71,23 @@ extension AppModel {
                 lastError = String(localized: "Couldn't send your answer: \(String(describing: error))")
             }
             await updateCalendar(for: invite, status: status)
+        }
+    }
+
+    /// The address the invitation was sent to, else the account's first.
+    private func answeringIdentity(in account: AccountConfig, for invite: CalendarInvite) -> Identity {
+        let invited = Set(invite.attendees.map { $0.address.lowercased() })
+        return account.sendingIdentities.first { invited.contains($0.address.lowercased()) }
+            ?? account.sendingIdentities.first ?? Identity(address: account.endpoint.username, name: "")
+    }
+
+    /// The answer mail's subject and text, and the toast's symbol.
+    private static func answerWording(_ status: CalendarInvite.ParticipationStatus, summary: String,
+                                      who: String) -> (subject: String, text: String, symbol: String) {
+        switch status {
+        case .accepted: (String(localized: "Accepted: \(summary)"), String(localized: "\(who) has accepted this invitation."), "checkmark.circle")
+        case .tentative: (String(localized: "Tentative: \(summary)"), String(localized: "\(who) might attend."), "questionmark.circle")
+        default: (String(localized: "Declined: \(summary)"), String(localized: "\(who) has declined this invitation."), "xmark.circle")
         }
     }
 

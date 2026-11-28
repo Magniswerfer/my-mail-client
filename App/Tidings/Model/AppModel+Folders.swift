@@ -158,11 +158,11 @@ extension AppModel {
 
     /// Runs a folder change on the server. Throws a message to show in the sheet.
     func createFolder(named name: String, in parent: String?, accountID: String) async throws {
-        guard let sync = syncs[accountID] else { throw FolderFailure(String(localized: "This account isn't connected.")) }
+        let sync = try connectedSync(accountID)
         do {
             let path = try await sync.createFolder(named: name, in: parent)
             reload()
-            let shown = FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator)
+            let shown = shownName(ofFolder: path, accountID: accountID)
             let undo = undoFolderChange(accountID: accountID) { [weak self] sync in
                 // Only while it's still empty: undo never deletes mail.
                 guard let self, (self.mailboxes.first { $0.accountID == accountID && $0.path == path }?.messageCount ?? 0) == 0 else {
@@ -176,22 +176,22 @@ extension AppModel {
     }
 
     func renameFolder(_ path: String, to name: String, accountID: String) async throws {
-        guard let sync = syncs[accountID] else { throw FolderFailure(String(localized: "This account isn't connected.")) }
+        let sync = try connectedSync(accountID)
         do {
             let newPath = try await sync.renameFolder(path, to: name, allowSpecial: true)
             folderMoved(from: path, to: newPath, accountID: accountID)
-            let oldName = FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator)
+            let oldName = shownName(ofFolder: path, accountID: accountID)
             let undo = undoFolderChange(accountID: accountID) { [weak self] sync in
                 let back = try await sync.renameFolder(newPath, to: oldName, allowSpecial: true)
                 self?.folderMoved(from: newPath, to: back, accountID: accountID)
             }
-            show(Toast(message: String(localized: "Renamed to “\(FolderPath.name(of: newPath, separator: folderLayout(accountID: accountID).separator))”"),
+            show(Toast(message: String(localized: "Renamed to “\(shownName(ofFolder: newPath, accountID: accountID))”"),
                        symbol: "pencil", undo: undo))
         } catch { throw FolderFailure(folderErrorMessage(error)) }
     }
 
     func moveFolder(_ path: String, into parent: String?, accountID: String) async throws {
-        guard let sync = syncs[accountID] else { throw FolderFailure(String(localized: "This account isn't connected.")) }
+        let sync = try connectedSync(accountID)
         do {
             let oldParent = parentFolder(of: path, accountID: accountID)
             let newPath = try await sync.moveFolder(path, into: parent, allowSpecial: true)
@@ -200,9 +200,8 @@ extension AppModel {
                 let back = try await sync.moveFolder(newPath, into: oldParent, allowSpecial: true)
                 self?.folderMoved(from: newPath, to: back, accountID: accountID)
             }
-            let separator = folderLayout(accountID: accountID).separator
-            let name = FolderPath.name(of: newPath, separator: separator)
-            let message = parent.map { String(localized: "Moved “\(name)” into “\(FolderPath.name(of: $0, separator: separator))”") }
+            let name = shownName(ofFolder: newPath, accountID: accountID)
+            let message = parent.map { String(localized: "Moved “\(name)” into “\(shownName(ofFolder: $0, accountID: accountID))”") }
                 ?? String(localized: "Moved “\(name)” to the top level")
             show(Toast(message: message, symbol: "folder", undo: undo))
         } catch { throw FolderFailure(folderErrorMessage(error)) }
@@ -233,7 +232,7 @@ extension AppModel {
                 try await sync.chooseFolder(box?.path, for: role)
                 reload()
                 if let box {
-                    show(Toast(message: String(localized: "“\(FolderPath.name(of: box.path, separator: folderLayout(accountID: accountID).separator))” is now used as \(role.title)"),
+                    show(Toast(message: String(localized: "“\(shownName(ofFolder: box.path, accountID: accountID))” is now used as \(role.title)"),
                                symbol: role.symbol))
                 }
             } catch {
@@ -262,13 +261,20 @@ extension AppModel {
         return true
     }
 
-    /// After a rename or move: the folder on screen and rules that file mail there follow.
+    /// After a rename or move: the folder on screen, rules that file mail there and smart
+    /// folders that search it follow.
     private func folderMoved(from old: String, to new: String, accountID: String) {
         let separator = folderLayout(accountID: accountID).separator
         if case .mailbox(let id, let path) = selection, id == accountID,
            let moved = FolderPath.renamed(path, from: old, to: new, separator: separator) {
             selection = .mailbox(accountID: accountID, path: moved)
         }
+        retargetRules(from: old, to: new, separator: separator)
+        retargetSmartFolders(from: old, to: new, separator: separator)
+        reload()
+    }
+
+    private func retargetRules(from old: String, to new: String, separator: Character?) {
         var changed = false
         for index in rules.indices {
             for (actionIndex, action) in rules[index].actions.enumerated() {
@@ -279,20 +285,35 @@ extension AppModel {
             }
         }
         if changed { saveRules() }
-        // Smart folders that search it (`in:INBOX.Clients`) follow too.
+    }
+
+    /// Smart folders that search the folder (`in:INBOX.Clients`).
+    private func retargetSmartFolders(from old: String, to new: String, separator: Character?) {
         var folders = smartFolders
-        var foldersChanged = false
+        var changed = false
         for index in folders.indices {
             if let query = SmartFolder.query(folders[index].query, renamingFolder: old, to: new, separator: separator) {
                 folders[index].query = query
-                foldersChanged = true
+                changed = true
             }
         }
-        if foldersChanged {
-            try? store.saveSmartFolders(folders)
-            smartFolders = folders
+        guard changed else { return }
+        do {
+            try store.saveSmartFolders(folders)
+        } catch {
+            lastError = String(localized: "Couldn't save your smart folders: \(String(describing: error))")
         }
-        reload()
+        smartFolders = folders
+    }
+
+    private func connectedSync(_ accountID: String) throws -> AccountSync {
+        guard let sync = syncs[accountID] else { throw FolderFailure(String(localized: "This account isn't connected.")) }
+        return sync
+    }
+
+    /// A folder's own name, the last part of its path.
+    private func shownName(ofFolder path: String, accountID: String) -> String {
+        FolderPath.name(of: path, separator: folderLayout(accountID: accountID).separator)
     }
 
     /// Undo for a folder change (toast and ⌘Z): runs `reverse` on the server, says if it can't.
@@ -346,6 +367,54 @@ extension AppModel {
 struct FolderFailure: Error {
     let message: String
     init(_ message: String) { self.message = message }
+}
+
+extension AppModel {
+    // MARK: Moving conversations
+
+    /// Where a conversation can be moved (V): Inbox and Archive first, then your own folders.
+    /// Not the folder it's in, and not Sent, Drafts or Snoozed (snoozing has its own key).
+    func folderTargets(for thread: ThreadSummary?) -> [MailboxState] {
+        guard let accountID = thread?.latest.accountID ?? accounts.first?.id else { return [] }
+        let source = sourceMailbox
+        func rank(_ box: MailboxState) -> Int {
+            switch box.role {
+            case .inbox: 0
+            case .archive: 1
+            case .junk: 3
+            case .trash: 4
+            default: 2
+            }
+        }
+        return mailboxes
+            .filter { $0.accountID == accountID && $0.path != source && !AccountSync.isSnoozedMailbox($0.path)
+                && $0.role != .sent && $0.role != .drafts }
+            .sorted { rank($0) == rank($1) ? $0.path.localizedStandardCompare($1.path) == .orderedAscending : rank($0) < rank($1) }
+    }
+
+    /// Moves conversations to a folder, using the matching triage action for the special ones
+    /// (so moving to Archive is Done, and back to Inbox clears snooze keywords).
+    func move(_ threads: [ThreadSummary]? = nil, toFolder box: MailboxState) {
+        let kind: TriageKind = switch box.role {
+        case .inbox: selection == .snoozed ? .unsnooze : .moveToInbox
+        case .archive: .done
+        case .trash: .trash
+        case .junk: .junk
+        default: .move(toMailbox: box.path)
+        }
+        // A folder belongs to one account; the others don't get a folder of that name.
+        if case .move = kind { perform(kind, on: threads, inAccount: box.accountID) } else { perform(kind, on: threads) }
+    }
+}
+
+extension MailboxState {
+    /// A folder's name as shown: the role's title for special folders, else the last path part.
+    var displayName: String { role?.title ?? Self.displayName(path) }
+
+    static func displayName(_ path: String) -> String {
+        if path.uppercased() == "INBOX" { return String(localized: "Inbox") }
+        return path.split(whereSeparator: { $0 == "/" || $0 == "." }).last.map(String.init) ?? path
+    }
 }
 
 extension AppModel {

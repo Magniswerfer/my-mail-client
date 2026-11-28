@@ -139,9 +139,7 @@ extension MailStore {
 
     /// Newest first; one rule's runs, or all.
     public func ruleRuns(ruleID: String? = nil, limit: Int = 200) throws -> [RuleRun] {
-        let decoder = JSONDecoder()
-        func list<T: Decodable>(_ text: String?, _ type: T.Type) -> T? { text.flatMap { try? decoder.decode(T.self, from: Data($0.utf8)) } }
-        return try db.read { db in
+        try db.read { db in
             var sql = "SELECT * FROM ruleRun"
             var args: [any DatabaseValueConvertible] = []
             if let ruleID {
@@ -151,16 +149,27 @@ extension MailStore {
             }
             sql += " ORDER BY at DESC, id DESC LIMIT ?"
             args.append(limit)
-            return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? })).map { row in
-                RuleRun(id: row["id"], at: row["at"], accountID: row["accountID"], messageID: row["messageID"],
-                        threadID: row["threadID"], subject: row["subject"], sender: row["sender"],
-                        ruleIDs: list(row["ruleIDs"], [String].self) ?? [],
-                        ruleNames: list(row["ruleNames"], [String].self) ?? [],
-                        actions: list(row["actions"], [RuleAction].self) ?? [],
-                        previousCategory: MailCategory(rawValue: row["previousCategory"]) ?? .primary,
-                        previousReason: row["previousReason"], undoneAt: row["undoneAt"])
-            }
+            return try Row.fetchAll(db, sql: sql, arguments: StatementArguments(args.map { $0 as (any DatabaseValueConvertible)? }))
+                .map { Self.ruleRun(from: $0) }
         }
+    }
+
+    func ruleRun(id: Int64) throws -> RuleRun? {
+        try db.read { try Row.fetchOne($0, sql: "SELECT * FROM ruleRun WHERE id = ?", arguments: [id]).map { Self.ruleRun(from: $0) } }
+    }
+
+    private static func ruleRun(from row: Row) -> RuleRun {
+        let decoder = JSONDecoder()
+        func decoded<T: Decodable>(_ json: String?, as type: T.Type) -> T? {
+            json.flatMap { try? decoder.decode(T.self, from: Data($0.utf8)) }
+        }
+        return RuleRun(id: row["id"], at: row["at"], accountID: row["accountID"], messageID: row["messageID"],
+                       threadID: row["threadID"], subject: row["subject"], sender: row["sender"],
+                       ruleIDs: decoded(row["ruleIDs"], as: [String].self) ?? [],
+                       ruleNames: decoded(row["ruleNames"], as: [String].self) ?? [],
+                       actions: decoded(row["actions"], as: [RuleAction].self) ?? [],
+                       previousCategory: MailCategory(rawValue: row["previousCategory"]) ?? .primary,
+                       previousReason: row["previousReason"], undoneAt: row["undoneAt"])
     }
 
     func markRuleRunUndone(id: Int64) throws {

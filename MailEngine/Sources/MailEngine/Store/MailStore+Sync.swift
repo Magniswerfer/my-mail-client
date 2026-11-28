@@ -98,11 +98,11 @@ extension MailStore {
         guard !uids.isEmpty else { return [:] }
         return try db.read { db in
             var result: [UInt32: String] = [:]
-            for chunk in stride(from: 0, to: uids.count, by: 500).map({ uids[$0..<min($0 + 500, uids.count)] }) {
-                let args: [(any DatabaseValueConvertible)?] = [accountID, mailbox] + chunk.map { $0 }
+            for batch in uids.sqlBatches() {
+                let args: [(any DatabaseValueConvertible)?] = [accountID, mailbox] + batch.map { $0 }
                 let rows = try Row.fetchCursor(db, sql: """
                     SELECT uid, flags FROM message WHERE accountID = ? AND mailbox = ?
-                    AND uid IN (\(chunk.map { _ in "?" }.joined(separator: ",")))
+                    AND uid IN (\(batch.sqlPlaceholders))
                     """, arguments: StatementArguments(args))
                 while let row = try rows.next() { result[row["uid"]] = row["flags"] }
             }
@@ -160,28 +160,28 @@ extension MailStore {
         let args: [(any DatabaseValueConvertible)?] = [mailbox] + localIDs.map { $0 }
         return try db.read { db in
             Set(try UInt32.fetchAll(db, sql: """
-                SELECT uid FROM message WHERE mailbox = ? AND id IN (\(localIDs.map { _ in "?" }.joined(separator: ",")))
+                SELECT uid FROM message WHERE mailbox = ? AND id IN (\(localIDs.sqlPlaceholders))
                 """, arguments: StatementArguments(args)))
         }
     }
 
     public func deleteMessages(accountID: String, mailbox: String, uids: [UInt32]) throws {
-        let ids = try db.read { db in
-            try uids.compactMap {
+        try db.write { db in
+            let ids = try uids.compactMap {
                 try Int64.fetchOne(db, sql: "SELECT id FROM message WHERE accountID = ? AND mailbox = ? AND uid = ?",
                                    arguments: [accountID, mailbox, $0])
             }
+            try deleteRowsIn(db, ids: ids)
         }
-        try delete(ids: ids)
     }
 
+    /// Forgets a mailbox: its messages and its sync state, in one transaction.
     public func deleteMailbox(accountID: String, mailbox: String) throws {
-        let ids = try db.read {
-            try Int64.fetchAll($0, sql: "SELECT id FROM message WHERE accountID = ? AND mailbox = ?", arguments: [accountID, mailbox])
-        }
-        try delete(ids: ids)
-        try db.write {
-            try $0.execute(sql: "DELETE FROM mailboxState WHERE accountID = ? AND path = ?", arguments: [accountID, mailbox])
+        try db.write { db in
+            let ids = try Int64.fetchAll(db, sql: "SELECT id FROM message WHERE accountID = ? AND mailbox = ?",
+                                         arguments: [accountID, mailbox])
+            try deleteRowsIn(db, ids: ids)
+            try db.execute(sql: "DELETE FROM mailboxState WHERE accountID = ? AND path = ?", arguments: [accountID, mailbox])
         }
     }
 
@@ -207,7 +207,7 @@ extension MailStore {
         if !candidates.isEmpty {
             let known = try db.read { db in
                 try String.fetchOne(db, sql: """
-                    SELECT threadID FROM message WHERE messageID IN (\(candidates.map { _ in "?" }.joined(separator: ",")))
+                    SELECT threadID FROM message WHERE messageID IN (\(candidates.sqlPlaceholders))
                     AND threadID IS NOT NULL LIMIT 1
                     """, arguments: StatementArguments(candidates))
             }
@@ -253,35 +253,33 @@ extension MailStore {
 
     /// Thread rows for the given newest messages: counts, people, pin/snooze/Reply Later.
     static func summaries(latest: [StoredMessage], arrived: [String: Date], ownAddresses: Set<String>, db: Database) throws -> [ThreadSummary] {
-        do {
-            let threadIDs = latest.compactMap(\.threadID)
-            guard !threadIDs.isEmpty else { return [] }
-            var counts: [String: (Int, Int, [String])] = [:]
-            var extras: [String: (pinned: Bool, snoozed: Date?, replyLater: Bool)] = [:]
-            // An empty IN () is invalid SQL; a never-matching placeholder keeps the query uniform.
-            let own = ownAddresses.isEmpty ? [""] : ownAddresses.map { $0.lowercased() }
-            let rows = try Row.fetchAll(db, sql: """
-                SELECT threadID, count(DISTINCT coalesce(messageID, id)) AS n, sum(instr(flags, '\\Seen') = 0) AS unread,
-                       max(instr(flags, '\\Flagged') > 0) AS pinned, max(snoozedUntil) AS snoozed,
-                       max(instr(flags, '\(replyLaterKeyword)') > 0) AS replyLater,
-                       group_concat(DISTINCT CASE WHEN lower(fromAddress) IN (\(own.map { _ in "?" }.joined(separator: ",")))
-                                                  THEN NULL ELSE coalesce(fromName, fromAddress) END) AS people
-                FROM message WHERE threadID IN (\(threadIDs.map { _ in "?" }.joined(separator: ","))) AND reactionTo IS NULL
-                GROUP BY threadID
-                """, arguments: StatementArguments(own + threadIDs))
-            for row in rows {
-                let people = (row["people"] as String?)?.split(separator: ",").map(String.init) ?? []
-                counts[row["threadID"]] = (row["n"], row["unread"] ?? 0, people)
-                extras[row["threadID"]] = ((row["pinned"] as Int? ?? 0) == 1, row["snoozed"], (row["replyLater"] as Int? ?? 0) == 1)
-            }
-            return latest.map { m in
-                let key = m.threadID ?? ""
-                let c = counts[key] ?? (1, m.flags.contains("\\Seen") ? 0 : 1, [m.fromName ?? m.fromAddress])
-                let e = extras[key] ?? (m.flags.contains("\\Flagged"), m.snoozedUntil, m.flags.contains(replyLaterKeyword))
-                return ThreadSummary(threadID: key, latest: m, messageCount: c.0, unreadCount: c.1, participants: c.2,
-                                     isPinned: e.pinned, isReplyLater: e.replyLater, arrivedAt: arrived[key] ?? m.date,
-                                     snoozedUntil: e.snoozed)
-            }
+        let threadIDs = latest.compactMap(\.threadID)
+        guard !threadIDs.isEmpty else { return [] }
+        var counts: [String: (messages: Int, unread: Int, people: [String])] = [:]
+        var extras: [String: (pinned: Bool, snoozed: Date?, replyLater: Bool)] = [:]
+        // An empty IN () is invalid SQL; a never-matching placeholder keeps the query uniform.
+        let own = ownAddresses.isEmpty ? [""] : ownAddresses.map { $0.lowercased() }
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT threadID, count(DISTINCT coalesce(messageID, id)) AS n, sum(instr(flags, '\\Seen') = 0) AS unread,
+                   max(instr(flags, '\\Flagged') > 0) AS pinned, max(snoozedUntil) AS snoozed,
+                   max(instr(flags, '\(replyLaterKeyword)') > 0) AS replyLater,
+                   group_concat(DISTINCT CASE WHEN lower(fromAddress) IN (\(own.sqlPlaceholders))
+                                              THEN NULL ELSE coalesce(fromName, fromAddress) END) AS people
+            FROM message WHERE threadID IN (\(threadIDs.sqlPlaceholders)) AND reactionTo IS NULL
+            GROUP BY threadID
+            """, arguments: StatementArguments(own + threadIDs))
+        for row in rows {
+            let people = (row["people"] as String?)?.split(separator: ",").map(String.init) ?? []
+            counts[row["threadID"]] = (row["n"], row["unread"] ?? 0, people)
+            extras[row["threadID"]] = ((row["pinned"] as Int? ?? 0) == 1, row["snoozed"], (row["replyLater"] as Int? ?? 0) == 1)
+        }
+        return latest.map { m in
+            let key = m.threadID ?? ""
+            let c = counts[key] ?? (1, m.flags.contains("\\Seen") ? 0 : 1, [m.fromName ?? m.fromAddress])
+            let e = extras[key] ?? (m.flags.contains("\\Flagged"), m.snoozedUntil, m.flags.contains(replyLaterKeyword))
+            return ThreadSummary(threadID: key, latest: m, messageCount: c.messages, unreadCount: c.unread, participants: c.people,
+                                 isPinned: e.pinned, isReplyLater: e.replyLater, arrivedAt: arrived[key] ?? m.date,
+                                 snoozedUntil: e.snoozed)
         }
     }
 

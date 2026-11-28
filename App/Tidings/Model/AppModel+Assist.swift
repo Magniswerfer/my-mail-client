@@ -22,6 +22,9 @@ enum AssistSettings {
 }
 
 extension AppModel {
+    /// Each pass after a sync drafts at most this many follow-ups (and replies) per account.
+    private static let autoDraftsPerAccountPerPass = 3
+
     /// The on-device writer, created on first use (nil without Apple Intelligence).
     var assistant: (any MailWriter)? {
         if !writerChecked {
@@ -73,22 +76,18 @@ extension AppModel {
         let days = AssistSettings.followUpDays
         for account in accounts {
             let candidates = (try? store.followUpCandidates(accountID: account.id, ownAddresses: Set(account.addresses),
-                                                             minDays: days, limit: 3)) ?? []
+                                                             minDays: days, limit: Self.autoDraftsPerAccountPerPass)) ?? []
             for mine in candidates {
                 guard let id = mine.id, let threadID = mine.threadID else { continue }
                 do {
                     let raw = try await rawMessage(mine)
                     let parsed = MIMEParser.parse(raw)
-                    let draft = self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
                     let recipient = parsed.to.first
                     let waited = max(days, Int(Date().timeIntervalSince(mine.date) / 86_400))
                     let request = FollowUpRequest(subject: parsed.subject, lastMessage: parsed.plainText,
                                                   recipientName: recipient.map(IntroReply.firstName), daysWaiting: waited)
                     let text = await assistant?.followUp(request) ?? Self.followUpTemplate(recipient: recipient)
-                    let body = NSMutableAttributedString(string: text, attributes: RichTextEditor.baseAttributes)
-                    body.append(draft.body)
-                    let outboxID = saveDraft(draft.message, body: body, accountID: account.id, kind: .reply, originalLocalID: id)
-                    try store.saveAutoDraft(AutoDraft(threadID: threadID, accountID: account.id, outboxID: outboxID, messageID: id))
+                    try saveAutoDraft(text, replyingTo: parsed, raw: raw, account: account, threadID: threadID, messageID: id, kind: .followUp)
                 } catch {
                     // Offline or the message is gone: try again after the next sync.
                     continue
@@ -103,28 +102,36 @@ extension AppModel {
     private func draftReplies() async {
         guard AssistSettings.replyDrafts, let writer = assistant else { return }
         for account in accounts {
-            let candidates = (try? store.replyCandidates(accountID: account.id, ownAddresses: Set(account.addresses), limit: 3)) ?? []
+            let candidates = (try? store.replyCandidates(accountID: account.id, ownAddresses: Set(account.addresses),
+                                                          limit: Self.autoDraftsPerAccountPerPass)) ?? []
             for incoming in candidates {
                 guard let id = incoming.id, let threadID = incoming.threadID else { continue }
                 do {
                     let raw = try await rawMessage(incoming)
                     let parsed = MIMEParser.parse(raw)
-                    let draft = self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
                     let digest = ThreadDigest(subject: incoming.subject, messages: messages(inThread: threadID),
                                               ownAddresses: Set(account.addresses))
                     let sender = parsed.from.first.map(IntroReply.firstName)
                     guard let text = await writer.reply(digest, to: sender) else { continue }
-                    let body = NSMutableAttributedString(string: text, attributes: RichTextEditor.baseAttributes)
-                    body.append(draft.body)
-                    let outboxID = saveDraft(draft.message, body: body, accountID: account.id, kind: .reply, originalLocalID: id)
-                    try store.saveAutoDraft(AutoDraft(threadID: threadID, accountID: account.id, outboxID: outboxID,
-                                                      messageID: id, kind: .reply))
+                    try saveAutoDraft(text, replyingTo: parsed, raw: raw, account: account, threadID: threadID, messageID: id, kind: .reply)
                 } catch {
                     continue
                 }
             }
         }
         reloadOutbox()
+    }
+
+    /// The suggested text above the usual quoted reply, kept as a draft and as the
+    /// conversation's suggestion.
+    private func saveAutoDraft(_ text: String, replyingTo parsed: ParsedMessage, raw: Data, account: AccountConfig,
+                               threadID: String, messageID: Int64, kind: AutoDraft.Kind) throws {
+        let draft = self.draft(.reply, replyingTo: parsed, raw: raw, account: account)
+        let body = NSMutableAttributedString(string: text, attributes: RichTextEditor.baseAttributes)
+        body.append(draft.body)
+        let outboxID = saveDraft(draft.message, body: body, accountID: account.id, kind: .reply, originalLocalID: messageID)
+        try store.saveAutoDraft(AutoDraft(threadID: threadID, accountID: account.id, outboxID: outboxID,
+                                          messageID: messageID, kind: kind))
     }
 
     /// Without Apple Intelligence: a plain nudge in the app's language.

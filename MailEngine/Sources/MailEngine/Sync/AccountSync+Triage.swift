@@ -81,7 +81,6 @@ extension AccountSync {
         let prefix = "INBOX\(separator)"
         return others.allSatisfy { $0.path.uppercased().hasPrefix(prefix.uppercased()) } ? prefix : ""
     }
-    static let maxAttempts = 3
 
     /// The setting that remembers a special folder Tidings doesn't sync (Trash).
     static func roleKey(_ role: MailboxRole) -> String { "rolePath.\(role.rawValue)" }
@@ -102,119 +101,147 @@ extension AccountSync {
 
     // MARK: Performing
 
+    /// Folder names created when the server has none for a role.
+    enum FallbackFolder {
+        static let archive = "Archive"
+        static let trash = "Deleted Messages"
+        static let junk = "Junk"
+    }
+
     /// Applies an action locally right away and queues it for the server. Returns nil when
     /// nothing matched (e.g. Done on a thread that has already left the Inbox).
     /// `learn`: whether a move into or out of Junk teaches the junk filter (not for its own moves).
     @discardableResult
     public func perform(_ kind: TriageKind, threadIDs: [String], from mailbox: String = "INBOX", learn: Bool = true) throws -> TriageChange? {
-        let changeID = UUID().uuidString
-        var localIDs: [Int64]
-        var add: [String] = []
-        var remove: [String] = []
-
         switch kind {
         case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze:
-            let source: String = kind == .unsnooze ? try snoozedPath() : mailbox
-            localIDs = try store.localIDs(threadIDs: threadIDs, mailbox: source, accountID: account.id)
-            guard !localIDs.isEmpty else { return nil }
-            let snapshots = try store.snapshots(localIDs: localIDs)
-            var target: String
-            var createTarget = false
-            var surfaced: Date?? = nil
-            var snooze: (Bool, Date?)? = nil
-            switch kind {
-            case .done:
-                if let archive = try path(for: .archive) { target = archive } else { target = try fallbackPath("Archive"); createTarget = true }
-            case .trash:
-                if let trash = try path(for: .trash) { target = trash } else { target = try fallbackPath("Deleted Messages"); createTarget = true }
-            case .junk:
-                if let junk = try path(for: .junk) { target = junk } else { target = try fallbackPath("Junk"); createTarget = true }
-            case .move(let path):
-                guard path != mailbox else { return nil }
-                target = path
-            case .moveToInbox:
-                target = "INBOX"
-                remove = Array(Set(snapshots.flatMap { SnoozeKeywords.all(in: $0.flags.split(separator: " ").map(String.init)) }))
-                snooze = (false, nil)
-            case .snooze(let until):
-                target = try snoozedPath()
-                createTarget = true
-                add = SnoozeKeywords.keywords(until: until)
-                snooze = (true, until)
-            case .unsnooze:
-                target = "INBOX"
-                remove = Array(Set(snapshots.flatMap { SnoozeKeywords.all(in: $0.flags.split(separator: " ").map(String.init)) }))
-                surfaced = .some(Date())   // back on top of the stream, like new mail
-                snooze = (false, nil)
-            default:
-                fatalError("unreachable")
-            }
-            // Already there (Done on archived mail, e.g. from a smart folder): nothing to move,
-            // and moving a mailbox onto itself would only make a copy on iCloud.
-            guard target.caseInsensitiveCompare(source) != .orderedSame else { return nil }
-            let items = snapshots.map { QueuedAction.MoveItem(localID: $0.localID, fromMailbox: $0.mailbox, fromUID: $0.uid) }
-            try store.db.write { db in
-                try store.applyLocalMove(localIDs: localIDs, to: target, flagsAdd: add, flagsRemove: remove,
-                                         surfacedAt: surfaced, snooze: snooze, in: db)
-                try store.enqueue(.move(items: items, to: target, addFlags: add, removeFlags: remove, createTarget: createTarget),
-                                  accountID: account.id, changeID: changeID, in: db)
-            }
-            if learn { try learnFromMove(kind, localIDs: localIDs, from: source, to: target) }
-            if case .snooze = kind { try store.noteMessageState(localIDs: localIDs, login: account.login) }
-            if kind == .unsnooze { try store.noteMessageState(localIDs: localIDs, login: account.login) }
-            signalWork()
-            return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
-                                snapshots: snapshots, addedFlags: add, removedFlags: remove)
-
+            return try performMove(kind, threadIDs: threadIDs, from: mailbox, learn: learn)
         case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater, .readLater, .clearReadLater:
-            let all = try store.localIDs(threadIDs: threadIDs, mailbox: nil, accountID: account.id)
-            let snapshotsAll = try store.snapshots(localIDs: all)
-            switch kind {
-            case .pin:
-                // Pin = \Flagged on the newest message, so Apple Mail shows it flagged too.
-                localIDs = try threadIDs.compactMap { thread in
-                    try store.messages(inThread: thread).filter { $0.accountID == account.id }.last?.id
-                }
-                add = ["\\Flagged"]
-            case .unpin:
-                localIDs = snapshotsAll.filter { $0.flags.contains("\\Flagged") }.map(\.localID)
-                remove = ["\\Flagged"]
-            case .replyLater:
-                localIDs = try threadIDs.compactMap { thread in
-                    try store.messages(inThread: thread).filter { $0.accountID == account.id }.last?.id
-                }
-                add = [replyLaterKeyword]
-            case .clearReplyLater:
-                localIDs = snapshotsAll.filter { $0.flags.contains(replyLaterKeyword) }.map(\.localID)
-                remove = [replyLaterKeyword]
-            case .readLater:
-                localIDs = snapshotsAll.map(\.localID)
-                add = [readLaterKeyword]
-            case .clearReadLater:
-                localIDs = snapshotsAll.filter { $0.flags.contains(readLaterKeyword) }.map(\.localID)
-                remove = [readLaterKeyword]
-            case .markRead:
-                localIDs = snapshotsAll.filter { !$0.flags.contains("\\Seen") }.map(\.localID)
-                add = ["\\Seen"]
-            default: // markUnread: only the newest message, like Apple Mail
-                localIDs = try threadIDs.compactMap { thread in
-                    try store.messages(inThread: thread).filter { $0.accountID == account.id }.last?.id
-                }
-                remove = ["\\Seen"]
-            }
-            guard !localIDs.isEmpty else { return nil }
-            let snapshots = snapshotsAll.filter { localIDs.contains($0.localID) }
-            try store.db.write { db in
-                try store.applyLocalFlags(localIDs: localIDs, add: add, remove: remove, in: db)
-                try store.enqueue(.flags(localIDs: localIDs, add: add, remove: remove),
-                                  accountID: account.id, changeID: changeID, in: db)
-            }
-            if [.replyLater, .clearReplyLater, .readLater, .clearReadLater].contains(kind) {
-                try store.noteMessageState(localIDs: localIDs, login: account.login)
-            }
-            signalWork()
-            return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
-                                snapshots: snapshots, addedFlags: add, removedFlags: remove)
+            return try performFlagChange(kind, threadIDs: threadIDs)
+        }
+    }
+
+    /// Where a move-type action sends its messages, and what it changes on the way.
+    private struct MovePlan {
+        var target: String
+        var createTarget = false
+        var addFlags: [String] = []
+        var removeFlags: [String] = []
+        /// `.some(date)` sets `surfacedAt`; nil leaves it.
+        var surfacedAt: Date?? = nil
+        /// (isSnoozed, until) to store; nil leaves the snooze state.
+        var snooze: (Bool, Date?)? = nil
+    }
+
+    private func performMove(_ kind: TriageKind, threadIDs: [String], from mailbox: String, learn: Bool) throws -> TriageChange? {
+        let source: String = kind == .unsnooze ? try snoozedPath() : mailbox
+        let localIDs = try store.localIDs(threadIDs: threadIDs, mailbox: source, accountID: account.id)
+        guard !localIDs.isEmpty else { return nil }
+        let snapshots = try store.snapshots(localIDs: localIDs)
+        guard let plan = try movePlan(for: kind, from: source, snapshots: snapshots),
+              // Already there (Done on archived mail, e.g. from a smart folder): nothing to move,
+              // and moving a mailbox onto itself would only make a copy on iCloud.
+              plan.target.caseInsensitiveCompare(source) != .orderedSame else { return nil }
+        let changeID = UUID().uuidString
+        let items = snapshots.map { QueuedAction.MoveItem(localID: $0.localID, fromMailbox: $0.mailbox, fromUID: $0.uid) }
+        try store.db.write { db in
+            try store.applyLocalMove(localIDs: localIDs, to: plan.target, flagsAdd: plan.addFlags, flagsRemove: plan.removeFlags,
+                                     surfacedAt: plan.surfacedAt, snooze: plan.snooze, in: db)
+            try store.enqueue(.move(items: items, to: plan.target, addFlags: plan.addFlags, removeFlags: plan.removeFlags,
+                                    createTarget: plan.createTarget),
+                              accountID: account.id, changeID: changeID, in: db)
+        }
+        if learn { try learnFromMove(kind, localIDs: localIDs, from: source, to: plan.target) }
+        if kind.changesRecordedState { try store.noteMessageState(localIDs: localIDs, login: account.login) }
+        signalWork()
+        return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
+                            snapshots: snapshots, addedFlags: plan.addFlags, removedFlags: plan.removeFlags)
+    }
+
+    private func movePlan(for kind: TriageKind, from source: String, snapshots: [MessageSnapshot]) throws -> MovePlan? {
+        switch kind {
+        case .done:
+            return try roleFolderPlan(.archive, fallback: FallbackFolder.archive)
+        case .trash:
+            return try roleFolderPlan(.trash, fallback: FallbackFolder.trash)
+        case .junk:
+            return try roleFolderPlan(.junk, fallback: FallbackFolder.junk)
+        case .move(let path):
+            guard path != source else { return nil }
+            return MovePlan(target: path)
+        case .moveToInbox:
+            return MovePlan(target: "INBOX", removeFlags: Self.snoozeKeywords(in: snapshots), snooze: (false, nil))
+        case .snooze(let until):
+            return MovePlan(target: try snoozedPath(), createTarget: true, addFlags: SnoozeKeywords.keywords(until: until),
+                            snooze: (true, until))
+        case .unsnooze:
+            // Back on top of the stream, like new mail.
+            return MovePlan(target: "INBOX", removeFlags: Self.snoozeKeywords(in: snapshots), surfacedAt: .some(Date()),
+                            snooze: (false, nil))
+        case .pin, .unpin, .markRead, .markUnread, .replyLater, .clearReplyLater, .readLater, .clearReadLater:
+            preconditionFailure("\(kind) is not a move")
+        }
+    }
+
+    /// The account's folder for `role`, or a new one named `fallback` when it has none.
+    private func roleFolderPlan(_ role: MailboxRole, fallback: String) throws -> MovePlan {
+        if let existing = try path(for: role) { return MovePlan(target: existing) }
+        return MovePlan(target: try fallbackPath(fallback), createTarget: true)
+    }
+
+    private static func snoozeKeywords(in snapshots: [MessageSnapshot]) -> [String] {
+        Array(Set(snapshots.flatMap { SnoozeKeywords.all(in: $0.flags.split(separator: " ").map(String.init)) }))
+    }
+
+    private func performFlagChange(_ kind: TriageKind, threadIDs: [String]) throws -> TriageChange? {
+        let threadSnapshots = try store.snapshots(localIDs: try store.localIDs(threadIDs: threadIDs, mailbox: nil, accountID: account.id))
+        let (localIDs, add, remove) = try flagEdit(for: kind, threadIDs: threadIDs, threadSnapshots: threadSnapshots)
+        guard !localIDs.isEmpty else { return nil }
+        let changeID = UUID().uuidString
+        let snapshots = threadSnapshots.filter { localIDs.contains($0.localID) }
+        try store.db.write { db in
+            try store.applyLocalFlags(localIDs: localIDs, add: add, remove: remove, in: db)
+            try store.enqueue(.flags(localIDs: localIDs, add: add, remove: remove),
+                              accountID: account.id, changeID: changeID, in: db)
+        }
+        if kind.changesRecordedState { try store.noteMessageState(localIDs: localIDs, login: account.login) }
+        signalWork()
+        return TriageChange(id: changeID, accountID: account.id, kind: kind, threadCount: threadIDs.count,
+                            snapshots: snapshots, addedFlags: add, removedFlags: remove)
+    }
+
+    /// Which messages a flag-type action touches, and the flags it adds and removes.
+    private func flagEdit(for kind: TriageKind, threadIDs: [String], threadSnapshots: [MessageSnapshot]) throws
+        -> (localIDs: [Int64], add: [String], remove: [String]) {
+        func carrying(_ flag: String) -> [Int64] { threadSnapshots.filter { $0.flags.contains(flag) }.map(\.localID) }
+        switch kind {
+        case .pin:
+            // Pin = \Flagged on the newest message, so Apple Mail shows it flagged too.
+            return (try newestMessageIDs(of: threadIDs), ["\\Flagged"], [])
+        case .unpin:
+            return (carrying("\\Flagged"), [], ["\\Flagged"])
+        case .replyLater:
+            return (try newestMessageIDs(of: threadIDs), [replyLaterKeyword], [])
+        case .clearReplyLater:
+            return (carrying(replyLaterKeyword), [], [replyLaterKeyword])
+        case .readLater:
+            return (threadSnapshots.map(\.localID), [readLaterKeyword], [])
+        case .clearReadLater:
+            return (carrying(readLaterKeyword), [], [readLaterKeyword])
+        case .markRead:
+            return (threadSnapshots.filter { !$0.flags.contains("\\Seen") }.map(\.localID), ["\\Seen"], [])
+        case .markUnread:
+            // Only the newest message, like Apple Mail.
+            return (try newestMessageIDs(of: threadIDs), [], ["\\Seen"])
+        case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze:
+            preconditionFailure("\(kind) is not a flag change")
+        }
+    }
+
+    /// Each conversation's newest message on this account.
+    private func newestMessageIDs(of threadIDs: [String]) throws -> [Int64] {
+        try threadIDs.compactMap { thread in
+            try store.messages(inThread: thread).filter { $0.accountID == account.id }.last?.id
         }
     }
 
@@ -263,11 +290,7 @@ extension AccountSync {
                     guard !items.isEmpty else { continue }
                     try store.applyLocalMove(localIDs: items.map(\.localID), to: origin,
                                              flagsAdd: change.removedFlags, flagsRemove: change.addedFlags, in: db)
-                    for snapshot in originals {
-                        try db.execute(sql: "UPDATE message SET surfacedAt = ?, snoozedUntil = ?, isSnoozed = ? WHERE id = ?",
-                                       arguments: [snapshot.surfacedAt, snapshot.snoozedUntil,
-                                                   snapshot.flags.contains(SnoozeKeywords.marker), snapshot.localID])
-                    }
+                    for snapshot in originals { try store.restoreSnoozeState(snapshot, in: db) }
                     try store.enqueue(.move(items: items, to: origin, addFlags: change.removedFlags,
                                             removeFlags: change.addedFlags, createTarget: false),
                                       accountID: account.id, changeID: undoID, in: db)
@@ -280,12 +303,9 @@ extension AccountSync {
             || change.snapshots.contains(where: { $0.mailbox.caseInsensitiveCompare(junk) == .orderedSame }) {
             try unlearnUndone(change)
         }
-        // Undone Reply Later / Read Later / snooze: the recorded state follows (or the next
-        // re-apply would put it back).
-        switch change.kind {
-        case .replyLater, .clearReplyLater, .readLater, .clearReadLater, .snooze, .unsnooze:
+        // The recorded state follows the undo, or the next re-apply would put it back.
+        if change.kind.changesRecordedState {
             try store.noteMessageState(localIDs: change.snapshots.map(\.localID), login: account.login)
-        default: break
         }
         signalWork()
     }
@@ -296,11 +316,7 @@ extension AccountSync {
     func wakeDueSnoozes() throws {
         let due = try store.dueSnoozes(accountID: account.id)
         guard !due.isEmpty else { return }
-        let threads = try store.db.read { db in
-            try String.fetchAll(db, sql: "SELECT DISTINCT threadID FROM message WHERE id IN (\(due.map { _ in "?" }.joined(separator: ",")))",
-                                arguments: StatementArguments(due))
-        }
-        try perform(.unsnooze, threadIDs: threads)
+        try perform(.unsnooze, threadIDs: try store.threadIDs(localIDs: due))
         emit(.snoozesWoke(messageIDs: due))
     }
 
@@ -322,6 +338,9 @@ extension AccountSync {
 
     // MARK: Draining the queue
 
+    /// Tries per queued change before it's given up and server truth restored.
+    static let maxAttempts = 3
+
     /// Applies queued actions in order. Stops at the first connection-level failure so later
     /// actions never overtake earlier ones; command failures are retried, then dropped.
     func drain(_ session: MailSession) async throws {
@@ -342,6 +361,7 @@ extension AccountSync {
         for var pending in try store.pendingActions(accountID: account.id) {
             guard let id = pending.id else { continue }
             guard let action = pending.action else {
+                SyncLog.info("queue: dropped an action that no longer decodes (id \(id))")
                 try store.deletePending(id: id)
                 continue
             }
@@ -418,68 +438,77 @@ extension AccountSync {
     func execute(_ action: QueuedAction, _ session: MailSession) async throws {
         switch action {
         case .move(let items, let queuedTarget, let add, let remove, let createTarget):
-            // Snoozes queued before the folder followed the server's namespace said "Snoozed";
-            // send them where this server wants it ("INBOX.Snoozed").
-            let target: String
-            if Self.isSnoozedMailbox(queuedTarget), let path = try? snoozedPath() {
-                target = path
-            } else {
-                // Any other folder named without the server's `INBOX.` (queued before the account's
-                // prefix was known, or a rule's folder from another account): where the server wants it.
-                target = Self.underPrefix(queuedTarget, try store.setting(Self.personalPrefixKey, accountID: account.id) ?? "")
-            }
-            if target != queuedTarget {
-                try await store.db.write { db in
-                    try db.execute(sql: "UPDATE message SET mailbox = ? WHERE accountID = ? AND mailbox = ?",
-                                   arguments: [target, account.id, queuedTarget])
-                }
-            }
-            do {
-                if createTarget { try await session.ensureMailbox(target) }
-                try await moveGroups(items, to: target, add: add, remove: remove, session)
-            } catch let error as MailSessionError {
-                // Dovecot names the prefix it wants ("should probably be prefixed with: INBOX."):
-                // remember it, so the next attempt goes there.
-                if let prefix = Self.namespaceHint(in: error.description), !prefix.isEmpty {
-                    try store.setSetting(Self.personalPrefixKey, prefix, accountID: account.id)
-                }
-                throw MailSessionError.commandFailed(command: "Move to \(target)", detail: error.description)
-            }
+            try await executeMove(items, queuedTarget: queuedTarget, add: add, remove: remove, createTarget: createTarget, session)
         case .flags(let localIDs, let add, let remove):
-            let byMailbox = Dictionary(grouping: try store.locations(localIDs: localIDs), by: \.mailbox)
-            for (mailbox, group) in byMailbox {
-                let uids = group.map(\.uid).filter { $0 < provisionalUIDBase }
-                guard !uids.isEmpty else {
-                    SyncLog.info("flags: skipped \(mailbox), only provisional UIDs \(group.map(\.uid))")
-                    continue
-                }
-                let selected = try await session.select(mailbox)
-                guard try uidValidityUnchanged(selected, mailbox: mailbox) else {
-                    SyncLog.info("flags: \(mailbox) has a new UIDVALIDITY; dropped a queued flag change")
-                    continue
-                }
-                if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
-                if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
-                SyncLog.info("flags: \(mailbox) uids \(uids) +\(add) -\(remove)")
-                // Read the flags back on the same connection: do our keywords stick on this server?
-                if let check = try? await session.fetchFlags(uids: uids) {
-                    for (uid, state) in check.sorted(by: { $0.key < $1.key }) {
-                        SyncLog.info("flags: \(mailbox) uid \(uid) now [\(state.flags.sorted().joined(separator: " "))] modseq \(state.modSeq.map(String.init) ?? "-")")
-                    }
-                    let ours = add.filter(Self.isOwnKeyword)
-                    if !ours.isEmpty, !check.isEmpty {
-                        let kept = check.values.allSatisfy { state in ours.allSatisfy(state.flags.contains) }
-                        try? store.setSetting(Self.keepsKeywordsKey, kept ? "true" : "false", accountID: account.id)
-                        if !kept { SyncLog.info("server accepted but didn't keep \(ours): keeping our keywords locally") }
-                    }
-                }
-            }
+            try await executeFlags(localIDs: localIDs, add: add, remove: remove, session)
         }
     }
 
+    private func executeMove(_ items: [QueuedAction.MoveItem], queuedTarget: String, add: [String], remove: [String],
+                             createTarget: Bool, _ session: MailSession) async throws {
+        let target = try serverSpelling(of: queuedTarget)
+        if target != queuedTarget {
+            try store.relabelMailbox(accountID: account.id, from: queuedTarget, to: target)
+        }
+        do {
+            if createTarget { try await session.ensureMailbox(target) }
+            try await moveGroups(items, to: target, add: add, remove: remove, session)
+        } catch let error as MailSessionError {
+            // Dovecot names the prefix it wants ("should probably be prefixed with: INBOX."):
+            // remember it, so the next attempt goes there.
+            if let prefix = Self.namespaceHint(in: error.description), !prefix.isEmpty {
+                try store.setSetting(Self.personalPrefixKey, prefix, accountID: account.id)
+            }
+            throw MailSessionError.commandFailed(command: "Move to \(target)", detail: error.description)
+        }
+    }
+
+    /// Where a queued move goes on this server. Snoozes queued before the folder followed the
+    /// server's namespace said "Snoozed"; any other folder may be named without the server's
+    /// `INBOX.` (queued before the account's prefix was known, or a rule's folder from another
+    /// account).
+    private func serverSpelling(of queuedTarget: String) throws -> String {
+        if Self.isSnoozedMailbox(queuedTarget), let path = try? snoozedPath() { return path }
+        return Self.underPrefix(queuedTarget, try store.setting(Self.personalPrefixKey, accountID: account.id) ?? "")
+    }
+
+    private func executeFlags(localIDs: [Int64], add: [String], remove: [String], _ session: MailSession) async throws {
+        let byMailbox = Dictionary(grouping: try store.locations(localIDs: localIDs), by: \.mailbox)
+        for (mailbox, group) in byMailbox {
+            let uids = group.map(\.uid).filter { $0 < provisionalUIDBase }
+            guard !uids.isEmpty else {
+                SyncLog.info("flags: skipped \(mailbox), only provisional UIDs \(group.map(\.uid))")
+                continue
+            }
+            let selected = try await session.select(mailbox)
+            guard try uidValidityUnchanged(selected, mailbox: mailbox) else {
+                SyncLog.info("flags: \(mailbox) has a new UIDVALIDITY; dropped a queued flag change")
+                continue
+            }
+            if !add.isEmpty { try await session.store(uids: uids, .add, flags: add) }
+            if !remove.isEmpty { try await session.store(uids: uids, .remove, flags: remove) }
+            SyncLog.info("flags: \(mailbox) uids \(uids) +\(add) -\(remove)")
+            await learnWhetherKeywordsStick(added: add, uids: uids, mailbox: mailbox, session)
+        }
+    }
+
+    /// Reads the flags back on the same connection: do our keywords stick on this server?
+    /// Best effort: a failed read-back leaves what we knew.
+    private func learnWhetherKeywordsStick(added add: [String], uids: [UInt32], mailbox: String, _ session: MailSession) async {
+        guard let check = try? await session.fetchFlags(uids: uids) else { return }
+        for (uid, state) in check.sorted(by: { $0.key < $1.key }) {
+            SyncLog.info("flags: \(mailbox) uid \(uid) now [\(state.flags.sorted().joined(separator: " "))] modseq \(state.modSeq.map(String.init) ?? "-")")
+        }
+        let ours = add.filter(Self.isOwnKeyword)
+        guard !ours.isEmpty, !check.isEmpty else { return }
+        let kept = check.values.allSatisfy { state in ours.allSatisfy(state.flags.contains) }
+        try? store.setSetting(Self.keepsKeywordsKey, kept ? "true" : "false", accountID: account.id)
+        if !kept { SyncLog.info("server accepted but didn't keep \(ours): keeping our keywords locally") }
+    }
+
+    /// The server never saw this change, and its MODSEQ won't tell an incremental sync to put
+    /// things back: the next sync of the mailboxes involved reads them in full.
     func abandon(_ action: QueuedAction) throws {
-        // The server never saw this change, and its MODSEQ won't tell an incremental sync to put
-        // things back: the next sync of the mailboxes involved reads them in full.
         switch action {
         case .move(let items, let target, _, _, _):
             try store.forgetModSeq(accountID: account.id, mailboxes: Set(items.map(\.fromMailbox)).union([target]))
@@ -497,66 +526,13 @@ extension AccountSync {
     }
 }
 
-extension QueuedAction {
-    /// The messages this change touches.
-    var localIDs: Set<Int64> {
+extension TriageKind {
+    /// Reply Later, Read Later and snooze are also recorded per message beyond the IMAP keywords
+    /// (`noteMessageState`), so that record follows every change of them, undo included.
+    var changesRecordedState: Bool {
         switch self {
-        case .move(let items, _, _, _, _): Set(items.map(\.localID))
-        case .flags(let ids, _, _): Set(ids)
-        }
-    }
-}
-
-extension MailStore {
-    func deletePending(id: Int64) throws {
-        _ = try db.write { try PendingAction.deleteOne($0, key: id) }
-    }
-
-    func savePending(_ pending: PendingAction) throws {
-        try db.write { try pending.update($0) }
-    }
-
-    func locations(localIDs: [Int64]) throws -> [(mailbox: String, uid: UInt32)] {
-        guard !localIDs.isEmpty else { return [] }
-        return try db.read { db in
-            try Row.fetchAll(db, sql: "SELECT mailbox, uid FROM message WHERE id IN (\(localIDs.map { _ in "?" }.joined(separator: ",")))",
-                             arguments: StatementArguments(localIDs)).map { ($0["mailbox"], $0["uid"]) }
-        }
-    }
-
-    /// Replaces provisional UIDs with the server's (from COPYUID). Without a mapping, or if sync
-    /// already stored the destination copy, the placeholder row is dropped and sync refetches it.
-    func applyMoveResult(accountID: String, target: String, items: [QueuedAction.MoveItem], mapping: [UInt32: UInt32]) throws {
-        try db.write { db in
-            for item in items {
-                if let newUID = mapping[item.fromUID],
-                   try Int64.fetchOne(db, sql: "SELECT id FROM message WHERE accountID = ? AND mailbox = ? AND uid = ?",
-                                      arguments: [accountID, target, newUID]) == nil {
-                    try db.execute(sql: "UPDATE message SET uid = ? WHERE id = ?", arguments: [newUID, item.localID])
-                } else {
-                    try deleteRowsIn(db, ids: [item.localID])
-                }
-            }
-        }
-    }
-
-    func snapshotsIn(_ db: Database, localIDs: [Int64]) throws -> [MessageSnapshot] {
-        guard !localIDs.isEmpty else { return [] }
-        return try Row.fetchAll(db, sql: """
-            SELECT id, mailbox, uid, flags, surfacedAt, snoozedUntil FROM message
-            WHERE id IN (\(localIDs.map { _ in "?" }.joined(separator: ",")))
-            """, arguments: StatementArguments(localIDs)).map {
-            MessageSnapshot(localID: $0["id"], mailbox: $0["mailbox"], uid: $0["uid"], flags: $0["flags"],
-                            surfacedAt: $0["surfacedAt"], snoozedUntil: $0["snoozedUntil"])
-        }
-    }
-
-    func deleteRowsIn(_ db: Database, ids: [Int64]) throws {
-        for id in ids {
-            if let key = try Int64.fetchOne(db, sql: "SELECT sortKey FROM message WHERE id = ?", arguments: [id]) {
-                try db.execute(sql: "DELETE FROM message_fts WHERE rowid = ?", arguments: [key])
-            }
-            try db.execute(sql: "DELETE FROM message WHERE id = ?", arguments: [id])
+        case .replyLater, .clearReplyLater, .readLater, .clearReadLater, .snooze, .unsnooze: true
+        default: false
         }
     }
 }

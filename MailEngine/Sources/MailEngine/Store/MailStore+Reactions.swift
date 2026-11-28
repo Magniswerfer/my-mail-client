@@ -50,13 +50,12 @@ extension MailStore {
         guard !ids.isEmpty else { return [:] }
         let own = Set(ownAddresses.map { $0.lowercased() })
         let rows = try db.read { db in
-            try stride(from: 0, to: ids.count, by: 500).flatMap { start -> [Row] in
-                let chunk = Array(ids[start..<min(start + 500, ids.count)])
-                return try Row.fetchAll(db, sql: """
+            try ids.sqlBatches().flatMap { batch -> [Row] in
+                try Row.fetchAll(db, sql: """
                     SELECT reactionTo, reactionEmoji, fromAddress, fromName, date FROM message
-                    WHERE reactionTo IS NOT NULL AND reactionTo IN (\(chunk.map { _ in "?" }.joined(separator: ",")))
+                    WHERE reactionTo IS NOT NULL AND reactionTo IN (\(batch.sqlPlaceholders))
                     ORDER BY date, id
-                    """, arguments: StatementArguments(chunk))
+                    """, arguments: StatementArguments(Array(batch)))
             }
         }
         // target → sender → their latest reaction (an empty emoji after a removal).

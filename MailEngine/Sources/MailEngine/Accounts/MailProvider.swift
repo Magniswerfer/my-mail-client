@@ -36,23 +36,28 @@ public enum MailProvider {
         case iCloud
     }
 
+    /// IMAP over implicit TLS: the only kind Tidings connects to (no STARTTLS on IMAP yet).
+    static let imapsPort: UInt16 = 993
+    static let smtpsPort = 465
+    static let submissionPort = 587
+
     struct Known {
         var name: String
         var domains: [String]
         var imapHost: String
         var smtpHost: String
-        var smtpPort: Int = 465
+        var smtpPort: Int = MailProvider.smtpsPort
         var smtpSecurity: SMTPEndpoint.Security = .tls
         var note: Note? = nil
     }
 
     static let known: [Known] = [
         Known(name: "iCloud", domains: ["icloud.com", "me.com", "mac.com"], imapHost: "imap.mail.me.com",
-              smtpHost: "smtp.mail.me.com", smtpPort: 587, smtpSecurity: .startTLS, note: .iCloud),
+              smtpHost: "smtp.mail.me.com", smtpPort: submissionPort, smtpSecurity: .startTLS, note: .iCloud),
         Known(name: "Gmail", domains: ["gmail.com", "googlemail.com"], imapHost: "imap.gmail.com",
               smtpHost: "smtp.gmail.com", note: .appPassword),
         Known(name: "Outlook.com", domains: ["outlook.com", "hotmail.com", "live.com", "msn.com", "outlook.dk", "hotmail.dk", "live.dk"],
-              imapHost: "outlook.office365.com", smtpHost: "smtp-mail.outlook.com", smtpPort: 587, smtpSecurity: .startTLS,
+              imapHost: "outlook.office365.com", smtpHost: "smtp-mail.outlook.com", smtpPort: submissionPort, smtpSecurity: .startTLS,
               note: .oauthOnly),
         Known(name: "Yahoo", domains: ["yahoo.com", "yahoo.dk", "yahoo.co.uk", "ymail.com", "rocketmail.com"],
               imapHost: "imap.mail.yahoo.com", smtpHost: "smtp.mail.yahoo.com", note: .appPassword),
@@ -60,9 +65,9 @@ public enum MailProvider {
         Known(name: "Fastmail", domains: ["fastmail.com", "fastmail.fm"], imapHost: "imap.fastmail.com",
               smtpHost: "smtp.fastmail.com", note: .appPassword),
         Known(name: "GMX", domains: ["gmx.net", "gmx.de", "gmx.at", "gmx.ch"], imapHost: "imap.gmx.net",
-              smtpHost: "mail.gmx.net", smtpPort: 587, smtpSecurity: .startTLS),
-        Known(name: "GMX", domains: ["gmx.com"], imapHost: "imap.gmx.com", smtpHost: "mail.gmx.com", smtpPort: 587, smtpSecurity: .startTLS),
-        Known(name: "WEB.DE", domains: ["web.de"], imapHost: "imap.web.de", smtpHost: "smtp.web.de", smtpPort: 587, smtpSecurity: .startTLS),
+              smtpHost: "mail.gmx.net", smtpPort: submissionPort, smtpSecurity: .startTLS),
+        Known(name: "GMX", domains: ["gmx.com"], imapHost: "imap.gmx.com", smtpHost: "mail.gmx.com", smtpPort: submissionPort, smtpSecurity: .startTLS),
+        Known(name: "WEB.DE", domains: ["web.de"], imapHost: "imap.web.de", smtpHost: "smtp.web.de", smtpPort: submissionPort, smtpSecurity: .startTLS),
         Known(name: "Zoho Mail", domains: ["zoho.com", "zohomail.com"], imapHost: "imap.zoho.com", smtpHost: "smtp.zoho.com"),
         Known(name: "mailbox.org", domains: ["mailbox.org"], imapHost: "imap.mailbox.org", smtpHost: "smtp.mailbox.org"),
         Known(name: "Posteo", domains: ["posteo.de", "posteo.net"], imapHost: "posteo.de", smtpHost: "posteo.de"),
@@ -75,12 +80,17 @@ public enum MailProvider {
         return String(parts[1])
     }
 
+    /// The full address, as most providers want it for the login.
+    static func login(for address: String) -> String {
+        address.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
     /// Built-in settings for a well-known provider, without asking the network.
     public static func builtIn(for address: String) -> MailServerSettings? {
         guard let domain = domain(of: address), let p = known.first(where: { $0.domains.contains(domain) }) else { return nil }
-        let login = address.trimmingCharacters(in: .whitespaces).lowercased()
+        let login = Self.login(for: address)
         return MailServerSettings(
-            imap: IMAPEndpoint(host: p.imapHost, port: 993, useTLS: true, username: login),
+            imap: IMAPEndpoint(host: p.imapHost, port: imapsPort, useTLS: true, username: login),
             smtp: SMTPEndpoint(host: p.smtpHost, port: p.smtpPort, security: p.smtpSecurity, username: login),
             source: p.name, note: p.note)
     }
@@ -88,10 +98,10 @@ public enum MailProvider {
     /// A guess when nothing else is known: imap.<domain> and smtp.<domain>, the full address as login.
     public static func guess(for address: String) -> MailServerSettings? {
         guard let domain = domain(of: address) else { return nil }
-        let login = address.trimmingCharacters(in: .whitespaces).lowercased()
+        let login = Self.login(for: address)
         return MailServerSettings(
-            imap: IMAPEndpoint(host: "imap.\(domain)", port: 993, useTLS: true, username: login),
-            smtp: SMTPEndpoint(host: "smtp.\(domain)", port: 587, security: .startTLS, username: login),
+            imap: IMAPEndpoint(host: "imap.\(domain)", port: imapsPort, useTLS: true, username: login),
+            smtp: SMTPEndpoint(host: "smtp.\(domain)", port: submissionPort, security: .startTLS, username: login),
             source: domain)
     }
 
@@ -100,8 +110,11 @@ public enum MailProvider {
     /// Fetches a URL's body; injectable so tests never touch the network.
     public typealias Fetch = @Sendable (URL) async throws -> Data
 
+    /// Autoconfig is a nicety: the form must not wait long for it.
+    static let autoconfigTimeout: TimeInterval = 8
+
     public static let urlSessionFetch: Fetch = { url in
-        var request = URLRequest(url: url, timeoutInterval: 8)
+        var request = URLRequest(url: url, timeoutInterval: MailProvider.autoconfigTimeout)
         request.setValue("application/xml", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -143,7 +156,7 @@ public enum MailProvider {
         let parser = XMLParser(data: data)
         parser.delegate = reader
         guard parser.parse() else { return nil }
-        let login = address.trimmingCharacters(in: .whitespaces).lowercased()
+        let login = Self.login(for: address)
         let localPart = login.split(separator: "@").first.map(String.init) ?? login
         let domain = domain(of: login) ?? ""
         func expand(_ s: String) -> String {

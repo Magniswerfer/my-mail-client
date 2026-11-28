@@ -8,12 +8,13 @@ import Sparkle
     static let shared = Updater()
 
     private let controller: SPUStandardUpdaterController?
+    private static let releaseBundleID = "hk.gnus.tidings"
 
     private init() {
         #if DEBUG
         controller = nil
         #else
-        controller = Bundle.main.bundleIdentifier == "hk.gnus.tidings"
+        controller = Bundle.main.bundleIdentifier == Self.releaseBundleID
             ? SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
             : nil
         #endif

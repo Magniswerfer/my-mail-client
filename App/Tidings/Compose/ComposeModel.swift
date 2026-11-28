@@ -2,6 +2,7 @@ import Foundation
 import MailEngine
 import SwiftUI
 import Observation
+import UniformTypeIdentifiers
 
 /// One composer window's state. Autosaves to the outbox table as a draft.
 @MainActor @Observable
@@ -52,6 +53,8 @@ final class ComposeModel {
 
     /// iCloud's per-message limit (Mail Drop is Apple-only).
     static let sizeLimit = 20 * 1_048_576
+    /// Typing pauses this long before the draft is saved.
+    private static let autosaveDelay: Duration = .seconds(1)
 
     init?(draftID: Int64, app: AppModel) {
         guard let item = try? app.store.outboxItem(id: draftID), let message = item.message else { return nil }
@@ -61,9 +64,9 @@ final class ComposeModel {
         let identities = app.identities(for: item.accountID)
         identity = identities.first { $0.address.caseInsensitiveCompare(message.from.address) == .orderedSame }
             ?? Identity(address: message.from.address, name: message.from.name ?? "")
-        to = message.to.map(\.description).joined(separator: ", ")
-        cc = message.cc.map(\.description).joined(separator: ", ")
-        bcc = message.bcc.map(\.description).joined(separator: ", ")
+        to = Self.field(message.to)
+        cc = Self.field(message.cc)
+        bcc = Self.field(message.bcc)
         showCcBcc = !cc.isEmpty || !bcc.isEmpty
         subject = message.subject
         // A signature's images are added when it's sent, never kept as attachments.
@@ -111,6 +114,14 @@ final class ComposeModel {
         AddressParser.parse(field.replacingOccurrences(of: ";", with: ","))
     }
 
+    /// Everyone in To, Cc and Bcc.
+    private var allRecipients: [MailAddress] { recipients(to) + recipients(cc) + recipients(bcc) }
+
+    /// Addresses as an address field shows them.
+    private static func field(_ addresses: [MailAddress]) -> String {
+        addresses.map(\.description).joined(separator: ", ")
+    }
+
     func buildMessage() -> OutgoingMessage {
         let signatures = app?.signaturesByID ?? [:]
         let full = fullBody   // put together once (it copies the folded quote in)
@@ -145,7 +156,7 @@ final class ComposeModel {
 
     /// Takes a reply's quote out of the editor (it ends the text); "•••" brings it back.
     private func foldQuotedReply() {
-        guard kind == .reply || kind == .replyAll, body.length > 0, let start = Self.quoteStart(in: body) else { return }
+        guard isReply, body.length > 0, let start = Self.quoteStart(in: body) else { return }
         foldedQuote = body.attributedSubstring(from: NSRange(location: start, length: body.length - start))
         body = body.attributedSubstring(from: NSRange(location: 0, length: start))
     }
@@ -160,8 +171,8 @@ final class ComposeModel {
         }
         let message = conversion.message
         kind = conversion.kind
-        to = message.to.map(\.description).joined(separator: ", ")
-        cc = message.cc.map(\.description).joined(separator: ", ")
+        to = Self.field(message.to)
+        cc = Self.field(message.cc)
         showCcBcc = !cc.isEmpty || !bcc.isEmpty
         subject = message.subject
         inReplyTo = message.inReplyTo
@@ -188,7 +199,7 @@ final class ComposeModel {
 
     /// Problems that block sending, in plain words.
     func validationError() -> String? {
-        let all = recipients(to) + recipients(cc) + recipients(bcc)
+        let all = allRecipients
         if all.isEmpty { return String(localized: "Add at least one recipient.") }
         let typed = [to, cc, bcc].flatMap { $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }.filter { !$0.isEmpty }
         if typed.count != all.count || all.contains(where: { !$0.address.contains("@") || $0.address.contains(" ") }) {
@@ -208,7 +219,7 @@ final class ComposeModel {
         }
         return SendCheck.problems(text: MailBodyConverter.plainText(body, signatures: app?.signaturesByID ?? [:]),
                                   attachmentCount: attachments.count,
-                                  recipients: recipients(to) + recipients(cc) + recipients(bcc),
+                                  recipients: allRecipients,
                                   conversationPeople: people, ownAddresses: app?.ownAddresses ?? [])
     }
 
@@ -221,6 +232,10 @@ final class ComposeModel {
 
     func changed() {
         noticeSignatureChanges()
+        markEdited()
+    }
+
+    private func markEdited() {
         isDirty = true
         wasEdited = true
         app?.editedDrafts.insert(draftID)
@@ -230,7 +245,7 @@ final class ComposeModel {
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: Self.autosaveDelay)
             guard !Task.isCancelled else { return }
             self?.saveNow()
         }
@@ -254,10 +269,10 @@ final class ComposeModel {
         try? app?.store.deleteOutboxItem(id: draftID)
     }
 
-    /// Queues the message (send now = after the undo window; or at `sendAt`). Returns true when queued.
-    /// Replies follow the Send and Done setting; `markDone` overrides it (⌥⌘↩ sends the other way).
     var isReply: Bool { kind == .reply || kind == .replyAll }
 
+    /// Queues the message (send now = after the undo window; or at `sendAt`). Returns true when queued.
+    /// Replies follow the Send and Done setting; `markDone` overrides it (⌥⌘↩ sends the other way).
     func send(at sendAt: Date? = nil, markDone: Bool? = nil) async -> Bool {
         if let problem = validationError() { error = problem; return false }
         saveTask?.cancel()
@@ -275,12 +290,14 @@ final class ComposeModel {
 
     // MARK: Attachments
 
+    private static let genericMIMEType = "application/octet-stream"
+
     func attach(urls: [URL]) {
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             guard let data = try? Data(contentsOf: url) else { continue }
-            let type = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            let type = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? Self.genericMIMEType
             attachments.append(OutgoingAttachment(filename: url.lastPathComponent, mimeType: type, data: data))
         }
         changed()
@@ -300,7 +317,7 @@ final class ComposeModel {
     }
 
     private var signatureRecipientAddresses: [String] {
-        (recipients(to) + recipients(cc) + recipients(bcc)).map { $0.address.lowercased() }
+        allRecipients.map { $0.address.lowercased() }
     }
 
     /// The signature the rules pick for this message now, unless you chose one yourself.
@@ -310,7 +327,7 @@ final class ComposeModel {
         guard force || addresses != signatureRecipients else { return }
         signatureRecipients = addresses
         guard !signatureChosenByHand, let app else { return }
-        let chosen = app.chooseSignature(from: identity, kind: kind, recipients: recipients(to) + recipients(cc) + recipients(bcc))
+        let chosen = app.chooseSignature(from: identity, kind: kind, recipients: allRecipients)
         let current = Self.signatureRange(in: body)
         if let current, current.id == chosen?.id { return }           // already the right one
         if current == nil, chosen == nil { return }
@@ -341,7 +358,7 @@ final class ComposeModel {
         let block = signature.map { Self.signatureBlock($0, dark: isDark) } ?? NSAttributedString()
         if let found = Self.signatureRange(in: mutable) {
             var range = found.range
-            if signature == nil, range.location > 0, (mutable.string as NSString).character(at: range.location - 1) == 10 {
+            if signature == nil, range.location > 0, (mutable.string as NSString).character(at: range.location - 1) == Self.newline {
                 range = NSRange(location: range.location - 1, length: range.length + 1)   // its line too
             }
             mutable.replaceCharacters(in: range, with: block)
@@ -355,11 +372,10 @@ final class ComposeModel {
         body = mutable
         signatureID = signature?.id
         refreshSignatureImage()
-        isDirty = true
-        wasEdited = true
-        app?.editedDrafts.insert(draftID)
-        scheduleSave()
+        markEdited()
     }
+
+    private static let newline = unichar(UInt8(ascii: "\n"))
 
     /// Gives the signature in the text its picture (drawn now if it isn't yet).
     func refreshSignatureImage() {
@@ -395,8 +411,6 @@ final class ComposeModel {
     /// Signatures to choose from in the composer.
     var availableSignatures: [Signature] { app?.signatures ?? [] }
 }
-
-import UniformTypeIdentifiers
 
 /// Forward after Reply (or back) on an open inline reply: the new kind's draft, for the open
 /// composer to take on (`ComposeModel.adopt`).

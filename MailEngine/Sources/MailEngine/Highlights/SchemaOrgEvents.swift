@@ -54,59 +54,76 @@ enum SchemaOrgEvents {
 
     // MARK: Types
 
+    /// What a booking shares whatever it books.
+    struct Booking {
+        var number: String?
+        var url: String?
+    }
+
+    /// A restaurant booking without an end time takes this long.
+    static let defaultRestaurantDuration: TimeInterval = 2 * 3_600
+    static let maxSourceTextLength = 240
+
     static func suggestion(from node: [String: Any], zone: TimeZone) -> EventSuggestion? {
         let kinds = types(node)
         if let status = string(node["reservationStatus"]) ?? string(node["eventStatus"]),
            status.localizedCaseInsensitiveContains("cancel") { return nil }
-        let number = string(node["reservationNumber"]) ?? string(node["confirmationNumber"])
-        let url = string(node["url"]) ?? string(node["modifyReservationUrl"])
+        let booking = Booking(number: string(node["reservationNumber"]) ?? string(node["confirmationNumber"]),
+                              url: string(node["url"]) ?? string(node["modifyReservationUrl"]))
+        if kinds.contains("FlightReservation") { return flight(node, booking: booking, zone: zone) }
+        if kinds.contains("LodgingReservation") { return lodging(node, booking: booking, zone: zone) }
+        if kinds.contains("FoodEstablishmentReservation") { return restaurant(node, booking: booking, zone: zone) }
+        return event(node, kinds: kinds, booking: booking, zone: zone)
+    }
 
-        if kinds.contains("FlightReservation") {
-            let flight = object(node["reservationFor"]) ?? [:]
-            guard let start = time(flight["departureTime"], zone: zone) else { return nil }
-            let airline = object(flight["airline"])
-            let code = string(airline?["iataCode"]) ?? ""
-            var number_ = string(flight["flightNumber"]) ?? ""
-            if !code.isEmpty, !number_.uppercased().hasPrefix(code.uppercased()) { number_ = code + number_ }
-            let from = airport(flight["departureAirport"])
-            let to = airport(flight["arrivalAirport"])
-            let route = [from.code, to.code].compactMap { $0 }.joined(separator: " → ")
-            let title = [number_.isEmpty ? (string(airline?["name"]) ?? "") : number_, route]
-                .filter { !$0.isEmpty }.joined(separator: " ")
-            let end = time(flight["arrivalTime"], zone: zone)
-            return EventSuggestion(kind: .flight, source: .schemaOrg, title: title, start: start.date,
-                                   end: end.map(\.date).flatMap { $0 > start.date ? $0 : nil },
-                                   timeZoneID: start.zone.identifier, location: from.name ?? from.code,
-                                   sourceText: title, confidence: .high, titleIsGuess: title.isEmpty,
-                                   reservationNumber: number, url: url)
-        }
+    static func flight(_ node: [String: Any], booking: Booking, zone: TimeZone) -> EventSuggestion? {
+        let flight = object(node["reservationFor"]) ?? [:]
+        guard let start = time(flight["departureTime"], zone: zone) else { return nil }
+        let airline = object(flight["airline"])
+        let code = string(airline?["iataCode"]) ?? ""
+        var flightNumber = string(flight["flightNumber"]) ?? ""
+        if !code.isEmpty, !flightNumber.uppercased().hasPrefix(code.uppercased()) { flightNumber = code + flightNumber }
+        let from = airport(flight["departureAirport"])
+        let to = airport(flight["arrivalAirport"])
+        let route = [from.code, to.code].compactMap { $0 }.joined(separator: " → ")
+        let title = [flightNumber.isEmpty ? (string(airline?["name"]) ?? "") : flightNumber, route]
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        let end = time(flight["arrivalTime"], zone: zone)
+        return EventSuggestion(kind: .flight, source: .schemaOrg, title: title, start: start.date,
+                               end: end.map(\.date).flatMap { $0 > start.date ? $0 : nil },
+                               timeZoneID: start.zone.identifier, location: from.name ?? from.code,
+                               sourceText: title, confidence: .high, titleIsGuess: title.isEmpty,
+                               reservationNumber: booking.number, url: booking.url)
+    }
 
-        if kinds.contains("LodgingReservation") {
-            let place = object(node["reservationFor"]) ?? [:]
-            guard let checkIn = time(node["checkinTime"] ?? node["checkinDate"], zone: zone) else { return nil }
-            let checkOut = time(node["checkoutTime"] ?? node["checkoutDate"], zone: zone)
-            let name = string(place["name"]) ?? ""
-            return EventSuggestion(kind: .lodging, source: .schemaOrg, title: name, start: checkIn.date,
-                                   end: checkOut.map(\.date).flatMap { $0 > checkIn.date ? $0 : nil },
-                                   isAllDay: checkIn.isAllDay, timeZoneID: checkIn.isAllDay ? nil : checkIn.zone.identifier,
-                                   location: address(place["address"]) ?? name, sourceText: name, confidence: .high,
-                                   titleIsGuess: name.isEmpty, reservationNumber: number, url: url)
-        }
+    static func lodging(_ node: [String: Any], booking: Booking, zone: TimeZone) -> EventSuggestion? {
+        let place = object(node["reservationFor"]) ?? [:]
+        guard let checkIn = time(node["checkinTime"] ?? node["checkinDate"], zone: zone) else { return nil }
+        let checkOut = time(node["checkoutTime"] ?? node["checkoutDate"], zone: zone)
+        let name = string(place["name"]) ?? ""
+        return EventSuggestion(kind: .lodging, source: .schemaOrg, title: name, start: checkIn.date,
+                               end: checkOut.map(\.date).flatMap { $0 > checkIn.date ? $0 : nil },
+                               isAllDay: checkIn.isAllDay, timeZoneID: checkIn.isAllDay ? nil : checkIn.zone.identifier,
+                               location: address(place["address"]) ?? name, sourceText: name, confidence: .high,
+                               titleIsGuess: name.isEmpty, reservationNumber: booking.number, url: booking.url)
+    }
 
-        if kinds.contains("FoodEstablishmentReservation") {
-            let place = object(node["reservationFor"]) ?? [:]
-            guard let start = time(node["startTime"] ?? node["startDate"], zone: zone) else { return nil }
-            let end = time(node["endTime"] ?? node["endDate"], zone: zone)?.date
-            let name = string(place["name"]) ?? ""
-            return EventSuggestion(kind: .restaurant, source: .schemaOrg, title: name, start: start.date,
-                                   end: end.flatMap { $0 > start.date ? $0 : nil } ?? (start.isAllDay ? nil : start.date.addingTimeInterval(7_200)),
-                                   isAllDay: start.isAllDay, timeZoneID: start.isAllDay ? nil : start.zone.identifier,
-                                   location: [name, address(place["address"])].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "),
-                                   sourceText: name, confidence: .high, titleIsGuess: name.isEmpty,
-                                   reservationNumber: number, url: url)
-        }
+    static func restaurant(_ node: [String: Any], booking: Booking, zone: TimeZone) -> EventSuggestion? {
+        let place = object(node["reservationFor"]) ?? [:]
+        guard let start = time(node["startTime"] ?? node["startDate"], zone: zone) else { return nil }
+        let end = time(node["endTime"] ?? node["endDate"], zone: zone)?.date
+        let name = string(place["name"]) ?? ""
+        let defaultEnd = start.isAllDay ? nil : start.date.addingTimeInterval(defaultRestaurantDuration)
+        return EventSuggestion(kind: .restaurant, source: .schemaOrg, title: name, start: start.date,
+                               end: end.flatMap { $0 > start.date ? $0 : nil } ?? defaultEnd,
+                               isAllDay: start.isAllDay, timeZoneID: start.isAllDay ? nil : start.zone.identifier,
+                               location: [name, address(place["address"])].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "),
+                               sourceText: name, confidence: .high, titleIsGuess: name.isEmpty,
+                               reservationNumber: booking.number, url: booking.url)
+    }
 
-        // An event, or a ticket for one.
+    /// An event, or a ticket for one.
+    static func event(_ node: [String: Any], kinds: [String], booking: Booking, zone: TimeZone) -> EventSuggestion? {
         var event = node
         if kinds.contains("EventReservation") || kinds.contains("Reservation"), let target = object(node["reservationFor"]) {
             event = target
@@ -115,17 +132,16 @@ enum SchemaOrgEvents {
         }
         if let status = string(event["eventStatus"]), status.localizedCaseInsensitiveContains("cancel") { return nil }
         guard let start = time(event["startDate"], zone: zone) else { return nil }
-        let end = time(event["endDate"], zone: zone)
         let name = string(event["name"]) ?? ""
-        let location = place(event["location"])
-        var endDate = end?.date
-        if start.isAllDay, let e = endDate { endDate = e.addingTimeInterval(86_400) }   // endDate is inclusive
+        var endDate = time(event["endDate"], zone: zone)?.date
+        if start.isAllDay, let e = endDate { endDate = e.addingTimeInterval(ICalDuration.secondsPerDay) }   // endDate is inclusive
         return EventSuggestion(kind: .event, source: .schemaOrg, title: name, start: start.date,
                                end: endDate.flatMap { $0 > start.date ? $0 : nil },
                                isAllDay: start.isAllDay, timeZoneID: start.isAllDay ? nil : start.zone.identifier,
-                               location: location, sourceText: string(event["description"]).map { String($0.prefix(240)) } ?? name,
-                               confidence: .high, titleIsGuess: name.isEmpty, reservationNumber: number,
-                               url: string(event["url"]) ?? url)
+                               location: place(event["location"]),
+                               sourceText: string(event["description"]).map { String($0.prefix(maxSourceTextLength)) } ?? name,
+                               confidence: .high, titleIsGuess: name.isEmpty, reservationNumber: booking.number,
+                               url: string(event["url"]) ?? booking.url)
     }
 
     // MARK: Values
@@ -187,9 +203,7 @@ enum SchemaOrgEvents {
         }
         guard let y = int(1), let mo = int(2), let d = int(3) else { return nil }
         guard let h = int(4), let mi = int(5) else {
-            var utc = Calendar(identifier: .gregorian)
-            utc.timeZone = TimeZone(identifier: "UTC")!
-            return utc.date(from: DateComponents(year: y, month: mo, day: d)).map { Time(date: $0, isAllDay: true, zone: zone) }
+            return TimeZoneResolver.utc.date(from: DateComponents(year: y, month: mo, day: d)).map { Time(date: $0, isAllDay: true, zone: zone) }
         }
         let components = DateComponents(year: y, month: mo, day: d, hour: h, minute: mi, second: int(6) ?? 0)
         var cal = Calendar(identifier: .gregorian)

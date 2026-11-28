@@ -13,6 +13,14 @@ public struct RuleReport: Sendable {
     /// What the junk filter did first.
     public var junk = JunkReport()
     public init() {}
+
+    mutating func record(_ run: RuleRun, draftOnly: Bool) {
+        matched += 1
+        if run.actions.contains(.notify) { notify.append(run) }
+        if run.actions.contains(where: { $0.isAppDelivered && $0 != .notify }) {
+            deliveries.append(RuleDelivery(run: run, draftOnly: draftOnly))
+        }
+    }
 }
 
 /// App-delivered actions of one run. `draftOnly` when a matching rule used an "about" condition:
@@ -27,9 +35,10 @@ extension AccountSync {
     /// AI sorting, so rules can read and override the category). Actions go through the same
     /// optimistic, queued triage path as your own key presses, and each run is recorded so it
     /// can be undone.
-    @discardableResult
+    ///
     /// The junk filter goes first (SPEC §6: spam → sorting → rules) when `filterJunk` is on;
     /// it learns either way.
+    @discardableResult
     public func runRules(engine: RuleEngine, filterJunk: Bool = true) async throws -> RuleReport {
         let rules = try store.rules().filter { $0.isEnabled && $0.isComplete }
         var (candidates, upTo) = try store.ruleCandidates(accountID: account.id)
@@ -50,11 +59,7 @@ extension AccountSync {
                 report.checked += 1
                 let matched = await engine.matchingRules(rules, for: message)
                 guard !matched.isEmpty, let run = try apply(matched, to: message) else { continue }
-                report.matched += 1
-                if run.actions.contains(.notify) { report.notify.append(run) }
-                if run.actions.contains(where: { $0.isAppDelivered && $0 != .notify }) {
-                    report.deliveries.append(RuleDelivery(run: run, draftOnly: matched.contains(where: \.usesLanguageModel)))
-                }
+                report.record(run, draftOnly: matched.contains(where: \.usesLanguageModel))
             }
         }
         if upTo > 0 { try store.markRulesChecked(accountID: account.id, upTo: upTo) }
@@ -72,14 +77,12 @@ extension AccountSync {
         for message in try store.inboxMessages(accountID: account.id) {
             report.checked += 1
             guard await engine.matches(probe, message), let run = try apply([probe], to: message) else { continue }
-            report.matched += 1
-            if run.actions.contains(.notify) { report.notify.append(run) }
-            if run.actions.contains(where: { $0.isAppDelivered && $0 != .notify }) {
-                report.deliveries.append(RuleDelivery(run: run, draftOnly: probe.usesLanguageModel))
-            }
+            report.record(run, draftOnly: probe.usesLanguageModel)
         }
         return report
     }
+
+    private static let secondsPerHour: TimeInterval = 3600
 
     /// Applies the merged actions of `rules` to the message's conversation and records the run.
     func apply(_ rules: [Rule], to message: StoredMessage) throws -> RuleRun? {
@@ -99,7 +102,7 @@ extension AccountSync {
             case .replyLater: try perform(.replyLater, threadIDs: threads)
             case .done: try perform(.done, threadIDs: threads)
             case .snooze(let hours):
-                try perform(.snooze(until: hours.map { Date().addingTimeInterval(TimeInterval($0) * 3600) }), threadIDs: threads)
+                try perform(.snooze(until: hours.map { Date().addingTimeInterval(TimeInterval($0) * Self.secondsPerHour) }), threadIDs: threads)
             case .moveToFolder(let path):
                 guard path != "INBOX" else { continue }
                 try perform(.move(toMailbox: path), threadIDs: threads)
@@ -111,7 +114,7 @@ extension AccountSync {
         let runID = try store.recordRuleRun(accountID: account.id, message: current, rules: rules, actions: applied)
         // Kinds only: rule names, forward addresses and reply text are personal (the log is public).
         SyncLog.info("rules: \(rules.count) rule(s) on message \(id): \(applied.map(\.logName))")
-        return try store.ruleRuns(limit: 1).first { $0.id == runID }
+        return try store.ruleRun(id: runID)
     }
 
     /// Reverses what a rule did to a conversation (newest action first).

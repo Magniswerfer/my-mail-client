@@ -35,16 +35,18 @@ public enum MailboxRoleResolver {
         // Only top-level folders are treated as special: "Clients/Archive" is just a folder.
         // Right under INBOX counts as top level (Dovecot's `INBOX.` namespace: "INBOX.Trash").
         var name = path.lowercased()
-        if let separator, name.hasPrefix("inbox\(separator)") { name.removeFirst(6) }
-        if let separator, name.contains(separator) { return nil }
+        if let separator {
+            let inboxPrefix = "inbox\(separator)"
+            if name.hasPrefix(inboxPrefix) { name.removeFirst(inboxPrefix.count) }
+            if name.contains(separator) { return nil }
+        }
         return namesByRole.first { $0.value.contains(name) }?.key
     }
 
-    /// Resolves roles for a whole mailbox list. When several mailboxes match one role,
-    /// the first match in `MailboxRoleResolver` preference order (SPECIAL-USE first, then list order) wins.
+    /// Resolves roles for a whole mailbox list. When several mailboxes match one role, a
+    /// SPECIAL-USE attribute beats a name, then the first in list order wins.
     public static func resolve(_ mailboxes: [MailboxListing]) -> [MailboxRole: String] {
         var result: [MailboxRole: String] = [:]
-        // Pass 1: SPECIAL-USE attributes.
         for box in mailboxes {
             for attribute in box.attributes {
                 if let role = specialUse[attribute.lowercased()], result[role] == nil {
@@ -52,7 +54,6 @@ public enum MailboxRoleResolver {
                 }
             }
         }
-        // Pass 2: names.
         for box in mailboxes {
             if let role = role(path: box.path, separator: box.separator, attributes: []), result[role] == nil {
                 result[role] = box.path

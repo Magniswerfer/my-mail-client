@@ -59,16 +59,9 @@ public enum HighlightExtractor {
         for script in SchemaOrgEvents.scripts(in: html) {
             let json = HTMLText.decodeEntities(script)
             guard let data = json.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) else { continue }
-            for item in flatten(object) { if let h = highlight(item) { results.append(h) } }
+            for item in SchemaOrgEvents.flatten(object) { if let h = highlight(item) { results.append(h) } }
         }
         return results
-    }
-
-    static func flatten(_ object: Any) -> [[String: Any]] {
-        if let array = object as? [Any] { return array.flatMap(flatten) }
-        guard let dict = object as? [String: Any] else { return [] }
-        if let graph = dict["@graph"] { return flatten(graph) }
-        return [dict]
     }
 
     static func types(_ d: [String: Any]) -> [String] {

@@ -21,6 +21,8 @@ enum VectorMath {
 
     static func dot(_ a: [Float], _ b: [Float]) -> Float {
         let count = min(a.count, b.count)
+        // An empty buffer may have no base address.
+        guard count > 0 else { return 0 }
         return a.withUnsafeBufferPointer { pa in
             b.withUnsafeBufferPointer { pb in dot(pa.baseAddress!, pb.baseAddress!, count: count) }
         }

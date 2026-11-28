@@ -58,7 +58,7 @@ struct InlineComposer: View {
             // stays as it is.
             if app.inlineDrafts[threadID] == draftID, !app.minimizedReplies.contains(threadID), !model.wasEdited {
                 app.inlineDrafts[threadID] = nil
-                if !app.autoDrafts.contains(where: { $0.outboxID == draftID }) {
+                if !isSuggestedReply {
                     model.discard()
                     app.reloadOutbox()
                 }
@@ -68,9 +68,12 @@ struct InlineComposer: View {
         }
     }
 
+    /// A reply Tidings drafted (Auto Drafts).
+    private var isSuggestedReply: Bool { app.autoDrafts.contains { $0.outboxID == draftID } }
+
     private func actions(_ model: ComposeModel) -> some View {
         HStack(spacing: 10) {
-            if app.autoDrafts.contains(where: { $0.outboxID == draftID }) {
+            if isSuggestedReply {
                 Button { app.clearSuggestedReply(threadID: threadID) } label: {
                     Label("Clear Suggestion", systemImage: "sparkles")
                 }
@@ -130,14 +133,6 @@ struct ComposeView: View {
     @State private var isSendLaterShown = false
     @State private var isAvailabilityShown = false
     @State private var pendingSend: PendingSend?
-
-    /// A send held back by the pre-send check.
-    struct PendingSend: Identifiable {
-        let id = UUID()
-        var date: Date?
-        var markDone: Bool?
-        var problems: [SendCheck.Problem]
-    }
     @State private var isSending = false
     @FocusState private var focused: Field?
     /// iPhone: the keyboard is up. Writing the body then folds the header into one line, so
@@ -146,46 +141,29 @@ struct ComposeView: View {
     /// Tapped open while writing; folds again when you go back to the body.
     @State private var isHeaderUnfolded = false
 
-    private var foldsHeader: Bool { Platform.isPhone && isKeyboardShown && focused == nil && !isHeaderUnfolded }
+    /// A send held back by the pre-send check.
+    struct PendingSend: Identifiable {
+        let id = UUID()
+        var date: Date?
+        var markDone: Bool?
+        var problems: [SendCheck.Problem]
+    }
 
     enum Field { case to, cc, bcc, subject }
+
+    private var foldsHeader: Bool { Platform.isPhone && isKeyboardShown && focused == nil && !isHeaderUnfolded }
+
+    /// A new message or a forward starts in To; a reply starts in the body.
+    private var startsInRecipients: Bool { model.kind == .new || model.kind == .forward }
 
     var body: some View {
         VStack(spacing: 0) {
             if foldsHeader { foldedHeader } else { header }
             Divider()
-            RichTextEditor(text: Binding(get: { model.body }, set: {
-                               model.body = $0
-                               model.changed()
-                               app.activeComposer = model
-                           }),
-                           focusOnAppear: model.kind != .new && model.kind != .forward,
-                           insertion: model.insertion)
-                .padding(.horizontal, 12)
-            if model.foldedQuote != nil {
-                // Gmail's "•••": the quoted mail is there, out of the way.
-                Button { withAnimation(.snappy) { model.unfoldQuote() } } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 30, height: 14)
-                        .background(.quaternary, in: .capsule)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Show the quoted mail")
-                .accessibilityLabel(Text("Show the quoted mail"))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
-            }
+            editor
+            if model.foldedQuote != nil { unfoldQuoteButton }
             if !model.attachments.isEmpty { attachmentStrip }
-            if let error = model.error {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red).font(.callout)
-                    .padding(.horizontal, 16).padding(.bottom, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            if let error = model.error { errorLabel(error) }
             if let embeddedActions {
                 Divider()
                 actionBar(embeddedActions)
@@ -221,7 +199,7 @@ struct ComposeView: View {
         .onAppear {
             model.isDark = colorScheme == .dark
             app.activeComposer = model
-            if model.kind == .new { focused = .to } else if model.kind == .forward { focused = .to }
+            if startsInRecipients { focused = .to }
             app.setSnippetContext(to: model.recipients(model.to), from: model.identity)
         }
         .onChange(of: model.to) { app.setSnippetContext(to: model.recipients(model.to), from: model.identity) }
@@ -249,12 +227,48 @@ struct ComposeView: View {
         }
     }
 
+    private var editor: some View {
+        RichTextEditor(text: Binding(get: { model.body }, set: {
+                           model.body = $0
+                           model.changed()
+                           app.activeComposer = model
+                       }),
+                       focusOnAppear: !startsInRecipients,
+                       insertion: model.insertion)
+            .padding(.horizontal, 12)
+    }
+
+    /// Gmail's "•••": the quoted mail is there, out of the way.
+    private var unfoldQuoteButton: some View {
+        Button { withAnimation(.snappy) { model.unfoldQuote() } } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 30, height: 14)
+                .background(.quaternary, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help("Show the quoted mail")
+        .accessibilityLabel(Text("Show the quoted mail"))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    private func errorLabel(_ error: String) -> some View {
+        Label(error, systemImage: "exclamationmark.triangle.fill")
+            .foregroundStyle(.red).font(.callout)
+            .padding(.horizontal, 16).padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: Header fields
 
     /// iPhone, writing the body: who it's to and the subject on one line. Tap for the fields.
     private var foldedHeader: some View {
         let people = model.recipients(model.to) + model.recipients(model.cc) + model.recipients(model.bcc)
-        let first = people.first.map { ($0.name?.isEmpty == false ? $0.name! : $0.address) } ?? ""
+        let first = people.first.map { person in person.name.flatMap { $0.isEmpty ? nil : $0 } ?? person.address } ?? ""
         return Button {
             isHeaderUnfolded = true
             // The field exists once the header is open: focus it on the next turn.
@@ -287,15 +301,9 @@ struct ComposeView: View {
                     Picker("", selection: $model.identity) {
                         ForEach(model.identitySections, id: \.account) { section in
                             if section.account.isEmpty {
-                                ForEach(section.identities) { identity in
-                                    Text(identity.mailAddress.description).tag(identity)
-                                }
+                                identityOptions(section.identities)
                             } else {
-                                Section(section.account) {
-                                    ForEach(section.identities) { identity in
-                                        Text(identity.mailAddress.description).tag(identity)
-                                    }
-                                }
+                                Section(section.account) { identityOptions(section.identities) }
                             }
                         }
                     }
@@ -323,6 +331,12 @@ struct ComposeView: View {
                     .focused($focused, equals: .subject)
                     .onChange(of: model.subject) { model.changed() }
             }
+        }
+    }
+
+    private func identityOptions(_ identities: [Identity]) -> some View {
+        ForEach(identities) { identity in
+            Text(identity.mailAddress.description).tag(identity)
         }
     }
 
@@ -379,12 +393,8 @@ struct ComposeView: View {
             // Icons (with tooltips): the bar sits in a pane, where the words crowded out the
             // host's own buttons next to Send.
             Group {
-                Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
-                    .help("Attach files (⌘⇧A)")
-                Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
-                    .keyboardShortcut("a", modifiers: [.command, .option])
-                    .help("Insert free times from your calendar (⌥⌘A)")
+                attachButton
+                availabilityButton
                 signatureMenu
             }
             .labelStyle(.iconOnly)
@@ -432,12 +442,8 @@ struct ComposeView: View {
             }
             .help("Bold, italic, underline and lists")
             #endif
-            Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
-                .help("Attach files (⌘⇧A)")
-            Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
-                .keyboardShortcut("a", modifiers: [.command, .option])
-                .help("Insert free times from your calendar (⌥⌘A)")
+            attachButton
+            availabilityButton
             signatureMenu
             Button(role: .destructive) {
                 model.discard()
@@ -446,6 +452,18 @@ struct ComposeView: View {
                 .help("Discard draft")
             sendButton
         }
+    }
+
+    private var attachButton: some View {
+        Button { isImporting = true } label: { Label("Attach", systemImage: "paperclip") }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .help("Attach files (⌘⇧A)")
+    }
+
+    private var availabilityButton: some View {
+        Button { isAvailabilityShown = true } label: { Label("Share Availability", systemImage: "calendar.badge.clock") }
+            .keyboardShortcut("a", modifiers: [.command, .option])
+            .help("Insert free times from your calendar (⌥⌘A)")
     }
 
     /// The signature of this message: the rules' pick, or another one (also in ⌘K).
@@ -665,11 +683,10 @@ struct OutboxView: View {
         return HStack(alignment: .top) {
             Image(systemName: icon(item.state)).foregroundStyle(item.state == .failed ? .red : .secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text(message?.subject.isEmpty == false ? message!.subject : String(localized: "(no subject)")).font(.headline)
+                Text(message.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? String(localized: "(no subject)")).font(.headline)
                 Text(message?.envelopeRecipients.joined(separator: ", ") ?? "").font(.caption).foregroundStyle(.secondary)
-                if let id = item.id, model.autoDrafts.contains(where: { $0.outboxID == id }) {
-                    let kind = model.autoDrafts.first { $0.outboxID == id }?.kind
-                    Label(kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you", systemImage: "sparkles")
+                if let id = item.id, let autoDraft = model.autoDrafts.first(where: { $0.outboxID == id }) {
+                    Label(autoDraft.kind == .reply ? "Reply drafted for you" : "Follow-up drafted for you", systemImage: "sparkles")
                         .font(.caption).foregroundStyle(.purple)
                 }
                 if let error = item.lastError {
