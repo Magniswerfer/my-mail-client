@@ -111,8 +111,8 @@ public enum OnDeviceAICheck {
         } catch {
             result.error = String(describing: error)
         }
-        result.milliseconds = Int((clock.now - start).components.seconds * 1000)
-            + Int((clock.now - start).components.attoseconds / 1_000_000_000_000_000)
+        let elapsed = (clock.now - start).components
+        result.milliseconds = Int(elapsed.seconds * 1000) + Int(elapsed.attoseconds / 1_000_000_000_000_000)
         return result
     }
     #endif

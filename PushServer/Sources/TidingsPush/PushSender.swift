@@ -73,6 +73,9 @@ public final class APNsSender: PushSender {
 
     public var isConfigured: Bool { true }
 
+    /// Kept this long if the phone is off; mail older than that isn't news.
+    static let alertLifetime: TimeInterval = 86_400
+
     struct Payload: Encodable, Sendable {
         var info: [String: String]
         struct Key: CodingKey {
@@ -91,8 +94,7 @@ public final class APNsSender: PushSender {
         var notification = APNSAlertNotification(
             alert: .init(title: push.titleKey.map { .localized(key: $0, arguments: push.titleArgs) } ?? .raw(push.title),
                          body: .raw(push.body)),
-            // Kept for a day if the phone is off; mail older than that isn't news.
-            expiration: .timeIntervalSince1970InSeconds(Int(Date().timeIntervalSince1970) + 86_400),
+            expiration: .timeIntervalSince1970InSeconds(Int(Date().timeIntervalSince1970 + Self.alertLifetime)),
             priority: .immediately, topic: topic, payload: Payload(info: push.info), sound: .default,
             threadID: push.threadID, category: push.category)
         notification.collapseID = push.collapseID

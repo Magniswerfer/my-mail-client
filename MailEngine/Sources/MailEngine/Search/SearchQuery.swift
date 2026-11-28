@@ -51,45 +51,64 @@ public struct SearchQuery: Sendable, Hashable {
 
     private mutating func apply(_ token: Token) {
         switch token {
-        case .phrase(let p): phrases.append(p)
+        case .phrase(let p):
+            phrases.append(p)
         case .word(let w):
-            if w.hasPrefix("-"), w.count > 1 { excluded.append(String(w.dropFirst())); return }
+            if w.hasPrefix("-"), w.count > 1 {
+                excluded.append(String(w.dropFirst()))
+                return
+            }
             guard let colon = w.firstIndex(of: ":"), colon != w.startIndex else { terms.append(w); return }
             let key = w[..<colon].lowercased()
             let value = String(w[w.index(after: colon)...])
-            guard !value.isEmpty else { terms.append(w); return }
-            switch key {
-            case "from": from.append(value)
-            case "to": to.append(value)
-            case "subject": subject.append(value)
-            case "in": mailbox = value
-            case "account": accounts.append(value)
-            case "category":
-                if let c = MailCategory(rawValue: value.lowercased()) ?? Self.categoryAliases[value.lowercased()] {
-                    categories.append(c)
-                } else { terms.append(w) }
-            case "has" where value.lowercased() == "attachment": hasAttachment = true
-            case "is" where value.lowercased() == "unread": unread = true
-            case "is" where value.lowercased() == "read": unread = false
-            case "is" where value.lowercased() == "pinned": pinned = true
-            case "is" where value.lowercased() == "waiting": waiting = true
-            case "is" where value.lowercased() == "readlater": readLater = true
-            case "before": if let d = Self.date(value) { before = d } else { terms.append(w) }
-            case "after": if let d = Self.date(value) { after = d } else { terms.append(w) }
-            case "larger": if let n = Self.size(value) { largerThan = n } else { terms.append(w) }
-            case "smaller": if let n = Self.size(value) { smallerThan = n } else { terms.append(w) }
-            default: terms.append(w)
-            }
+            // An operator it doesn't understand (or can't read the value of) is searched as text.
+            if value.isEmpty || !(applyTextOperator(key, value) || applyOperator(key, value)) { terms.append(w) }
         case .quotedOperator(let key, let value):
-            switch key.lowercased() {
-            case "from": from.append(value)
-            case "to": to.append(value)
-            case "subject": subject.append(value)
-            case "in": mailbox = value
-            case "account": accounts.append(value)
-            default: phrases.append(value)
-            }
+            if !applyTextOperator(key.lowercased(), value) { phrases.append(value) }
         }
+    }
+
+    /// Operators whose value is free text, quoted or not. False for any other key.
+    private mutating func applyTextOperator(_ key: String, _ value: String) -> Bool {
+        switch key {
+        case "from": from.append(value)
+        case "to": to.append(value)
+        case "subject": subject.append(value)
+        case "in": mailbox = value
+        case "account": accounts.append(value)
+        default: return false
+        }
+        return true
+    }
+
+    /// Operators with a fixed vocabulary, a date or a size. False when the key or value isn't one.
+    private mutating func applyOperator(_ key: String, _ value: String) -> Bool {
+        let lower = value.lowercased()
+        switch (key, lower) {
+        case ("category", _):
+            guard let c = MailCategory(rawValue: lower) ?? Self.categoryAliases[lower] else { return false }
+            categories.append(c)
+        case ("has", "attachment"): hasAttachment = true
+        case ("is", "unread"): unread = true
+        case ("is", "read"): unread = false
+        case ("is", "pinned"): pinned = true
+        case ("is", "waiting"): waiting = true
+        case ("is", "readlater"): readLater = true
+        case ("before", _):
+            guard let d = Self.date(value) else { return false }
+            before = d
+        case ("after", _):
+            guard let d = Self.date(value) else { return false }
+            after = d
+        case ("larger", _):
+            guard let n = Self.size(value) else { return false }
+            largerThan = n
+        case ("smaller", _):
+            guard let n = Self.size(value) else { return false }
+            smallerThan = n
+        default: return false
+        }
+        return true
     }
 
     /// `account:` values turned into account ids: an id, the account's name, any of its
@@ -184,6 +203,8 @@ public struct SearchQuery: Sendable, Hashable {
         return tokens
     }
 
+    static let absoluteDateFormats = ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy-MM", "yyyy"]
+
     static func date(_ s: String, now: Date = Date(), calendar: Calendar = .current) -> Date? {
         let lower = s.lowercased()
         switch lower {
@@ -207,17 +228,18 @@ public struct SearchQuery: Sendable, Hashable {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
-        for format in ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy-MM", "yyyy"] {
+        for format in absoluteDateFormats {
             f.dateFormat = format
             if let d = f.date(from: s) { return d }
         }
         return nil
     }
 
+    static let sizeMultipliers: [(suffix: String, bytes: Int)] = [("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]
+
     static func size(_ s: String) -> Int? {
         let upper = s.uppercased()
-        let multipliers: [(String, Int)] = [("G", 1 << 30), ("M", 1 << 20), ("K", 1 << 10)]
-        for (suffix, m) in multipliers where upper.hasSuffix(suffix) {
+        for (suffix, m) in sizeMultipliers where upper.hasSuffix(suffix) {
             return Double(upper.dropLast()).map { Int($0 * Double(m)) }
         }
         return Int(upper)

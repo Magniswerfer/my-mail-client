@@ -87,7 +87,7 @@ public enum Unsubscribe {
 
     public enum Failure: Error, Sendable { case status(Int) }
 
-    /// RFC 8058 one-click: POST `List-Unsubscribe=One-Click`, no cookies, no redirects to follow.
+    /// RFC 8058 one-click: POST `List-Unsubscribe=One-Click`, without cookies.
     public static func postOneClick(_ url: URL, session: URLSession = .shared) async throws {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         request.httpMethod = "POST"

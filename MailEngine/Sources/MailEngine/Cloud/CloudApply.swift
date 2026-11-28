@@ -23,8 +23,8 @@ extension MailStore {
                 try db.write { db in
                     try db.execute(sql: "INSERT OR REPLACE INTO cloudShadow (type, key, payload) VALUES (?, ?, ?)",
                                    arguments: [record.type, record.key, record.payload])
-                    try db.execute(sql: "DELETE FROM cloudOutbox WHERE type = ? AND key = ?", arguments: [record.type, record.key])
-                    try db.execute(sql: "DELETE FROM cloudPending WHERE type = ? AND key = ?", arguments: [record.type, record.key])
+                    try Self.deleteCloudRow(db, from: "cloudOutbox", type: record.type, key: record.key)
+                    try Self.deleteCloudRow(db, from: "cloudPending", type: record.type, key: record.key)
                 }
                 report.applied += 1
                 report.changedTypes.insert(record.type)
@@ -32,7 +32,7 @@ extension MailStore {
                 try db.write { db in
                     try db.execute(sql: "INSERT OR REPLACE INTO cloudPending (type, key, payload, modifiedAt) VALUES (?, ?, ?, ?)",
                                    arguments: [record.type, record.key, record.payload, record.modifiedAt])
-                    try db.execute(sql: "DELETE FROM cloudOutbox WHERE type = ? AND key = ?", arguments: [record.type, record.key])
+                    try Self.deleteCloudRow(db, from: "cloudOutbox", type: record.type, key: record.key)
                 }
                 report.deferred += 1
             }
@@ -46,8 +46,8 @@ extension MailStore {
             if deletion.type == StateRecordType.account.rawValue { report.removedAccounts.insert(deletion.key) }
             try remove(type: deletion.type, key: deletion.key, accounts: accounts)
             try db.write { db in
-                for table in ["cloudShadow", "cloudOutbox", "cloudPending"] {
-                    try db.execute(sql: "DELETE FROM \(table) WHERE type = ? AND key = ?", arguments: [deletion.type, deletion.key])
+                for table in Self.cloudRecordTables {
+                    try Self.deleteCloudRow(db, from: table, type: deletion.type, key: deletion.key)
                 }
             }
             report.applied += 1
@@ -90,6 +90,14 @@ extension MailStore {
         }
     }
 
+    /// `list` with `item` (replacing the one with its id) at `position`, clamped to the list.
+    private static func placing<Item>(_ item: Item, at position: Int, in list: [Item], id: (Item) -> String) -> [Item] {
+        var list = list.filter { id($0) != id(item) }
+        list.insert(item, at: min(max(0, position), list.count))
+        return list
+    }
+
+    /// "login|rest" keys → (login, rest).
     private static func split(_ key: String) -> (String, String)? {
         guard let bar = key.firstIndex(of: "|") else { return nil }
         return (String(key[..<bar]), String(key[key.index(after: bar)...]))
@@ -101,19 +109,13 @@ extension MailStore {
         switch type {
         case .rule:
             let p = try CloudJSON.value(RulePayload.self, record.payload)
-            var list = try rules().filter { $0.id != p.rule.id }
-            list.insert(p.rule, at: min(max(0, p.position), list.count))
-            try saveRules(list)
+            try saveRules(Self.placing(p.rule, at: p.position, in: try rules(), id: \.id))
         case .smartFolder:
             let p = try CloudJSON.value(FolderPayload.self, record.payload)
-            var list = try smartFolders().filter { $0.id != p.folder.id }
-            list.insert(p.folder, at: min(max(0, p.position), list.count))
-            try saveSmartFolders(list)
+            try saveSmartFolders(Self.placing(p.folder, at: p.position, in: try smartFolders(), id: \.id))
         case .aiCategory:
             let p = try CloudJSON.value(AICategoryPayload.self, record.payload)
-            var list = try aiCategories().filter { $0.id != p.category.id }
-            list.insert(p.category, at: min(max(0, p.position), list.count))
-            try saveAICategories(list)
+            try saveAICategories(Self.placing(p.category, at: p.position, in: try aiCategories(), id: \.id))
         case .senderRule:
             let p = try CloudJSON.value(SenderRulePayload.self, record.payload)
             guard let category = MailCategory(rawValue: p.category) else { return .applied }
@@ -165,9 +167,7 @@ extension MailStore {
             report.accounts[key] = record.payload
         case .signature:
             let p = try CloudJSON.value(SignaturePayload.self, record.payload)
-            var list = try signatures().filter { $0.id != p.signature.id }
-            list.insert(p.signature, at: min(max(0, p.position), list.count))
-            try saveSignatures(list)
+            try saveSignatures(Self.placing(p.signature, at: p.position, in: try signatures(), id: \.id))
         case .signatureSettings:
             try saveSignatureSettings(try CloudJSON.value(SignatureSettings.self, record.payload))
         case .highlightTraining:

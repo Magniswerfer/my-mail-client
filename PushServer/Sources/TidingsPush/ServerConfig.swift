@@ -47,25 +47,34 @@ public struct ServerConfig: Sendable {
 
     /// From `TIDINGS_*` and `APNS_*` variables. Push is optional (the server still syncs and
     /// wakes snoozes without it); the pairing secret and master key are not.
+    static let minimumPairingSecretLength = 16
+    /// Polling Sent and Snoozed more often than this only loads the mail server.
+    static let minimumPollSeconds = 30
+    static let defaultTeamID = "493257NQK3"
+    static let defaultTopic = "hk.gnus.tidings"
+
     public static func fromEnvironment(_ env: [String: String] = ProcessInfo.processInfo.environment) throws -> ServerConfig {
         func required(_ name: String) throws -> String {
             guard let value = env[name]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { throw ConfigError.missing(name) }
             return value
         }
         let secret = try required("TIDINGS_PAIRING_SECRET")
-        guard secret.count >= 16 else { throw ConfigError.invalid("TIDINGS_PAIRING_SECRET must be at least 16 characters") }
+        guard secret.count >= minimumPairingSecretLength else {
+            throw ConfigError.invalid("TIDINGS_PAIRING_SECRET must be at least \(minimumPairingSecretLength) characters")
+        }
         var apns: APNsConfig?
         if let pem = env["APNS_KEY_P8"], !pem.isEmpty {
+            // A PEM kept in a single-line variable has its line breaks written as "\n".
             apns = APNsConfig(privateKeyPEM: pem.replacingOccurrences(of: "\\n", with: "\n"), keyID: try required("APNS_KEY_ID"),
-                              teamID: env["APNS_TEAM_ID"] ?? "493257NQK3", topic: env["APNS_TOPIC"] ?? "hk.gnus.tidings")
+                              teamID: env["APNS_TEAM_ID"] ?? defaultTeamID, topic: env["APNS_TOPIC"] ?? defaultTopic)
         }
         var config = ServerConfig(dataDirectory: URL(fileURLWithPath: env["TIDINGS_DATA_DIR"] ?? "/data", isDirectory: true),
                                   pairingSecret: secret, masterKey: try required("TIDINGS_MASTER_KEY"), apns: apns)
         if let port = env["PORT"].flatMap(Int.init) ?? env["TIDINGS_PORT"].flatMap(Int.init) { config.port = port }
         if let hosts = env["TIDINGS_PLAINTEXT_IMAP_HOSTS"] {
-            config.plaintextHosts.formUnion(hosts.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+            config.plaintextHosts.formUnion(hosts.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() })
         }
-        if let seconds = env["TIDINGS_POLL_SECONDS"].flatMap(Int.init) { config.pollInterval = .seconds(max(30, seconds)) }
+        if let seconds = env["TIDINGS_POLL_SECONDS"].flatMap(Int.init) { config.pollInterval = .seconds(max(minimumPollSeconds, seconds)) }
         return config
     }
 }

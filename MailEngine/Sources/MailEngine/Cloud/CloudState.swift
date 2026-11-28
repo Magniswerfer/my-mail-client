@@ -139,6 +139,18 @@ public struct MessageStatePayload: Codable, Sendable, Hashable {
     var isEmpty: Bool { !replyLater && !readLater && !snoozed }
 }
 
+/// The synced state being gathered: type → key → payload.
+struct CloudSnapshot {
+    static let signatureSettingsKey = "settings"
+    static let highlightTrainingKey = "training"
+
+    private(set) var records: [String: [String: Data]] = [:]
+
+    mutating func put(_ type: StateRecordType, _ key: String, _ payload: Data) {
+        records[type.rawValue, default: [:]][key] = payload
+    }
+}
+
 // MARK: - Store
 
 extension MailStore {
@@ -184,6 +196,9 @@ extension MailStore {
         }
     }
 
+    /// The tables that hold rows per synced record (type, key).
+    static let cloudRecordTables = ["cloudShadow", "cloudOutbox", "cloudPending"]
+
     public func cloudMeta(_ key: String) throws -> Data? {
         try db.read { try Data.fetchOne($0, sql: "SELECT value FROM cloudMeta WHERE key = ?", arguments: [key]) }
     }
@@ -204,87 +219,123 @@ extension MailStore {
     /// `accountRecords`: the app's accounts by login (`CloudAccountRecord.payload`).
     func cloudSnapshot(accounts: CloudAccounts, settings: [String: Data],
                        accountRecords: [String: Data] = [:]) throws -> [String: [String: Data]] {
-        var out: [String: [String: Data]] = [:]
-        func put(_ type: StateRecordType, _ key: String, _ payload: Data) { out[type.rawValue, default: [:]][key] = payload }
-        for (login, payload) in accountRecords { put(.account, login.lowercased(), payload) }
+        var snapshot = CloudSnapshot()
+        for (login, payload) in accountRecords { snapshot.put(.account, login.lowercased(), payload) }
+        try snapshotOrderedLists(into: &snapshot)
+        try db.read { db in
+            try Self.snapshotSenderState(db, into: &snapshot)
+            try Self.snapshotConversationState(db, accounts: accounts, into: &snapshot)
+            try Self.snapshotAccountState(db, accounts: accounts, into: &snapshot)
+        }
+        try snapshotSingletons(into: &snapshot)
+        for (key, value) in settings { snapshot.put(.setting, key, value) }
+        return snapshot.records
+    }
 
-        for (i, rule) in try rules().enumerated() { put(.rule, rule.id, try CloudJSON.data(RulePayload(position: i, rule: rule))) }
-        for (i, folder) in try smartFolders().enumerated() { put(.smartFolder, folder.id, try CloudJSON.data(FolderPayload(position: i, folder: folder))) }
+    /// Rules, smart folders, AI categories and signatures, each with its position in the list.
+    private func snapshotOrderedLists(into snapshot: inout CloudSnapshot) throws {
+        for (i, rule) in try rules().enumerated() {
+            snapshot.put(.rule, rule.id, try CloudJSON.data(RulePayload(position: i, rule: rule)))
+        }
+        for (i, folder) in try smartFolders().enumerated() {
+            snapshot.put(.smartFolder, folder.id, try CloudJSON.data(FolderPayload(position: i, folder: folder)))
+        }
         for (i, category) in try aiCategories().enumerated() {
-            put(.aiCategory, category.id, try CloudJSON.data(AICategoryPayload(position: i, category: category)))
-        }
-        let nothing = try CloudJSON.data(NothingPayload())
-        try db.read { db in
-            for row in try Row.fetchAll(db, sql: "SELECT address, category FROM senderRule") {
-                put(.senderRule, row["address"], try CloudJSON.data(SenderRulePayload(category: row["category"])))
-            }
-            for sender in try String.fetchAll(db, sql: "SELECT sender FROM imageTrust") { put(.imageTrust, sender, nothing) }
-            for address in try String.fetchAll(db, sql: "SELECT address FROM trustedSender") { put(.trustedSender, address, nothing) }
-            for row in try Row.fetchAll(db, sql: "SELECT address, method, at FROM unsubscribed") {
-                put(.unsubscribed, row["address"], try CloudJSON.data(UnsubscribedPayload(method: row["method"], at: row["at"])))
-            }
-            for row in try Row.fetchAll(db, sql: "SELECT accountID, uid, sequence, status, respondedAt FROM inviteResponse") {
-                guard let login = accounts.loginByID[row["accountID"]] else { continue }
-                put(.inviteResponse, "\(login)|\(row["uid"] as String)",
-                    try CloudJSON.data(InvitePayload(sequence: row["sequence"], status: row["status"], respondedAt: row["respondedAt"])))
-            }
-            for threadID in try String.fetchAll(db, sql: "SELECT threadID FROM mutedThread") {
-                let ids = try Self.messageIDs(inThread: threadID, db)
-                guard let root = ids.first else { continue }
-                put(.mute, root, try CloudJSON.data(ConversationPayload(messageIDs: ids)))
-            }
-            for row in try Row.fetchAll(db, sql: "SELECT account, messageID, payload FROM messageState") {
-                put(.messageState, "\(row["account"] as String)|\(row["messageID"] as String)", row["payload"])
-            }
-            // "Move this conversation" corrections (the classifier's strongest labels).
-            for row in try Row.fetchAll(db, sql: """
-                SELECT accountID, messageID, category FROM message
-                WHERE classificationReason LIKE 'moved|%' AND messageID IS NOT NULL
-                """) {
-                guard let login = accounts.loginByID[row["accountID"]] else { continue }
-                put(.correction, "\(login)|\(row["messageID"] as String)", try CloudJSON.data(CorrectionPayload(category: row["category"])))
-            }
-            // Your ✓/✗ in AI categories (not the model's own picks).
-            for row in try Row.fetchAll(db, sql: "SELECT categoryID, threadID, source FROM aiCategoryMember WHERE source != 0") {
-                let ids = try Self.messageIDs(inThread: row["threadID"], db)
-                guard let root = ids.first else { continue }
-                let categoryID: String = row["categoryID"]
-                put(.aiChoice, "\(categoryID)|\(root)",
-                    try CloudJSON.data(AIChoicePayload(categoryID: categoryID, isMember: (row["source"] as Int) > 0, messageIDs: ids)))
-            }
-        }
-        try db.read { db in
-            // Folders you chose for a role ("role.archive" → "INBOX.Done"); empty means none.
-            for row in try Row.fetchAll(db, sql: "SELECT accountID, key, value FROM accountSetting WHERE key LIKE 'role.%' AND value != ''") {
-                guard let login = accounts.loginByID[row["accountID"]] else { continue }
-                let role = String((row["key"] as String).dropFirst("role.".count))
-                put(.folderRole, "\(login)|\(role)", try CloudJSON.data(FolderRolePayload(path: row["value"])))
-            }
+            snapshot.put(.aiCategory, category.id, try CloudJSON.data(AICategoryPayload(position: i, category: category)))
         }
         for (i, signature) in try signatures().enumerated() {
-            put(.signature, signature.id, try CloudJSON.data(SignaturePayload(position: i, signature: signature)))
+            snapshot.put(.signature, signature.id, try CloudJSON.data(SignaturePayload(position: i, signature: signature)))
         }
-        let signatureSettings = try signatureSettings()
-        if signatureSettings != SignatureSettings() { put(.signatureSettings, "settings", try CloudJSON.data(signatureSettings)) }
-        let highlightTraining = try highlightTraining()
-        if !highlightTraining.rules.isEmpty { put(.highlightTraining, "training", try CloudJSON.data(highlightTraining)) }
-        for (key, value) in settings { put(.setting, key, value) }
-        return out
     }
+
+    /// State keyed by a sender's address.
+    private static func snapshotSenderState(_ db: Database, into snapshot: inout CloudSnapshot) throws {
+        let nothing = try CloudJSON.data(NothingPayload())
+        for row in try Row.fetchAll(db, sql: "SELECT address, category FROM senderRule") {
+            snapshot.put(.senderRule, row["address"], try CloudJSON.data(SenderRulePayload(category: row["category"])))
+        }
+        for sender in try String.fetchAll(db, sql: "SELECT sender FROM imageTrust") { snapshot.put(.imageTrust, sender, nothing) }
+        for address in try String.fetchAll(db, sql: "SELECT address FROM trustedSender") { snapshot.put(.trustedSender, address, nothing) }
+        for row in try Row.fetchAll(db, sql: "SELECT address, method, at FROM unsubscribed") {
+            snapshot.put(.unsubscribed, row["address"], try CloudJSON.data(UnsubscribedPayload(method: row["method"], at: row["at"])))
+        }
+    }
+
+    /// State about messages and conversations, keyed by Message-IDs (the same on every device).
+    private static func snapshotConversationState(_ db: Database, accounts: CloudAccounts,
+                                                  into snapshot: inout CloudSnapshot) throws {
+        for row in try Row.fetchAll(db, sql: "SELECT accountID, uid, sequence, status, respondedAt FROM inviteResponse") {
+            guard let login = accounts.loginByID[row["accountID"]] else { continue }
+            snapshot.put(.inviteResponse, "\(login)|\(row["uid"] as String)",
+                         try CloudJSON.data(InvitePayload(sequence: row["sequence"], status: row["status"], respondedAt: row["respondedAt"])))
+        }
+        for threadID in try String.fetchAll(db, sql: "SELECT threadID FROM mutedThread") {
+            let ids = try messageIDs(inThread: threadID, db)
+            guard let root = ids.first else { continue }
+            snapshot.put(.mute, root, try CloudJSON.data(ConversationPayload(messageIDs: ids)))
+        }
+        for row in try Row.fetchAll(db, sql: "SELECT account, messageID, payload FROM messageState") {
+            snapshot.put(.messageState, "\(row["account"] as String)|\(row["messageID"] as String)", row["payload"])
+        }
+        // "Move this conversation" corrections (the classifier's strongest labels).
+        for row in try Row.fetchAll(db, sql: """
+            SELECT accountID, messageID, category FROM message
+            WHERE classificationReason LIKE 'moved|%' AND messageID IS NOT NULL
+            """) {
+            guard let login = accounts.loginByID[row["accountID"]] else { continue }
+            snapshot.put(.correction, "\(login)|\(row["messageID"] as String)", try CloudJSON.data(CorrectionPayload(category: row["category"])))
+        }
+        // Your ✓/✗ in AI categories (not the model's own picks).
+        for row in try Row.fetchAll(db, sql: "SELECT categoryID, threadID, source FROM aiCategoryMember WHERE source != 0") {
+            let ids = try messageIDs(inThread: row["threadID"], db)
+            guard let root = ids.first else { continue }
+            let categoryID: String = row["categoryID"]
+            snapshot.put(.aiChoice, "\(categoryID)|\(root)",
+                         try CloudJSON.data(AIChoicePayload(categoryID: categoryID, isMember: (row["source"] as Int) > 0, messageIDs: ids)))
+        }
+    }
+
+    /// Per-account choices, keyed by login.
+    private static func snapshotAccountState(_ db: Database, accounts: CloudAccounts, into snapshot: inout CloudSnapshot) throws {
+        // Folders you chose for a role ("role.archive" → "INBOX.Done"); empty means none.
+        for row in try Row.fetchAll(db, sql: "SELECT accountID, key, value FROM accountSetting WHERE key LIKE 'role.%' AND value != ''") {
+            guard let login = accounts.loginByID[row["accountID"]] else { continue }
+            let role = String((row["key"] as String).dropFirst("role.".count))
+            snapshot.put(.folderRole, "\(login)|\(role)", try CloudJSON.data(FolderRolePayload(path: row["value"])))
+        }
+    }
+
+    /// One-record types, left out while they're still at their defaults.
+    private func snapshotSingletons(into snapshot: inout CloudSnapshot) throws {
+        let signatureSettings = try signatureSettings()
+        if signatureSettings != SignatureSettings() {
+            snapshot.put(.signatureSettings, CloudSnapshot.signatureSettingsKey, try CloudJSON.data(signatureSettings))
+        }
+        let highlightTraining = try highlightTraining()
+        if !highlightTraining.rules.isEmpty {
+            snapshot.put(.highlightTraining, CloudSnapshot.highlightTrainingKey, try CloudJSON.data(highlightTraining))
+        }
+    }
+
+    /// At most this many of a conversation's Message-IDs travel with a mute or an AI choice.
+    static let conversationMessageIDLimit = 40
 
     /// A conversation's Message-IDs, oldest first (its first one is its key across devices).
     static func messageIDs(inThread threadID: String, _ db: Database) throws -> [String] {
         var seen = Set<String>()
         return try String.fetchAll(db, sql: """
-            SELECT messageID FROM message WHERE threadID = ? AND messageID IS NOT NULL ORDER BY date LIMIT 40
-            """, arguments: [threadID]).filter { seen.insert($0).inserted }
+            SELECT messageID FROM message WHERE threadID = ? AND messageID IS NOT NULL ORDER BY date LIMIT ?
+            """, arguments: [threadID, conversationMessageIDLimit]).filter { seen.insert($0).inserted }
     }
 
     // MARK: Collecting local changes
 
+    /// The date of a change to state that existed before it was ever synced: older than
+    /// anything in the cloud, so on a device joining an account that already syncs, the
+    /// cloud's version wins.
+    static let neverSyncedChangeDate = Date(timeIntervalSince1970: 1)
+
     /// Compares the state now with what was last in sync, and queues the differences.
-    /// State that existed before it was ever synced is dated far in the past, so on a device
-    /// joining an account that already syncs, the cloud's version wins.
     @discardableResult
     public func collectCloudChanges(accounts: CloudAccounts, settings: [String: Data] = [:],
                                     accountRecords: [String: Data] = [:], now: Date = Date()) throws -> Int {
@@ -294,6 +345,7 @@ extension MailStore {
             for row in try Row.fetchAll(db, sql: "SELECT type, key, payload FROM cloudShadow") {
                 shadow[row["type"], default: [:]][row["key"]] = row["payload"]
             }
+            // A nil payload is a queued deletion.
             var outbox: [String: [String: Data?]] = [:]
             for row in try Row.fetchAll(db, sql: "SELECT type, key, payload FROM cloudOutbox") {
                 outbox[row["type"], default: [:]][row["key"]] = row["payload"] as Data?
@@ -304,23 +356,19 @@ extension MailStore {
                     let synced = shadow[type]?[key]
                     if synced == payload {
                         // Back to what the cloud has: nothing to send.
-                        if outbox[type]?[key] != nil {
-                            try db.execute(sql: "DELETE FROM cloudOutbox WHERE type = ? AND key = ?", arguments: [type, key])
-                        }
+                        if outbox[type]?[key] != nil { try Self.deleteCloudRow(db, from: "cloudOutbox", type: type, key: key) }
                         continue
                     }
                     if let pending = outbox[type]?[key], pending == payload { continue }
-                    let when = synced == nil ? Date(timeIntervalSince1970: 1) : now
-                    try db.execute(sql: "INSERT OR REPLACE INTO cloudOutbox (type, key, payload, modifiedAt) VALUES (?, ?, ?, ?)",
-                                   arguments: [type, key, payload, when])
+                    try Self.queueCloudChange(db, type: type, key: key, payload: payload,
+                                              at: synced == nil ? Self.neverSyncedChangeDate : now)
                     queued += 1
                 }
             }
             for (type, records) in shadow {
                 for key in records.keys where current[type]?[key] == nil {
-                    if let pending = outbox[type]?[key], pending == nil { continue }
-                    try db.execute(sql: "INSERT OR REPLACE INTO cloudOutbox (type, key, payload, modifiedAt) VALUES (?, ?, NULL, ?)",
-                                   arguments: [type, key, now])
+                    if case .some(nil) = outbox[type]?[key] { continue }   // its deletion is queued already
+                    try Self.queueCloudChange(db, type: type, key: key, payload: nil, at: now)
                     queued += 1
                 }
             }
@@ -328,29 +376,36 @@ extension MailStore {
         }
     }
 
+    /// `payload` nil queues a deletion.
+    private static func queueCloudChange(_ db: Database, type: String, key: String, payload: Data?, at date: Date) throws {
+        try db.execute(sql: "INSERT OR REPLACE INTO cloudOutbox (type, key, payload, modifiedAt) VALUES (?, ?, ?, ?)",
+                       arguments: [type, key, payload, date])
+    }
+
+    /// Removes one record's row from a cloud bookkeeping table.
+    static func deleteCloudRow(_ db: Database, from table: String, type: String, key: String) throws {
+        try db.execute(sql: "DELETE FROM \(table) WHERE type = ? AND key = ?", arguments: [type, key])
+    }
+
     /// Queued local changes, oldest first.
     public func pendingCloudChanges(limit: Int = 400) throws -> [CloudChange] {
         try db.read { db in
             try Row.fetchAll(db, sql: "SELECT type, key, payload, modifiedAt FROM cloudOutbox ORDER BY modifiedAt LIMIT ?",
-                             arguments: [limit]).map { row in
-                if let payload = row["payload"] as Data? {
-                    return .save(StateRecord(type: row["type"], key: row["key"], payload: payload, modifiedAt: row["modifiedAt"]))
-                }
-                return .delete(type: row["type"], key: row["key"])
-            }
+                             arguments: [limit]).map { Self.cloudChange(outboxRow: $0, type: $0["type"], key: $0["key"]) }
         }
     }
 
     /// The local version of one record, for a save the transport is about to send.
     public func pendingCloudRecord(type: String, key: String) throws -> CloudChange? {
         try db.read { db in
-            guard let row = try Row.fetchOne(db, sql: "SELECT payload, modifiedAt FROM cloudOutbox WHERE type = ? AND key = ?",
-                                             arguments: [type, key]) else { return nil }
-            if let payload = row["payload"] as Data? {
-                return .save(StateRecord(type: type, key: key, payload: payload, modifiedAt: row["modifiedAt"]))
-            }
-            return .delete(type: type, key: key)
+            try Row.fetchOne(db, sql: "SELECT payload, modifiedAt FROM cloudOutbox WHERE type = ? AND key = ?",
+                             arguments: [type, key]).map { Self.cloudChange(outboxRow: $0, type: type, key: key) }
         }
+    }
+
+    private static func cloudChange(outboxRow row: Row, type: String, key: String) -> CloudChange {
+        guard let payload = row["payload"] as Data? else { return .delete(type: type, key: key) }
+        return .save(StateRecord(type: type, key: key, payload: payload, modifiedAt: row["modifiedAt"]))
     }
 
     /// The cloud has this version now.
@@ -375,7 +430,7 @@ extension MailStore {
     /// time sync runs, local state is offered again and the cloud's wins where it has some.
     public func resetCloudState() throws {
         try db.write { db in
-            for table in ["cloudShadow", "cloudOutbox", "cloudPending", "cloudMeta"] { try db.execute(sql: "DELETE FROM \(table)") }
+            for table in Self.cloudRecordTables + ["cloudMeta"] { try db.execute(sql: "DELETE FROM \(table)") }
         }
     }
 }
@@ -420,9 +475,9 @@ extension MailStore {
             }
         }
         let saves = records.filter { known[$0.type]?[$0.key] != $0.payload }
-        let incoming = Set(records.map { "\($0.type)\u{1}\($0.key)" })
+        let incoming = Dictionary(grouping: records, by: \.type).mapValues { Set($0.map(\.key)) }
         let deletions = known.flatMap { type, keys in
-            keys.keys.filter { !incoming.contains("\(type)\u{1}\($0)") }.map { (type: type, key: $0) }
+            keys.keys.filter { incoming[type]?.contains($0) != true }.map { (type: type, key: $0) }
         }
         return try applyCloudChanges(saves: saves, deletions: deletions, accounts: accounts)
     }

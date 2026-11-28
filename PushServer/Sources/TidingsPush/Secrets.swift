@@ -5,11 +5,12 @@ import Foundation
 /// in the environment (a Coolify secret), so the database volume or a backup alone reveals
 /// nothing.
 public struct SecretBox: Sendable {
+    static let masterKeyByteCount = 32
     let key: SymmetricKey
 
     /// `base64`: 32 random bytes, e.g. from `openssl rand -base64 32`.
     public init(base64 masterKey: String) throws {
-        guard let data = Data(base64Encoded: masterKey.trimmingCharacters(in: .whitespacesAndNewlines)), data.count == 32 else {
+        guard let data = Data(base64Encoded: masterKey.trimmingCharacters(in: .whitespacesAndNewlines)), data.count == Self.masterKeyByteCount else {
             throw ConfigError.invalid("TIDINGS_MASTER_KEY must be 32 bytes, base64 (openssl rand -base64 32)")
         }
         key = SymmetricKey(data: data)
@@ -34,7 +35,12 @@ enum Tokens {
     static func random(bytes: Int = 32) -> String {
         var generator = SystemRandomNumberGenerator()
         let raw = (0..<bytes).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
-        return Data(raw).base64EncodedString()
+        return base64URL(Data(raw))
+    }
+
+    /// RFC 4648 §5 without padding: safe in a header and a URL as is.
+    static func base64URL(_ data: Data) -> String {
+        data.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
 

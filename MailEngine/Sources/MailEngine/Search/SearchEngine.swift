@@ -49,24 +49,13 @@ public struct SearchEngine: Sendable {
     public func hits(_ query: SearchQuery, limit: Int = 50) throws -> SearchHits {
         let clock = ContinuousClock()
         let start = clock.now
-        let plan = Self.plan(query)
+        let source = Self.plan(query).source()
         let rows: [Row] = try store.db.read { db in
-            if let match = plan.match {
-                // Stream FTS newest-first, join only for the rows we keep.
-                return try Row.fetchAll(db, sql: """
-                    SELECT m.id, m.subject, m.fromName, m.fromAddress, m.date, m.category, m.preview, m.bodyText
-                    FROM message_fts f JOIN message m ON m.sortKey = f.rowid
-                    WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid")) \(plan.messageSQL)
-                    ORDER BY f.rowid DESC LIMIT \(limit)
-                    """, arguments: Self.arguments([match] + plan.rowidArguments + plan.messageArguments))
-            } else {
-                return try Row.fetchAll(db, sql: """
-                    SELECT m.id, m.subject, m.fromName, m.fromAddress, m.date, m.category, m.preview, m.bodyText
-                    FROM message m
-                    WHERE 1 \(plan.rowidSQL("m.sortKey")) \(plan.messageSQL)
-                    ORDER BY m.sortKey DESC LIMIT \(limit)
-                    """, arguments: Self.arguments(plan.rowidArguments + plan.messageArguments))
-            }
+            try Row.fetchAll(db, sql: """
+                SELECT m.id, m.subject, m.fromName, m.fromAddress, m.date, m.category, m.preview, m.bodyText
+                \(source.fromWhere)
+                ORDER BY \(source.key) DESC LIMIT \(limit)
+                """, arguments: source.arguments)
         }
         let terms = query.terms + query.phrases
         let hits = rows.map { row -> SearchHit in
@@ -85,22 +74,12 @@ public struct SearchEngine: Sendable {
     /// The conversations a query matches, newest first: for each, the id of its newest
     /// matching message. Smart folders list these; any mailbox counts.
     public func conversations(_ query: SearchQuery, limit: Int = 500) throws -> [Int64] {
-        let plan = Self.plan(query)
+        let source = Self.plan(query).source()
         return try store.db.read { db in
-            let keys: [Int64]
-            if let match = plan.match {
-                keys = try Int64.fetchAll(db, sql: """
-                    SELECT max(m.sortKey) AS k FROM message_fts f JOIN message m ON m.sortKey = f.rowid
-                    WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid")) \(plan.messageSQL)
-                    GROUP BY coalesce(m.threadID, m.id) ORDER BY k DESC LIMIT \(limit)
-                    """, arguments: Self.arguments([match] + plan.rowidArguments + plan.messageArguments))
-            } else {
-                keys = try Int64.fetchAll(db, sql: """
-                    SELECT max(m.sortKey) AS k FROM message m
-                    WHERE 1 \(plan.rowidSQL("m.sortKey")) \(plan.messageSQL)
-                    GROUP BY coalesce(m.threadID, m.id) ORDER BY k DESC LIMIT \(limit)
-                    """, arguments: Self.arguments(plan.rowidArguments + plan.messageArguments))
-            }
+            let keys = try Int64.fetchAll(db, sql: """
+                SELECT max(m.sortKey) AS k \(source.fromWhere)
+                GROUP BY coalesce(m.threadID, m.id) ORDER BY k DESC LIMIT \(limit)
+                """, arguments: source.arguments)
             guard !keys.isEmpty else { return [] }
             let ids = try Row.fetchAll(db, sql: "SELECT id, sortKey FROM message WHERE sortKey IN (\(keys.map(String.init).joined(separator: ",")))")
             let idByKey = Dictionary(uniqueKeysWithValues: ids.map { ($0["sortKey"] as Int64, $0["id"] as Int64) })
@@ -110,17 +89,10 @@ public struct SearchEngine: Sendable {
 
     /// How many conversations a query matches (smart folder counts).
     public func conversationCount(_ query: SearchQuery) throws -> Int {
-        let plan = Self.plan(query)
+        let source = Self.plan(query).source()
         return try store.db.read { db in
-            if let match = plan.match {
-                return try Int.fetchOne(db, sql: """
-                    SELECT count(DISTINCT coalesce(m.threadID, m.id)) FROM message_fts f JOIN message m ON m.sortKey = f.rowid
-                    WHERE f.message_fts MATCH ? \(plan.rowidSQL("f.rowid")) \(plan.messageSQL)
-                    """, arguments: Self.arguments([match] + plan.rowidArguments + plan.messageArguments)) ?? 0
-            }
-            return try Int.fetchOne(db, sql: """
-                SELECT count(DISTINCT coalesce(m.threadID, m.id)) FROM message m WHERE 1 \(plan.rowidSQL("m.sortKey")) \(plan.messageSQL)
-                """, arguments: Self.arguments(plan.rowidArguments + plan.messageArguments)) ?? 0
+            try Int.fetchOne(db, sql: "SELECT count(DISTINCT coalesce(m.threadID, m.id)) \(source.fromWhere)",
+                             arguments: source.arguments) ?? 0
         }
     }
 
@@ -129,31 +101,15 @@ public struct SearchEngine: Sendable {
     public func facets(_ query: SearchQuery) throws -> SearchFacets {
         let clock = ContinuousClock()
         let start = clock.now
-        let plan = Self.plan(query)
+        let source = Self.plan(query).source()
         return try store.db.read { db in
-            // Rowid-only aggregation: no join unless the query has message-table filters.
-            let source: String
-            let key: String
-            var args: [any DatabaseValueConvertible] = []
-            if let match = plan.match {
-                key = "f.rowid"
-                source = plan.messageSQL.isEmpty
-                    ? "FROM message_fts f WHERE f.message_fts MATCH ? \(plan.rowidSQL(key))"
-                    : "FROM message_fts f JOIN message m ON m.sortKey = f.rowid WHERE f.message_fts MATCH ? \(plan.rowidSQL(key)) \(plan.messageSQL)"
-                args = [match] + plan.rowidArguments + plan.messageArguments
-            } else {
-                key = "m.sortKey"
-                source = "FROM message m WHERE 1 \(plan.rowidSQL(key)) \(plan.messageSQL)"
-                args = plan.rowidArguments + plan.messageArguments
-            }
-            let arguments = Self.arguments(args)
-
+            let key = source.key
             // One grouped pass over the rowids: (category, attachment, day) buckets.
             let rows = try Row.fetchAll(db, sql: """
                 SELECT \(SortKey.categorySQL(key)) AS c, \(SortKey.attachmentSQL(key)) AS a,
-                       (\(key) >> \(SortKey.secondsShift)) / 86400 AS d, count(*) AS n
-                \(source) GROUP BY c, a, d
-                """, arguments: arguments)
+                       (\(key) >> \(SortKey.secondsShift)) / \(Self.secondsPerDay) AS d, count(*) AS n
+                \(source.fromWhere) GROUP BY c, a, d
+                """, arguments: source.arguments)
 
             var total = 0
             var categoryCounts: [Int64: Int] = [:]
@@ -166,15 +122,16 @@ public struct SearchEngine: Sendable {
                 categoryCounts[row["c"], default: 0] += n
                 if (row["a"] as Int64) == 1 { attachments += n }
                 let day: Int64 = row["d"]
-                yearCounts[calendar.component(.year, from: Date(timeIntervalSince1970: TimeInterval(day * 86_400))), default: 0] += n
+                let dayStart = Date(timeIntervalSince1970: TimeInterval(day * Self.secondsPerDay))
+                yearCounts[calendar.component(.year, from: dayStart), default: 0] += n
             }
 
             let senderRows = try Row.fetchAll(db, sql: """
                 SELECT coalesce(max(m.fromName), m.fromAddress) AS v, count(*) AS n FROM (
-                    SELECT \(key) AS k \(source) ORDER BY \(key) DESC LIMIT \(senderSampleSize)
+                    SELECT \(key) AS k \(source.fromWhere) ORDER BY \(key) DESC LIMIT \(senderSampleSize)
                 ) recent JOIN message m ON m.sortKey = recent.k
-                GROUP BY m.fromAddress ORDER BY n DESC LIMIT 8
-                """, arguments: arguments)
+                GROUP BY m.fromAddress ORDER BY n DESC LIMIT \(Self.senderFacetCount)
+                """, arguments: source.arguments)
 
             return SearchFacets(
                 total: total,
@@ -196,10 +153,17 @@ public struct SearchEngine: Sendable {
         StatementArguments(values.map { $0 as (any DatabaseValueConvertible)? })
     }
 
+    static let secondsPerDay: Int64 = 86_400
+    /// How many top senders the facets list.
+    static let senderFacetCount = 8
+
     struct Plan {
+        /// FTS5 MATCH expression; nil scans `message` by sort key instead.
         var match: String?
+        /// Conditions on the sort key, with `$K` standing for its column.
         var rowidClauses: [String] = []
         var rowidArguments: [any DatabaseValueConvertible] = []
+        /// Conditions on `message m`.
         var messageClauses: [String] = []
         var messageArguments: [any DatabaseValueConvertible] = []
 
@@ -207,6 +171,27 @@ public struct SearchEngine: Sendable {
             rowidClauses.map { " AND " + $0.replacingOccurrences(of: "$K", with: column) }.joined()
         }
         var messageSQL: String { messageClauses.map { " AND " + $0 }.joined() }
+
+        /// The FROM … WHERE part of a query and the sort-key column it streams by, newest
+        /// first: the FTS rowid when there is free text (joined to `message` for the rows
+        /// kept), else `message.sortKey`.
+        struct Source {
+            var key: String
+            var fromWhere: String
+            var arguments: StatementArguments
+        }
+
+        func source() -> Source {
+            if let match {
+                let key = "f.rowid"
+                return Source(key: key,
+                              fromWhere: "FROM message_fts f JOIN message m ON m.sortKey = f.rowid WHERE f.message_fts MATCH ? \(rowidSQL(key)) \(messageSQL)",
+                              arguments: SearchEngine.arguments([match] + rowidArguments + messageArguments))
+            }
+            let key = "m.sortKey"
+            return Source(key: key, fromWhere: "FROM message m WHERE 1 \(rowidSQL(key)) \(messageSQL)",
+                          arguments: SearchEngine.arguments(rowidArguments + messageArguments))
+        }
     }
 
     static func plan(_ q: SearchQuery) -> Plan {
@@ -261,7 +246,11 @@ public struct SearchEngine: Sendable {
         return p
     }
 
-    /// Cuts a ~160-character window around the first matching term from the compressed body.
+    static let snippetLength = 160
+    /// How much text the snippet keeps before the match.
+    static let snippetLeadIn = 60
+
+    /// Cuts a `snippetLength`-character window around the first matching term from the compressed body.
     static func snippet(body: Data?, fallback: String, terms: [String]) -> String {
         guard !terms.isEmpty, let body, let text = TextCompression.decompress(body) else { return fallback }
         let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
@@ -269,9 +258,9 @@ public struct SearchEngine: Sendable {
             let t = term.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
             guard let range = folded.range(of: t) else { continue }
             let offset = folded.distance(from: folded.startIndex, to: range.lowerBound)
-            let startOffset = max(0, offset - 60)
+            let startOffset = max(0, offset - snippetLeadIn)
             let start = text.index(text.startIndex, offsetBy: min(startOffset, text.count))
-            let end = text.index(start, offsetBy: min(160, text.distance(from: start, to: text.endIndex)))
+            let end = text.index(start, offsetBy: min(snippetLength, text.distance(from: start, to: text.endIndex)))
             let window = text[start..<end].split(whereSeparator: \.isWhitespace).joined(separator: " ")
             return (startOffset > 0 ? "…" : "") + window + (end < text.endIndex ? "…" : "")
         }

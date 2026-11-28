@@ -28,9 +28,13 @@ public struct Rule: Codable, Sendable, Hashable, Identifiable {
     public var isComplete: Bool { !conditions.isEmpty && !actions.isEmpty && actions.allSatisfy(\.isComplete) }
 
     /// Whether any condition needs the on-device model (slower; runs after the cheap ones).
-    public var usesLanguageModel: Bool {
-        conditions.contains { if case .about = $0 { true } else { false } }
-    }
+    public var usesLanguageModel: Bool { !aboutConditions.isEmpty }
+
+    /// The natural-language conditions, which need the on-device model.
+    var aboutConditions: [AboutCondition] { conditions.compactMap(\.aboutCondition) }
+
+    /// Every condition that can be decided from the message alone.
+    var cheapConditions: [RuleCondition] { conditions.filter { $0.aboutCondition == nil } }
 }
 
 /// Text comparison, case- and accent-insensitive.
@@ -72,6 +76,10 @@ public enum RuleCondition: Codable, Sendable, Hashable {
     case hasAttachment(Bool)
     /// Natural language ("about shoes"): embedding pre-filter, then an on-device yes/no.
     case about(AboutCondition)
+
+    var aboutCondition: AboutCondition? {
+        if case .about(let about) = self { about } else { nil }
+    }
 }
 
 /// A natural-language condition (SPEC §6).

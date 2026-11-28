@@ -29,6 +29,30 @@ public actor PushEngine {
     public static let policyKey = "notificationPolicy.v1"
     /// More than this from one pass become one "N new messages" alert, as on the phone.
     static let burstLimit = 4
+    /// How many senders a burst alert names.
+    static let burstSenderCount = 4
+    static let cacheLimitBytes = 64 << 20
+    /// Mail server messages in the log are cut to this; they can quote a whole response.
+    static let loggedMessageLength = 300
+
+    /// `PushAPI.PayloadKey.kind` values.
+    enum PushKind {
+        static let mail = "mail"
+        static let wake = "wake"
+    }
+
+    /// The app's notification category with the Done / Mark as Read buttons.
+    static let mailCategory = "mail"
+
+    /// `PushAPI.AccountStatus.state` values.
+    enum AccountState {
+        static let noPassword = "no password"
+        static let connecting = "connecting"
+        static let syncing = "syncing"
+        static let idle = "idle"
+        static let failed = "failed"
+        static let stopped = "stopped"
+    }
 
     public init(config: ServerConfig, sender: any PushSender, logger: Logger) throws {
         self.config = config
@@ -38,7 +62,7 @@ public actor PushEngine {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         store = try ServerStore(path: dir.appendingPathComponent("server.sqlite").path)
         mail = try MailStore(path: dir.appendingPathComponent("mail.sqlite").path)
-        cache = MessageCache(directory: dir.appendingPathComponent("cache", isDirectory: true), limitBytes: 64 << 20)
+        cache = MessageCache(directory: dir.appendingPathComponent("cache", isDirectory: true), limitBytes: Self.cacheLimitBytes)
         secrets = try SecretBox(base64: config.masterKey)
     }
 
@@ -64,7 +88,7 @@ public actor PushEngine {
 
     private func startWatcher(_ account: ServerStore.Account) throws {
         guard let sealed = account.sealedPassword else {
-            statuses[account.login] = .init(login: account.login, hasPassword: false, state: "no password", lastSync: nil, error: nil)
+            statuses[account.login] = .init(login: account.login, hasPassword: false, state: AccountState.noPassword, lastSync: nil, error: nil)
             return
         }
         let password = try secrets.open(sealed)
@@ -83,7 +107,7 @@ public actor PushEngine {
             await sync.run(pollInterval: poll)
         }
         watchers[login] = Watcher(sync: sync, task: task, events: events)
-        statuses[login] = .init(login: login, hasPassword: true, state: "connecting", lastSync: statuses[login]?.lastSync, error: nil)
+        statuses[login] = .init(login: login, hasPassword: true, state: AccountState.connecting, lastSync: statuses[login]?.lastSync, error: nil)
     }
 
     private func stopWatcher(_ login: String) async {
@@ -98,25 +122,25 @@ public actor PushEngine {
     func handle(_ event: AccountSync.Event, login: String) async {
         switch event {
         case .started:
-            statuses[login]?.state = "syncing"
+            statuses[login]?.state = AccountState.syncing
         case .mailboxSynced(let mailbox, _):
             if mailbox.caseInsensitiveCompare("INBOX") == .orderedSame { await notifyNewMail(login: login) }
         case .idle:
-            statuses[login]?.state = "idle"
+            statuses[login]?.state = AccountState.idle
             statuses[login]?.lastSync = Date()
             statuses[login]?.error = nil
             await notifyNewMail(login: login)
         case .failed(let message):
-            statuses[login]?.state = "failed"
+            statuses[login]?.state = AccountState.failed
             statuses[login]?.error = message
             // The server's own words (an IMAP response or a connection error): never a password.
             logger.warning("account sync failed", metadata: ["account": "\(Self.redacted(login))",
-                                                             "error": "\(String(message.prefix(300)))"])
+                                                             "error": "\(Self.loggable(message))"])
         case .changeRefused(let message):
             // A move or flag the mail server refused (the connection is fine): it keeps syncing.
             statuses[login]?.error = message
             logger.warning("mail server refused a change", metadata: ["account": "\(Self.redacted(login))",
-                                                                      "error": "\(String(message.prefix(300)))"])
+                                                                      "error": "\(Self.loggable(message))"])
         case .snoozesWoke(let ids):
             await notifyWoke(ids, login: login)
         case .sent(let outboxID):
@@ -143,35 +167,48 @@ public actor PushEngine {
             guard !found.isEmpty else { return }
             logger.info("new mail to notify", metadata: ["account": "\(Self.redacted(login))", "count": "\(found.count)"])
             if found.count > Self.burstLimit {
-                let senders = Array(Set(found.map(\.sender))).sorted().prefix(4).joined(separator: ", ")
-                await broadcast(Push(title: "\(found.count) new messages", body: senders, titleKey: "push.burst",
-                                     titleArgs: ["\(found.count)"], threadID: nil, collapseID: nil, category: nil,
-                                     info: [PushAPI.PayloadKey.kind: "mail", PushAPI.PayloadKey.account: login]))
+                await broadcast(Self.burstPush(found, login: login))
                 return
             }
-            for n in found {
-                var info = [PushAPI.PayloadKey.kind: "mail", PushAPI.PayloadKey.account: login]
-                info[PushAPI.PayloadKey.messageID] = n.messageID
-                await broadcast(Push(title: n.sender, body: n.subject.isEmpty ? "—" : n.subject, threadID: n.threadID,
-                                     collapseID: n.messageID.map { PushAPI.collapseID(account: login, messageID: $0) },
-                                     category: "mail", info: info))
-            }
+            for notification in found { await broadcast(Self.mailPush(notification, login: login)) }
         } catch {
             logger.error("notification pass failed: \(error)")
         }
     }
 
+    static func burstPush(_ found: [MailNotification], login: String) -> Push {
+        let senders = Array(Set(found.map(\.sender))).sorted().prefix(burstSenderCount).joined(separator: ", ")
+        return Push(title: "\(found.count) new messages", body: senders, titleKey: "push.burst",
+                    titleArgs: ["\(found.count)"], threadID: nil, collapseID: nil, category: nil,
+                    info: payload(kind: PushKind.mail, login: login, messageID: nil))
+    }
+
+    static func mailPush(_ notification: MailNotification, login: String) -> Push {
+        Push(title: notification.sender, body: notification.subject.isEmpty ? "—" : notification.subject,
+             threadID: notification.threadID,
+             collapseID: notification.messageID.map { PushAPI.collapseID(account: login, messageID: $0) },
+             category: mailCategory, info: payload(kind: PushKind.mail, login: login, messageID: notification.messageID))
+    }
+
     func notifyWoke(_ ids: [Int64], login: String) async {
         let messages = ids.compactMap { try? mail.message(id: $0) }
-        var seen = Set<String>()
-        for m in messages.sorted(by: { $0.date > $1.date }) where seen.insert(m.threadID ?? "\(m.id ?? 0)").inserted {
-            var info = [PushAPI.PayloadKey.kind: "wake", PushAPI.PayloadKey.account: login]
-            info[PushAPI.PayloadKey.messageID] = m.messageID
-            await broadcast(Push(title: "Back in your Inbox", body: "\(m.fromName ?? m.fromAddress): \(m.subject)",
-                                 titleKey: "Back in your Inbox", threadID: m.threadID,
-                                 collapseID: m.messageID.map { "wake-" + PushAPI.collapseID(account: login, messageID: $0) },
-                                 category: "mail", info: info))
+        var seenThreads = Set<String>()
+        for m in messages.sorted(by: { $0.date > $1.date }) where seenThreads.insert(m.threadID ?? "\(m.id ?? 0)").inserted {
+            await broadcast(Self.wakePush(m, login: login))
         }
+    }
+
+    static func wakePush(_ message: StoredMessage, login: String) -> Push {
+        Push(title: "Back in your Inbox", body: "\(message.fromName ?? message.fromAddress): \(message.subject)",
+             titleKey: "Back in your Inbox", threadID: message.threadID,
+             collapseID: message.messageID.map { "wake-" + PushAPI.collapseID(account: login, messageID: $0) },
+             category: mailCategory, info: payload(kind: PushKind.wake, login: login, messageID: message.messageID))
+    }
+
+    static func payload(kind: String, login: String, messageID: String?) -> [String: String] {
+        var info = [PushAPI.PayloadKey.kind: kind, PushAPI.PayloadKey.account: login]
+        info[PushAPI.PayloadKey.messageID] = messageID
+        return info
     }
 
     func broadcast(_ push: Push) async {
@@ -195,6 +232,10 @@ public actor PushEngine {
     static func redacted(_ login: String) -> String {
         guard let at = login.firstIndex(of: "@") else { return "…" }
         return String(login[..<at].prefix(2)) + "…" + String(login[at...])
+    }
+
+    static func loggable(_ serverMessage: String) -> String {
+        String(serverMessage.prefix(loggedMessageLength))
     }
 
     // MARK: API operations
@@ -259,6 +300,8 @@ public actor PushEngine {
     public func cancelScheduled(id: String) async throws -> Bool {
         guard let (login, outboxID) = try store.scheduled(id: id) else { throw OperationError.notFound }
         guard let sync = watchers[login]?.sync else {
+            // Nothing is sending it now, but a watcher started later would.
+            try mail.deleteOutboxItem(id: outboxID)
             try store.removeScheduled(id: id)
             return true
         }
@@ -271,7 +314,7 @@ public actor PushEngine {
     public func status() throws -> PushAPI.ServerStatus {
         let accounts = try store.accounts().map { account in
             statuses[account.login] ?? .init(login: account.login, hasPassword: account.sealedPassword != nil,
-                                              state: "stopped", lastSync: nil, error: nil)
+                                              state: AccountState.stopped, lastSync: nil, error: nil)
         }
         return PushAPI.ServerStatus(version: PushServerVersion.current, pushConfigured: sender.isConfigured,
                                     devices: try store.devices().count, scheduled: try store.scheduledCount(), accounts: accounts)
@@ -280,12 +323,4 @@ public actor PushEngine {
 
 public enum PushServerVersion {
     public static let current = "0.1.0"
-}
-
-extension ServerStore {
-    func removeScheduled(outboxID: Int64, login: String) throws {
-        try db.write {
-            try $0.execute(sql: "DELETE FROM scheduled WHERE outboxID = ? AND login = ?", arguments: [outboxID, login])
-        }
-    }
 }

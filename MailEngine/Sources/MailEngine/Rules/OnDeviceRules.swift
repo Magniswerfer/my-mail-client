@@ -46,21 +46,24 @@ public final class OnDeviceRuleJudge: RuleJudge, @unchecked Sendable {
     }
 
     private func vector(for description: String) -> [Float]? {
-        lock.lock()
-        if let cached = descriptionVectors[description] { lock.unlock(); return cached }
-        lock.unlock()
+        if let cached = lock.withLock({ descriptionVectors[description] }) { return cached }
         guard let vector = embedder?.embed(description) else { return nil }
-        lock.lock(); descriptionVectors[description] = vector; lock.unlock()
+        lock.withLock { descriptionVectors[description] = vector }
         return vector
     }
 
+    /// Fewer Inbox embeddings than this say too little about what's typical to calibrate on.
+    static let calibrationMinimumSample = 30
+    /// How many standard deviations above the Inbox's mean similarity the cut sits.
+    static let calibrationCutDeviations: Float = 1.5
+
     /// Sets the condition's pre-filter cut from how similar your Inbox mail is to the description:
-    /// mean + 1.5 standard deviations (embedding scores are high for everything, so a fixed
-    /// number wouldn't mean much). Unchanged without embeddings.
+    /// `calibrationCutDeviations` standard deviations above the mean (embedding scores are high
+    /// for everything, so a fixed number wouldn't mean much). Unchanged without embeddings.
     public func calibrated(_ condition: AboutCondition, sample: Int = 1500) -> AboutCondition {
         guard let query = vector(for: condition.description) else { return condition }
         let vectors = (try? store.inboxEmbeddings(limit: sample)) ?? []
-        guard vectors.count >= 30 else { return condition }
+        guard vectors.count >= Self.calibrationMinimumSample else { return condition }
         var scores: [Float] = []
         scores.reserveCapacity(vectors.count)
         for v in vectors where v.count == query.count {
@@ -68,7 +71,7 @@ public final class OnDeviceRuleJudge: RuleJudge, @unchecked Sendable {
         }
         let (mean, std) = VectorMath.meanAndDeviation(scores)
         var result = condition
-        result.threshold = mean + 1.5 * std
+        result.threshold = mean + Self.calibrationCutDeviations * std
         return result
     }
 
@@ -89,6 +92,11 @@ public protocol AboutVerifier: Sendable {
 }
 
 public struct FoundationModelsAboutVerifier: AboutVerifier {
+    /// What of a message and of your examples fits the prompt next to the instructions.
+    static let maxExamples = 8
+    static let exampleTextLength = 200
+    static let messageTextLength = 700
+
     public init?() {
         #if canImport(FoundationModels)
         guard case .available = SystemLanguageModel.default.availability else { return nil }
@@ -106,12 +114,12 @@ public struct FoundationModelsAboutVerifier: AboutVerifier {
             """
         if !condition.examples.isEmpty {
             instructions += "\n\nThe user marked these examples:\n"
-            for example in condition.examples.prefix(8) {
-                instructions += "- \(example.matches ? "matches" : "does not match"): \(example.text.prefix(200))\n"
+            for example in condition.examples.prefix(Self.maxExamples) {
+                instructions += "- \(example.matches ? "matches" : "does not match"): \(example.text.prefix(Self.exampleTextLength))\n"
             }
         }
         let session = LanguageModelSession(instructions: instructions)
-        let text = (message.plainText ?? message.preview).prefix(700)
+        let text = (message.plainText ?? message.preview).prefix(Self.messageTextLength)
         do {
             let response = try await session.respond(to: """
                 Description: \(condition.description)
