@@ -73,3 +73,30 @@ public enum TransportPolicy {
         return ["127.0.0.1", "localhost", "::1"].contains(host) || additionalPlaintextHosts.contains(host)
     }
 }
+
+/// Hosts that name this machine or a private network, by name or address literal. Used where
+/// untrusted input picks a host (an unsubscribe link, an uploaded server setting), so it can't
+/// point the app or the push server at a router, a NAS, or a cloud metadata service.
+/// A public name that resolves to a private address isn't caught: pair this with an allow-list
+/// where it matters.
+public enum NetworkTarget {
+    public static func isLocal(host rawHost: String) -> Bool {
+        let host = rawHost.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]."))
+        if host.isEmpty || host == "localhost" { return true }
+        for suffix in [".localhost", ".local", ".internal", ".lan", ".home.arpa", ".localdomain"] where host.hasSuffix(suffix) { return true }
+        if host.contains(":") {   // IPv6 literal: loopback, unspecified, unique local, link-local, v4-mapped
+            return host == "::1" || host == "::" || host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80")
+                || host.hasPrefix("::ffff:")
+        }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        if parts.count == 4, parts.allSatisfy({ UInt8($0) != nil }) {
+            let octets = parts.compactMap { UInt8($0) }
+            switch (octets[0], octets[1]) {
+            case (0, _), (10, _), (127, _), (169, 254), (192, 168), (172, 16...31), (100, 64...127): return true
+            default: return false
+            }
+        }
+        // A single label ("router", "nas") is a local name; a bare number is an IPv4 shorthand.
+        return !host.contains(".") || host.first?.isNumber == true && host.allSatisfy { $0.isHexDigit || $0 == "." || $0 == "x" }
+    }
+}

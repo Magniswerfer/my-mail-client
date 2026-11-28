@@ -13,6 +13,15 @@ public struct ServerConfig: Sendable {
     public var apns: APNsConfig?
     /// Plain-text IMAP is refused except to these hosts (the local test server).
     public var plaintextHosts: Set<String> = ["127.0.0.1", "localhost", "::1"]
+    /// When set (`TIDINGS_ALLOWED_MAIL_HOSTS`), uploaded accounts may only use these IMAP and
+    /// SMTP hosts, e.g. `imap.mail.me.com,smtp.mail.me.com`. Recommended: it stops a stolen
+    /// device token from pointing an account at another server.
+    public var allowedMailHosts: Set<String> = []
+    /// A send-later message must be due at least this far out (devices hand off only mail due
+    /// in more than 5 minutes).
+    public var minimumScheduleLead: TimeInterval = 60
+    /// At most this many send-later messages wait on the server.
+    public var maxScheduled = 200
     /// How often Sent and Snoozed are re-synced next to INBOX's IDLE.
     public var pollInterval: Duration = .seconds(300)
 
@@ -64,6 +73,10 @@ public struct ServerConfig: Sendable {
         if let port = env["PORT"].flatMap(Int.init) ?? env["TIDINGS_PORT"].flatMap(Int.init) { config.port = port }
         if let hosts = env["TIDINGS_PLAINTEXT_IMAP_HOSTS"] {
             config.plaintextHosts.formUnion(hosts.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+        }
+        if let hosts = env["TIDINGS_ALLOWED_MAIL_HOSTS"] {
+            config.allowedMailHosts = Set(hosts.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+                .filter { !$0.isEmpty })
         }
         if let seconds = env["TIDINGS_POLL_SECONDS"].flatMap(Int.init) { config.pollInterval = .seconds(max(30, seconds)) }
         return config

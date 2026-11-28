@@ -42,7 +42,7 @@ struct PushServerSection: View {
                 SecureField("Pairing secret", text: $secret)
                 if let error { Text(error).font(.caption).foregroundStyle(.red) }
                 Button(isWorking ? "Pairing…" : "Pair This Device") { pair() }
-                    .disabled(isWorking || URL(string: address)?.scheme?.hasPrefix("http") != true || secret.count < 16)
+                    .disabled(isWorking || !(URL(string: address.trimmingCharacters(in: .whitespaces)).map(PushServerClient.isAllowed) ?? false) || secret.count < 16)
             }
         } header: {
             Text("Push Server")

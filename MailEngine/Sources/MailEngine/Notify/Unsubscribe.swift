@@ -115,26 +115,11 @@ public enum Unsubscribe {
         return URLSession(configuration: configuration, delegate: NoRedirects(), delegateQueue: nil)
     }()
 
-    /// True for hosts on this machine or the local network (by name or address literal): a
-    /// mail mustn't be able to make the app POST to the user's router or NAS.
+    /// True for hosts on this machine or the local network: a mail mustn't be able to make
+    /// the app POST to the user's router or NAS.
     public static func isLocalTarget(_ url: URL) -> Bool {
-        guard var host = url.host()?.lowercased() else { return true }
-        host = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") || host.hasSuffix(".internal")
-            || host.hasSuffix(".lan") || host.hasSuffix(".home.arpa") || !host.contains(".") && !host.contains(":") { return true }
-        let octets = host.split(separator: ".").compactMap { UInt8($0) }
-        if octets.count == 4, host.split(separator: ".").count == 4 {
-            switch (octets[0], octets[1]) {
-            case (0, _), (10, _), (127, _), (169, 254), (192, 168): return true
-            case (172, 16...31), (100, 64...127): return true
-            default: return false
-            }
-        }
-        if host.contains(":") {   // IPv6 literal: loopback, unique local, link-local, mapped v4
-            return host == "::1" || host == "::" || host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80")
-                || host.hasPrefix("::ffff:")
-        }
-        return false
+        guard let host = url.host() else { return true }
+        return NetworkTarget.isLocal(host: host)
     }
 
     /// RFC 8058 one-click: POST `List-Unsubscribe=One-Click`, no cookies, no redirects to follow.

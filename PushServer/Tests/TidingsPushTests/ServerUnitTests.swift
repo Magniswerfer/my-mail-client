@@ -15,6 +15,7 @@ enum Fixtures {
         let key = Data((0..<32).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
         var config = ServerConfig(dataDirectory: dir, pairingSecret: secret, masterKey: key, apns: apns)
         config.pollInterval = .seconds(5)
+        config.minimumScheduleLead = 0   // the end-to-end tests send a moment later
         return config
     }
 
@@ -142,5 +143,101 @@ actor RecordingSender: PushSender {
         try await engine.removeAccount(login: "a@example.com")
         #expect(try engine.store.accounts().isEmpty)
         await engine.stop()
+    }
+
+    func record(imap: String = "127.0.0.1", tls: Bool = false, smtp: SMTPEndpoint? = nil) -> CloudAccountRecord {
+        CloudAccountRecord(AccountConfig(displayName: "x", endpoint: IMAPEndpoint(host: imap, port: 1, useTLS: tls, username: "a@example.com"),
+                                         addresses: ["a@example.com"], smtp: smtp))
+    }
+
+    /// A device token alone can't re-point an account at another server and collect its password.
+    @Test func changingServerSettingsNeedsThePasswordAgain() async throws {
+        let engine = try PushEngine(config: try Fixtures.config(), sender: RecordingSender(), logger: Logger(label: "test"))
+        try await engine.upsertAccount(login: "a@example.com", PushAPI.AccountUpload(record: record(), password: "pw"))
+        // The same settings without a password: fine (the app does this on every launch).
+        try await engine.upsertAccount(login: "a@example.com", PushAPI.AccountUpload(record: record(), password: nil))
+        // Another host, or another SMTP server, without the password: refused, nothing stored.
+        await #expect(throws: PushEngine.OperationError.self) {
+            try await engine.upsertAccount(login: "a@example.com", PushAPI.AccountUpload(record: record(imap: "imap.evil.test", tls: true), password: nil))
+        }
+        let smtp = SMTPEndpoint(host: "smtp.evil.test", port: 587, security: .startTLS, username: "a@example.com")
+        await #expect(throws: PushEngine.OperationError.self) {
+            try await engine.upsertAccount(login: "a@example.com", PushAPI.AccountUpload(record: record(smtp: smtp), password: nil))
+        }
+        #expect(try engine.store.accounts().first?.record.endpoint.host == "127.0.0.1")
+        // SMTP without TLS to a real host, and private-network hosts, are refused outright.
+        let plain = SMTPEndpoint(host: "smtp.example.com", port: 25, security: .none, username: "a@example.com")
+        await #expect(throws: PushEngine.OperationError.self) {
+            try await engine.upsertAccount(login: "b@example.com", PushAPI.AccountUpload(record: record(smtp: plain), password: "pw"))
+        }
+        for host in ["169.254.169.254", "10.0.0.5", "redis", "db.internal"] {
+            await #expect(throws: PushEngine.OperationError.self) {
+                try await engine.upsertAccount(login: "b@example.com", PushAPI.AccountUpload(record: record(imap: host, tls: true), password: "pw"))
+            }
+        }
+        await engine.stop()
+    }
+
+    @Test func allowListLimitsMailHosts() async throws {
+        var config = try Fixtures.config()
+        config.allowedMailHosts = ["imap.mail.me.com", "smtp.mail.me.com"]
+        let engine = try PushEngine(config: config, sender: RecordingSender(), logger: Logger(label: "test"))
+        await #expect(throws: PushEngine.OperationError.self) {
+            try await engine.upsertAccount(login: "a@example.com", PushAPI.AccountUpload(record: record(imap: "imap.example.com", tls: true), password: "pw"))
+        }
+        try await engine.checkMailHost("imap.mail.me.com")
+        await engine.stop()
+    }
+
+    @Test func passwordsAreBoundToTheirAccount() throws {
+        let box = try SecretBox(base64: Data((0..<32).map { _ in UInt8.random(in: 0...255) }).base64EncodedString())
+        let sealed = try box.seal("pw", context: "a@example.com")
+        #expect(try box.open(sealed, context: "a@example.com") == "pw")
+        #expect(throws: (any Error).self) { try box.open(sealed, context: "b@example.com") }
+        // Sealed before contexts existed: still opens.
+        #expect(try box.open(try box.seal("old"), context: "a@example.com") == "old")
+    }
+
+    @Test func devicesCanBeListedAndRevokedAndRotatingTheSecretRetiresThem() async throws {
+        let config = try Fixtures.config()
+        let engine = try PushEngine(config: config, sender: RecordingSender(), logger: Logger(label: "test"))
+        let app = Application(router: PushServerAPI.router(engine: engine))
+        try await app.test(.router) { client in
+            func pair(_ name: String) async throws -> PushAPI.PairResponse {
+                try await client.execute(uri: "/v1/devices", method: .post,
+                                         body: try Fixtures.json(PushAPI.PairRequest(secret: Fixtures.secret, deviceName: name))) {
+                    try Fixtures.decode(PushAPI.PairResponse.self, $0.body)
+                }
+            }
+            let phone = try await pair("iPhone"), lost = try await pair("Old iPad")
+            let auth: HTTPFields = [.authorization: "Bearer \(phone.token)"]
+            let listed = try await client.execute(uri: "/v1/devices", method: .get, headers: auth) {
+                try Fixtures.decode([PushAPI.DeviceInfo].self, $0.body)
+            }
+            #expect(Set(listed.map(\.name)) == ["iPhone", "Old iPad"])
+            #expect(listed.first { $0.isCurrent }?.id == phone.deviceID)
+            try await client.execute(uri: "/v1/devices/\(lost.deviceID)", method: .delete, headers: auth) { #expect($0.status == .noContent) }
+            try await client.execute(uri: "/v1/status", method: .get, headers: [.authorization: "Bearer \(lost.token)"]) {
+                #expect($0.status == .unauthorized)
+            }
+            try await client.execute(uri: "/v1/status", method: .get, headers: auth) { #expect($0.status == .ok) }
+        }
+        await engine.stop()
+        // A new pairing secret: devices paired under the old one stop working.
+        var rotated = config
+        rotated.pairingSecret = "a-completely-new-pairing-secret"
+        let engine2 = try PushEngine(config: rotated, sender: RecordingSender(), logger: Logger(label: "test"))
+        let device = try #require(try engine2.store.devices().first)
+        #expect(device.secretTag != Tokens.secretTag(rotated.pairingSecret))
+        await engine2.stop()
+    }
+
+    @Test func parallelGuessesAllCount() async {
+        let limiter = PairingLimiter(maxFailures: 5)
+        var allowed = 0
+        for _ in 0..<50 where await limiter.begin(client: "1.2.3.4") { allowed += 1 }
+        #expect(allowed == 5)
+        // Another client still gets its own tries, up to the shared ceiling.
+        #expect(await limiter.begin(client: "5.6.7.8"))
     }
 }
