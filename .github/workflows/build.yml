@@ -56,12 +56,14 @@ jobs:
         run: |
           bench=MailEngine/.build/release/tidings-bench
           $bench run --dir "$RUNNER_TEMP/bench" --out perf.json
-          # A shared runner can have a bad minute: measure once more before failing.
-          if ! $bench compare --current perf.json --baseline perf-baseline.json > /dev/null; then
-            echo "::warning::A budget or regression check failed; measuring again before deciding."
+          # Budgets fail the job; a slowdown against main's last run only warns, since two shared
+          # VMs with the same CPU can differ by more than the tolerance. A shared runner can have
+          # a bad minute: measure once more before failing.
+          if ! $bench compare --current perf.json --baseline perf-baseline.json --warn-on-regression > /dev/null; then
+            echo "::warning::A budget check failed; measuring again before deciding."
             $bench run --dir "$RUNNER_TEMP/bench" --out perf.json
           fi
-          $bench compare --current perf.json --baseline perf-baseline.json --summary "$GITHUB_STEP_SUMMARY"
+          $bench compare --current perf.json --baseline perf-baseline.json --warn-on-regression --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

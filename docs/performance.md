@@ -11,7 +11,7 @@ A synthetic mailbox of **250,000 messages** (`SyntheticCorpus`: Zipf vocabulary,
 | Cold launch → usable stream (p50 of 7 opens) | Open `MailStore` (GRDB pool, migration check) and read the Inbox conversations, as `AppModel.reload` does | < 400 ms |
 | Search keystroke → results (p95) | Phase 1 of `AppModel.runSearch`: `SearchEngine.hits` plus the person card (`contact(for:)`), over the typed sequence from `tidings-probe bench-search` (22 queries × 10 rounds) | < 30 ms |
 | Search facets (p95) | Phase 2: `SearchEngine.facets` over the same queries (skipped for a lone letter, as in the app) | < 100 ms |
-| Search person card (p95) | `contact(for:)` alone, also over prefixes of busy senders ("no" → every noreply@) | — (regressions gated) |
+| Search person card (p95) | `contact(for:)` alone, also over prefixes of busy senders ("no" → every noreply@) | — (regressions reported) |
 | Open cached message (p95) | The conversation's messages, the raw body from the cache tier, a full MIME parse | < 50 ms |
 | Peak memory | The bench process's peak resident size | < 300 MB |
 | Store on disk | Reported only | — |
@@ -23,7 +23,7 @@ These are the **engine's share** of each budget. SwiftUI layout, the `WKWebView`
 ## When it fails
 
 - **Over budget**: always a failure.
-- **Regression**: more than 10% slower than the baseline, and by more than the metric's noise floor (1 ms for search and opening a message, 3 ms for facets, 5 ms for launch and the person card, 8 MB for memory). The baseline is the results of the last passing run on `main`, kept in the Actions cache (`perf-baseline-<sha>`). Timings are compared only between runs on the **same CPU model**. A slowdown against a baseline from another processor shows as ⚠️ in the report and doesn't fail.
+- **Regression**: more than 10% slower than the baseline, and by more than the metric's noise floor (1 ms for search and opening a message, 3 ms for facets, 5 ms for launch and the person card, 8 MB for memory). The baseline is the results of the last passing run on `main`, kept in the Actions cache (`perf-baseline-<sha>`). Timings are compared only between runs on the **same CPU model**. A slowdown against a baseline from another processor shows as ⚠️ in the report and doesn't fail. In CI a regression is a warning, not a failure (`--warn-on-regression`): two shared VMs with the same CPU model can differ by more than 10%. Budgets always fail.
 - When either check fails, the job measures once more before deciding, so one bad minute on a shared runner doesn't fail the build.
 
 The report is in the job's summary, and the raw results are uploaded as the `perf-results` artifact.

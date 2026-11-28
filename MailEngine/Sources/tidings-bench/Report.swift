@@ -7,13 +7,19 @@ struct Report {
     var baseline: BenchResults?
     var tolerance: Double
 
-    var failures: [String] {
+    var failures: [String] { budgetFailures + regressions }
+
+    var budgetFailures: [String] {
         current.metrics.compactMap { metric in
-            switch verdict(metric) {
-            case .overBudget: "\(metric.label) is over budget"
-            case .regressed(let change): String(format: "%@ is %.0f%% slower than main", metric.label, change * 100)
-            default: nil
-            }
+            if case .overBudget = verdict(metric) { "\(metric.label) is over budget" } else { nil }
+        }
+    }
+
+    var regressions: [String] {
+        current.metrics.compactMap { metric in
+            if case .regressed(let change) = verdict(metric) {
+                String(format: "%@ is %.0f%% slower than main", metric.label, change * 100)
+            } else { nil }
         }
     }
 

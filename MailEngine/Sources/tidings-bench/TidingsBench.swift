@@ -61,6 +61,8 @@ struct Compare: ParsableCommand {
     @Option(help: "Results to compare with (the last run on main). Skipped when absent.") var baseline: String?
     @Option(help: "Allowed slowdown against the baseline, in percent.") var tolerance = 10.0
     @Option(help: "Also append the report (Markdown) to this file, e.g. $GITHUB_STEP_SUMMARY.") var summary: String?
+    @Flag(help: "Report slowdowns against the baseline as warnings only; budgets still fail. For shared CI runners, where two VMs with the same CPU can differ by more than the tolerance.")
+    var warnOnRegression = false
 
     func run() throws {
         let decoder = JSONDecoder()
@@ -76,8 +78,12 @@ struct Compare: ParsableCommand {
             handle.write(Data((report.markdown + "\n").utf8))
             try? handle.close()
         }
-        if !report.failures.isEmpty {
-            print("\nFailed: " + report.failures.joined(separator: "; "))
+        if warnOnRegression {
+            for warning in report.regressions { print("::warning::\(warning)") }
+        }
+        let failures = warnOnRegression ? report.budgetFailures : report.failures
+        if !failures.isEmpty {
+            print("\nFailed: " + failures.joined(separator: "; "))
             throw ExitCode.failure
         }
     }
