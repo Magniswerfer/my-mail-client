@@ -84,7 +84,11 @@ step "Sparkle appcast"
 mkdir -p "$FEED"
 cp "$DMG" "$FEED/"
 # Earlier versions stay in the feed: start from the appcast on the latest release, if any.
-gh release download --repo "$REPO" --pattern appcast.xml --dir "$FEED" 2>/dev/null || true
+# When there is a release but its appcast can't be fetched (offline, auth), stop rather than
+# publish a feed that has silently lost every older version.
+if gh release view --repo "$REPO" >/dev/null 2>&1; then
+    gh release download --repo "$REPO" --pattern appcast.xml --dir "$FEED" --clobber
+fi
 "$SPARKLE_BIN/generate_appcast" \
     --download-url-prefix "https://github.com/$REPO/releases/download/$TAG/" \
     --link "https://github.com/$REPO" \
