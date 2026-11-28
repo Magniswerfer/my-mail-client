@@ -3,11 +3,18 @@ import MailEngine
 
 /// Rules (SPEC §6): your ordered list, the pass after each sync, "run now", history and undo.
 extension AppModel {
+    /// The rules list shows what each rule did over this period.
+    private static let ruleCountPeriod: TimeInterval = 7 * 86_400
+
     // MARK: The list
 
     func loadRules() {
         rules = (try? store.rules()) ?? []
-        ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
+        refreshRuleCounts()
+    }
+
+    private func refreshRuleCounts() {
+        ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-Self.ruleCountPeriod))) ?? [:]
     }
 
     func saveRules() {
@@ -110,7 +117,7 @@ extension AppModel {
             self.ruleTask = nil
             self.reportJunk(junked)
             if matched > 0 || !arrived.isEmpty || !junked.isEmpty {
-                self.ruleCounts = (try? self.store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
+                self.refreshRuleCounts()
                 self.reload()
             }
             await self.deliverNotifications(arrived: arrived, ruleRuns: notify)
@@ -142,7 +149,7 @@ extension AppModel {
                 matched += report.matched
                 await deliver(report.deliveries)
             }
-            ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
+            refreshRuleCounts()
             reload()
             show(Toast(message: matched == 0 ? String(localized: "“\(rule.name)” matched nothing in the Inbox")
                                              : String(localized: "“\(rule.name)” acted on \(matched) conversations"),
@@ -158,7 +165,7 @@ extension AppModel {
             } catch {
                 lastError = String(localized: "Couldn't undo: \(String(describing: error))")
             }
-            ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
+            refreshRuleCounts()
             reload()
         }
     }
@@ -240,6 +247,10 @@ extension Rule {
 // MARK: - Forward, auto-reply, Shortcuts
 
 extension AppModel {
+    private static let autoRepliedKey = "rules.autoReplied"
+    /// Auto-replies go to one person at most once in this long.
+    private static let autoReplyInterval: TimeInterval = 86_400
+
     /// The actions the engine leaves to the app. Forwards and replies go through the outbox (so
     /// the undo window applies), or stay in Drafts when the rule used an "about" condition.
     func deliver(_ deliveries: [RuleDelivery]) async {
@@ -254,10 +265,7 @@ extension AppModel {
                     guard shouldAutoReply(to: message) else { continue }
                     await ruleMail(.reply, about: message, to: nil, text: text, send: !delivery.draftOnly)
                 case .runShortcut(let name):
-                    var c = URLComponents(string: "shortcuts://run-shortcut")
-                    c?.queryItems = [URLQueryItem(name: "name", value: name), URLQueryItem(name: "input", value: "text"),
-                                     URLQueryItem(name: "text", value: message.messageID.flatMap(MessageLink.url)?.absoluteString ?? message.subject)]
-                    if let url = c?.url { Platform.openExternally(url) }
+                    runShortcut(named: name, with: message)
                 default:
                     continue
                 }
@@ -266,19 +274,27 @@ extension AppModel {
         if !deliveries.isEmpty { reloadOutbox() }
     }
 
+    /// The Shortcuts app runs it with a link to the message (its subject when there's no link).
+    private func runShortcut(named name: String, with message: StoredMessage) {
+        var components = URLComponents(string: "shortcuts://run-shortcut")
+        components?.queryItems = [URLQueryItem(name: "name", value: name), URLQueryItem(name: "input", value: "text"),
+                                  URLQueryItem(name: "text", value: message.messageID.flatMap(MessageLink.url)?.absoluteString ?? message.subject)]
+        if let url = components?.url { Platform.openExternally(url) }
+    }
+
     /// Auto-replies never go to robots or lists, and at most once a day per person.
     private func shouldAutoReply(to message: StoredMessage) -> Bool {
         guard message.category == .primary, !SignatureInfo.looksAutomated(message.fromAddress) else { return false }
-        var log = UserDefaults.standard.dictionary(forKey: "rules.autoReplied") as? [String: Date] ?? [:]
+        var log = UserDefaults.standard.dictionary(forKey: Self.autoRepliedKey) as? [String: Date] ?? [:]
         let sender = message.fromAddress.lowercased()
-        if let last = log[sender], Date().timeIntervalSince(last) < 86_400 { return false }
+        if let last = log[sender], Date().timeIntervalSince(last) < Self.autoReplyInterval { return false }
         log[sender] = Date()
-        UserDefaults.standard.set(log, forKey: "rules.autoReplied")
+        UserDefaults.standard.set(log, forKey: Self.autoRepliedKey)
         return true
     }
 
     private func ruleMail(_ kind: ComposeKind, about message: StoredMessage, to: [MailAddress]?, text: String?, send: Bool) async {
-        guard let account = accounts.first(where: { $0.id == message.accountID }),
+        guard let account = account(id: message.accountID),
               let raw = try? await rawMessage(message) else { return }
         let parsed = MIMEParser.parse(raw)
         var draft = self.draft(kind, replyingTo: parsed, raw: raw, account: account)

@@ -30,6 +30,11 @@ extension AppModel {
         return messages(inThread: threadID).last
     }
 
+    /// The newest message of `thread`, else of the open conversation.
+    private func newestMessage(of thread: ThreadSummary?) -> StoredMessage? {
+        thread.map { messages(inThread: $0.threadID).last ?? $0.latest } ?? currentMessage
+    }
+
     func link(for message: StoredMessage) -> URL? {
         message.messageID.flatMap(MessageLink.url)
     }
@@ -52,8 +57,7 @@ extension AppModel {
     }
 
     func copyLink(thread: ThreadSummary? = nil) {
-        guard let message = thread.map({ messages(inThread: $0.threadID).last ?? $0.latest }) ?? currentMessage,
-              let url = link(for: message) else { return }
+        guard let message = newestMessage(of: thread), let url = link(for: message) else { return }
         Platform.copy(url.absoluteString)
         show(Toast(message: String(localized: "Link to the message copied"), symbol: "link"))
     }
@@ -91,7 +95,7 @@ extension AppModel {
 
     /// A reminder titled with the subject, linking back to the message.
     func addToReminders(thread: ThreadSummary? = nil, due: ReminderDue = .none) {
-        guard let message = thread.map({ messages(inThread: $0.threadID).last ?? $0.latest }) ?? currentMessage else { return }
+        guard let message = newestMessage(of: thread) else { return }
         let url = link(for: message)
         Task {
             do {
@@ -109,12 +113,13 @@ extension AppModel {
     }
 
     static let thingsAdd = URL(string: "things:///add")!
+    private static let things = URL(string: "things:///")!
 
-    var canAddToThings: Bool { Platform.canOpen(URL(string: "things:///")!) }
+    var canAddToThings: Bool { Platform.canOpen(Self.things) }
 
     /// Things' URL scheme: title, the sender and the link back in the notes.
     func addToThings(thread: ThreadSummary? = nil) {
-        guard let message = thread.map({ messages(inThread: $0.threadID).last ?? $0.latest }) ?? currentMessage,
+        guard let message = newestMessage(of: thread),
               var components = URLComponents(url: Self.thingsAdd, resolvingAgainstBaseURL: false) else { return }
         let notes = [String(localized: "From \(message.senderDisplay)"), link(for: message)?.absoluteString]
             .compactMap { $0 }.joined(separator: "\n")

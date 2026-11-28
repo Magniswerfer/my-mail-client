@@ -29,7 +29,7 @@ extension AppModel {
     /// (left out, they'd look removed). Not the dev copy's built-in local account.
     var cloudAccountRecords: [String: Data] {
         var records: [String: Data] = [:]
-        for account in accountsAwaitingPassword + accounts where account.id != "dev" {
+        for account in accountsAwaitingPassword + accounts where account.id != Self.devAccountID {
             records[account.login.lowercased()] = CloudAccountRecord(account).payload
         }
         return records
@@ -56,7 +56,7 @@ extension AppModel {
         cloudSync = sync
         // Passwords go to iCloud Keychain from now on, older ones too, so another device can sign in.
         Keychain.synchronizes = true
-        Keychain.moveToICloud(accounts.filter { $0.id != "dev" })
+        Keychain.moveToICloud(accounts.filter { $0.id != Self.devAccountID })
         let accounts = cloudAccounts
         Task {
             await sync.start(accounts: accounts)
@@ -127,7 +127,7 @@ extension AppModel {
     func applyCloudAccounts(_ report: CloudApplyReport) {
         for login in report.removedAccounts {
             accountsAwaitingPassword.removeAll { $0.login.lowercased() == login }
-            if let account = accounts.first(where: { $0.login.lowercased() == login && $0.id != "dev" }) {
+            if let account = accounts.first(where: { $0.login.lowercased() == login && $0.id != Self.devAccountID }) {
                 removeAccount(account, everywhere: false)
             }
         }

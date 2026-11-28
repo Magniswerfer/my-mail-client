@@ -11,12 +11,19 @@ import MailEngine
 @MainActor final class CalendarBridge {
     static let shared = CalendarBridge()
 
+    private static let linksKey = "calendarLinks"
+    /// An event with no end lasts this long (an all-day one, a day).
+    private static let defaultEventLength: TimeInterval = 3_600
+    private static let day: TimeInterval = 86_400
+    /// Highlights' events (flights, reservations) are at least this long.
+    private static let minimumEventLength: TimeInterval = 15 * 60
+
     /// Recreated once access is granted: a store made before that can't see events.
     private var store = EKEventStore()
     /// Event UID → `eventIdentifier` of the copy we made, so updates and cancellations find it.
     private var links: [String: String] {
-        get { UserDefaults.standard.dictionary(forKey: "calendarLinks") as? [String: String] ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: "calendarLinks") }
+        get { UserDefaults.standard.dictionary(forKey: Self.linksKey) as? [String: String] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: Self.linksKey) }
     }
 
     /// Off in the dev copy (`-TidingsDevServer`): it shares the user's real calendar and
@@ -25,7 +32,6 @@ import MailEngine
 
     var status: EKAuthorizationStatus { EKEventStore.authorizationStatus(for: .event) }
     var hasAccess: Bool { isEnabled && status == .fullAccess }
-    var wasDenied: Bool { status == .denied || status == .restricted || status == .writeOnly }
 
     func requestAccess() async -> Bool {
         guard isEnabled else { return false }
@@ -43,8 +49,8 @@ import MailEngine
         guard hasAccess else { return nil }
         if let id = links[invite.uid], let event = store.event(withIdentifier: id) { return event }
         let (start, end) = localRange(invite)
-        let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-86_400),
-                                                 end: end.addingTimeInterval(86_400), calendars: nil)
+        let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-Self.day),
+                                                 end: end.addingTimeInterval(Self.day), calendars: nil)
         return store.events(matching: predicate).first { $0.calendarItemExternalIdentifier == invite.uid }
     }
 
@@ -66,7 +72,6 @@ import MailEngine
 
     enum Failure: Error { case noAccess, noList, devCopy }
 
-    /// A reminder in the default list, with an optional due date (and an alert then).
     /// A plain event (flights, reservations from Highlights).
     func addEvent(title: String, start: Date, end: Date, location: String?, url: URL?) throws {
         guard hasAccess else { throw Failure.noAccess }
@@ -74,12 +79,13 @@ import MailEngine
         event.calendar = store.defaultCalendarForNewEvents
         event.title = title
         event.startDate = start
-        event.endDate = max(end, start.addingTimeInterval(900))
+        event.endDate = max(end, start.addingTimeInterval(Self.minimumEventLength))
         event.location = location
         event.url = url
         try store.save(event, span: .thisEvent, commit: true)
     }
 
+    /// A reminder in the default list, with an optional due date (and an alert then).
     func addReminder(title: String, notes: String?, url: URL?, due: Date?) async throws {
         guard isEnabled else { throw Failure.devCopy }
         if EKEventStore.authorizationStatus(for: .reminder) != .fullAccess {
@@ -146,7 +152,7 @@ import MailEngine
 
     /// Wall-clock range in this Mac's time zone. All-day dates are stored as UTC midnight.
     func localRange(_ invite: CalendarInvite) -> (Date, Date) {
-        let end = invite.end ?? invite.start.addingTimeInterval(invite.isAllDay ? 86_400 : 3_600)
+        let end = invite.end ?? invite.start.addingTimeInterval(invite.isAllDay ? Self.day : Self.defaultEventLength)
         guard invite.isAllDay else { return (invite.start, end) }
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = TimeZone(identifier: "UTC")!

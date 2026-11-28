@@ -21,8 +21,8 @@ import UserNotifications
             content.body = "\(message.fromName ?? message.fromAddress): \(message.subject)"
             content.sound = .default
             content.threadIdentifier = thread
-            var info = ["threadID": thread, "accountID": message.accountID]
-            if let link = message.messageID.flatMap(MessageLink.url) { info["link"] = link.absoluteString }
+            var info = [NotificationInfoKey.threadID: thread, NotificationInfoKey.accountID: message.accountID]
+            if let link = message.messageID.flatMap(MessageLink.url) { info[NotificationInfoKey.link] = link.absoluteString }
             content.userInfo = info
             try? await center.add(UNNotificationRequest(identifier: "\(prefix)snooze.\(message.id ?? 0)", content: content,
                                                         trigger: trigger(at: wake)))

@@ -52,9 +52,7 @@ final class AppModel {
             // One account's Inbox is a filter on the Inbox: leaving the Inbox ends it.
             if !isInInbox { inboxAccountID = nil }
             if selection != oldValue {
-                selectedThreadID = nil
-                selectionIndexHint = nil
-                heldCategories = [:]
+                forgetListPosition()
                 isSelecting = false
             }
             // Choosing a place in the sidebar leaves search, so the click visibly goes there.
@@ -73,6 +71,13 @@ final class AppModel {
                 selectionIndexHint = index
             }
         }
+    }
+
+    /// A different list is on screen: nothing selected in it yet, no categories held from the last one.
+    private func forgetListPosition() {
+        selectedThreadID = nil
+        selectionIndexHint = nil
+        heldCategories = [:]
     }
     /// More than one selected conversation (⌘A selects the focused one and everything below),
     /// always including `selectedThreadID`, which stays the focus the reader shows. Empty when
@@ -121,7 +126,7 @@ final class AppModel {
             return
         }
         readerTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(120))
+            try? await Task.sleep(for: Self.keyboardPause)
             guard !Task.isCancelled, let self else { return }
             self.readerThreadID = self.selectedThreadID
         }
@@ -380,14 +385,25 @@ final class AppModel {
     /// Each account's event listener and sync loop, so one account can be stopped on its own.
     private var tasks: [String: [Task<Void, Never>]] = [:]
 
+    // MARK: Timing
+
+    /// How long j/k or typing must pause before the reader or the search results catch up.
+    private static let keyboardPause: Duration = .milliseconds(120)
+    private static let reloadCoalescingDelay: Duration = .milliseconds(250)
+    /// The semantic tier waits for typing to stop: it's slower and less urgent than keyword hits.
+    private static let relatedSearchDelay: Duration = .milliseconds(250)
+    private static let minimumRelatedSearchLength = 3
+    /// During a first sync, the list refreshes every this many messages of a folder.
+    private static let progressReloadInterval = 100
+    /// Before suspending, mail due within the undo-send window plus this margin goes out now.
+    private static let undoWindowMargin: TimeInterval = 5
+    private static let suspendPollInterval: Duration = .milliseconds(400)
+
     init() {
-        isDevServer = ProcessInfo.processInfo.arguments.contains("-TidingsDevServer")
-            || ProcessInfo.processInfo.environment["TIDINGS_DEV_SERVER"] == "1"
+        isDevServer = Self.launchedAsDevServer
         CalendarBridge.shared.isEnabled = !isDevServer
-        let devUser = UserDefaults.standard.string(forKey: "TidingsDevUser") ?? "magnus"
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(isDevServer ? (devUser == "magnus" ? "Tidings-Dev" : "Tidings-Dev-\(devUser)") : "Tidings", isDirectory: true)
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        let devUser = UserDefaults.standard.string(forKey: "TidingsDevUser") ?? Self.defaultDevUser
+        let base = Self.makeDataDirectory(isDevServer: isDevServer, devUser: devUser)
         dataDirectory = base
         do {
             store = try MailStore(path: base.appendingPathComponent("mail.sqlite").path)
@@ -397,29 +413,9 @@ final class AppModel {
         cache = MessageCache(directory: base.appendingPathComponent("Cache", isDirectory: true))
         // The dev copy keeps its own account list and Keychain items, apart from the real app's.
         Keychain.service = isDevServer ? "Tidings-Dev" : "Tidings"
-        var dev = Self.devAccount
-        dev.endpoint.username = devUser
-        // `-TidingsDevPort 31145`: the local Dovecot with every folder under `INBOX.` (like NordicWay).
-        let devPort = UserDefaults.standard.integer(forKey: "TidingsDevPort")
-        if (1...65535).contains(devPort) { dev.endpoint.port = UInt16(devPort) }
-        if isDevServer {
-            if devUser != "magnus" { AccountStorage.devKey = "accounts.dev.v1.\(devUser)" }
-            // The local Dovecot account is always there; accounts added in the dev copy follow it.
-            var saved = AccountStorage.load(dev: true)
-            if let i = saved.firstIndex(where: { $0.id == "dev" }) { dev.identities = saved.remove(at: i).identities ?? dev.identities }
-            accounts = [dev] + saved
-        } else {
-            accounts = AccountStorage.load()
-        }
+        accounts = isDevServer ? Self.devAccounts(devUser: devUser) : AccountStorage.load()
         accountsAwaitingPassword = AccountStorage.loadAwaiting(dev: isDevServer)
-        if !isDevServer {
-            var changed = false
-            for index in accounts.indices where accounts[index].identities == nil {
-                accounts[index].identities = [Identity(address: accounts[index].endpoint.username, name: Platform.fullUserName)]
-                changed = true
-            }
-            if changed { AccountStorage.save(accounts) }
-        }
+        if !isDevServer { addMissingIdentities() }
         reload()
         reloadOutbox()
         loadRules()
@@ -430,9 +426,41 @@ final class AppModel {
         Self.shared = self
     }
 
+    private static var launchedAsDevServer: Bool {
+        ProcessInfo.processInfo.arguments.contains("-TidingsDevServer")
+            || ProcessInfo.processInfo.environment["TIDINGS_DEV_SERVER"] == "1"
+    }
+
+    /// Application Support/Tidings; the dev copy's own folder per `-TidingsDevUser`.
+    private static func makeDataDirectory(isDevServer: Bool, devUser: String) -> URL {
+        let name = !isDevServer ? "Tidings" : devUser == defaultDevUser ? "Tidings-Dev" : "Tidings-Dev-\(devUser)"
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(name, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// Accounts saved before identities existed send as their login, under your name.
+    private func addMissingIdentities() {
+        let missing = accounts.indices.filter { accounts[$0].identities == nil }
+        guard !missing.isEmpty else { return }
+        for index in missing {
+            accounts[index].identities = [Identity(address: accounts[index].endpoint.username, name: Platform.fullUserName)]
+        }
+        AccountStorage.save(accounts)
+    }
+
+    // MARK: The dev copy
+
+    /// The local Dovecot account (`MailEngine/TestServer`) the dev copy always has.
+    static let devAccountID = "dev"
+    private static let devAccountPassword = "tidings-test"
+    /// `-TidingsDevUser` when none is given: the dev copy's own Dovecot user and data folder.
+    private static let defaultDevUser = "magnus"
+
     static let devAccount = AccountConfig(
-        id: "dev", displayName: "Dev (local Dovecot)",
-        endpoint: IMAPEndpoint(host: "127.0.0.1", port: 31143, useTLS: false, username: "magnus"),
+        id: devAccountID, displayName: "Dev (local Dovecot)",
+        endpoint: IMAPEndpoint(host: "127.0.0.1", port: 31143, useTLS: false, username: defaultDevUser),
         addresses: [TestMailFactory.me.address],
         smtp: SMTPEndpoint(host: "127.0.0.1", port: 31587, security: .startTLS, username: TestMailFactory.me.address,
                            allowSelfSignedLocalhost: true),
@@ -440,42 +468,62 @@ final class AppModel {
                      Identity(address: "m@tidings.test", name: "Magnus H. Kaspersen", signature: "Magnus H. Kaspersen\nTidings")]
     )
 
+    /// The local Dovecot account always comes first; accounts added in the dev copy follow it.
+    private static func devAccounts(devUser: String) -> [AccountConfig] {
+        var dev = devAccount
+        dev.endpoint.username = devUser
+        // `-TidingsDevPort 31145`: the local Dovecot with every folder under `INBOX.` (like NordicWay).
+        let devPort = UserDefaults.standard.integer(forKey: "TidingsDevPort")
+        if (1...65535).contains(devPort) { dev.endpoint.port = UInt16(devPort) }
+        if devUser != defaultDevUser { AccountStorage.devKey = "accounts.dev.v1.\(devUser)" }
+        var saved = AccountStorage.load(dev: true)
+        if let i = saved.firstIndex(where: { $0.id == devAccountID }) { dev.identities = saved.remove(at: i).identities ?? dev.identities }
+        return [dev] + saved
+    }
+
     // MARK: Sync
 
     func start() {
         startCloudSync()
         _ = notifier   // become the notification delegate before any tap arrives
         syncWithPushServer()
-        if refinement == nil {
-            // Loading the embedding model takes a moment: keep it off the main thread.
-            let store = self.store
-            Task.detached { [weak self] in
-                let loaded = Refinement.onDevice(store: store)
-                let judge = OnDeviceRuleJudge(store: store, embedder: loaded?.embedder)
-                await MainActor.run {
-                    self?.refinement = loaded
-                    self?.ruleJudge = judge
-                }
+        if refinement == nil { loadOnDeviceModels() }
+        for account in accounts where syncs[account.id] == nil { startSync(account) }
+    }
+
+    /// Loading the embedding model takes a moment: kept off the main thread.
+    private func loadOnDeviceModels() {
+        let store = self.store
+        Task.detached { [weak self] in
+            let loaded = Refinement.onDevice(store: store)
+            let judge = OnDeviceRuleJudge(store: store, embedder: loaded?.embedder)
+            await MainActor.run {
+                self?.refinement = loaded
+                self?.ruleJudge = judge
             }
         }
-        for account in accounts where syncs[account.id] == nil {
-            guard let sync = makeSync(for: account) else { continue }
-            syncs[account.id] = sync
-            let id = account.id
-            // Subscribe before starting the loop, or a fast first sync can finish (and emit
-            // everything, including "idle") before anyone is listening.
-            tasks[id, default: []].append(Task { [weak self] in
-                let events = await sync.events()
-                self?.tasks[id, default: []].append(Task.detached { await sync.run() })
-                for await event in events { self?.handle(event, account: account) }
-            })
-        }
+    }
+
+    private func startSync(_ account: AccountConfig) {
+        guard let sync = makeSync(for: account) else { return }
+        syncs[account.id] = sync
+        let id = account.id
+        // Subscribe before starting the loop, or a fast first sync can finish (and emit
+        // everything, including "idle") before anyone is listening.
+        tasks[id, default: []].append(Task { [weak self] in
+            let events = await sync.events()
+            // Stopped while subscribing (the account was removed): a loop started now would
+            // never be cancelled.
+            guard !Task.isCancelled else { return }
+            self?.tasks[id, default: []].append(Task.detached { await sync.run() })
+            for await event in events { self?.handle(event, account: account) }
+        })
     }
 
     private func makeSync(for account: AccountConfig) -> AccountSync? {
         let password: String
-        if account.id == "dev" {
-            password = "tidings-test"
+        if account.id == Self.devAccountID {
+            password = Self.devAccountPassword
         } else if let stored = Keychain.password(for: account) {
             password = stored
         } else {
@@ -483,7 +531,7 @@ final class AppModel {
             return nil
         }
         return AccountSync(account: account, password: password, store: store, cache: cache,
-                           profile: account.id == "dev" ? .iCloudSimulation : nil)
+                           profile: account.id == Self.devAccountID ? .iCloudSimulation : nil)
     }
 
     /// Closes one account's connections (it's being removed).
@@ -507,22 +555,30 @@ final class AppModel {
     /// reach the server, then the connections close (a suspended app's sockets die anyway).
     /// Send-later mail stays queued for the next catch-up.
     func finishWorkBeforeSuspending(timeout: Duration = .seconds(25)) async {
-        let soon = Date().addingTimeInterval(AccountSync.defaultUndoSendDelay + 5)
-        let due = ((try? store.outbox()) ?? []).filter { $0.state == .queued && ($0.sendAt ?? .distantPast) <= soon }
+        let due = mailDueWithinUndoWindow()
         for item in due {
             if let id = item.id { try? await syncs[item.accountID]?.retrySend(id: id) }
         }
         let dueIDs = Set(due.compactMap(\.id))
         let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            let outbox = (try? store.outbox()) ?? []
-            let sending = outbox.contains { item in item.id.map(dueIDs.contains) == true && (item.state == .queued || item.state == .sending) }
-            let pending = accounts.contains { !((try? store.pendingActions(accountID: $0.id)) ?? []).isEmpty }
-            if !sending && !pending { break }
-            try? await Task.sleep(for: .milliseconds(400))
+        while ContinuousClock.now < deadline, hasUnfinishedOutgoingWork(sending: dueIDs) {
+            try? await Task.sleep(for: Self.suspendPollInterval)
         }
         stopSync()
         reloadOutbox()
+    }
+
+    /// Queued mail whose undo-send window closes within moments.
+    private func mailDueWithinUndoWindow() -> [OutboxItem] {
+        let soon = Date().addingTimeInterval(AccountSync.defaultUndoSendDelay + Self.undoWindowMargin)
+        return ((try? store.outbox()) ?? []).filter { $0.state == .queued && ($0.sendAt ?? .distantPast) <= soon }
+    }
+
+    /// Mail from `dueIDs` still going out, or Done/Pin/Snooze not yet on the server.
+    private func hasUnfinishedOutgoingWork(sending dueIDs: Set<Int64>) -> Bool {
+        let outbox = (try? store.outbox()) ?? []
+        let sending = outbox.contains { item in item.id.map(dueIDs.contains) == true && (item.state == .queued || item.state == .sending) }
+        return sending || accounts.contains { !((try? store.pendingActions(accountID: $0.id)) ?? []).isEmpty }
     }
 
     /// iOS background refresh: one catch-up per account on its own connection.
@@ -540,7 +596,7 @@ final class AppModel {
         case .started: syncStatus[account.id] = String(localized: "Syncing…")
         case .mailboxProgress(let mailbox, let done, let total):
             syncStatus[account.id] = String(localized: "\(mailbox): \(done) of \(total)")
-            if done % 100 == 0 || done == total { reload() }
+            if done % Self.progressReloadInterval == 0 || done == total { reload() }
         case .mailboxSynced: reload()
         case .idle:
             syncStatus[account.id] = String(localized: "Up to date")
@@ -556,16 +612,7 @@ final class AppModel {
             syncStatus[account.id] = String(localized: "A change couldn't be applied")
             lastError = message
         case .failed(let message):
-            syncStatus[account.id] = String(localized: "Offline")
-            lastError = message
-            let first = accountErrors[account.id] == nil
-            accountErrors[account.id] = message
-            // Mail only goes out over a working connection: say so instead of a silent wait.
-            let due = outboxItems.contains { $0.accountID == account.id && $0.state == .queued && ($0.sendAt ?? .distantFuture) <= Date() }
-            if first, due {
-                show(Toast(message: String(localized: "Not sent yet: can't connect to \(account.displayName). It's waiting in the Outbox."),
-                           symbol: "exclamationmark.triangle"))
-            }
+            accountWentOffline(account, message: message)
         case .sending:
             syncStatus[account.id] = String(localized: "Sending…")
             reloadOutbox()
@@ -579,6 +626,22 @@ final class AppModel {
         case .snoozesWoke:
             reload()
         }
+    }
+
+    private func accountWentOffline(_ account: AccountConfig, message: String) {
+        syncStatus[account.id] = String(localized: "Offline")
+        lastError = message
+        let isNewFailure = accountErrors[account.id] == nil
+        accountErrors[account.id] = message
+        // Mail only goes out over a working connection: say so instead of a silent wait.
+        let hasMailDue = outboxItems.contains { $0.accountID == account.id && $0.state == .queued && ($0.sendAt ?? .distantFuture) <= Date() }
+        if isNewFailure, hasMailDue {
+            show(Toast(message: Self.waitingInOutboxMessage(accountName: account.displayName), symbol: "exclamationmark.triangle"))
+        }
+    }
+
+    static func waitingInOutboxMessage(accountName: String) -> String {
+        String(localized: "Not sent yet: can't connect to \(accountName). It's waiting in the Outbox.")
     }
 
     /// One background sorting pass after each sync, never two at once; then your rules, which
@@ -609,8 +672,7 @@ final class AppModel {
         let account = AccountConfig(displayName: trimmed, endpoint: endpoint, addresses: [trimmed],
                                     identities: [Identity(address: trimmed, name: Platform.fullUserName)])
         try checkNotAdded(account)
-        // Validate before saving anything: read-only login + capability check.
-        _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
+        try await signInReadOnly(endpoint, password: password)
         try save(account, password: password)
     }
 
@@ -624,36 +686,36 @@ final class AppModel {
         let account = AccountConfig(displayName: title.isEmpty ? trimmed : title, endpoint: settings.imap, addresses: [trimmed],
                                     smtp: smtp, identities: [Identity(address: trimmed, name: Platform.fullUserName)])
         try checkNotAdded(account)
-        do {
-            _ = try await MailSession.open(endpoint: settings.imap, password: password) { session in session.capabilities }
-        } catch {
-            throw AccountSetupError.incoming(String(describing: error))
-        }
-        do {
-            try await SMTPClient.verify(endpoint: smtp, password: password)
-        } catch {
-            throw AccountSetupError.outgoing(String(describing: error))
-        }
+        try await verifyServers(imap: settings.imap, smtp: smtp, password: password)
         try save(account, password: password)
     }
 
     /// An account another device added through iCloud: its password is checked against the
     /// servers, then it joins like one added here.
     func completeAccount(_ account: AccountConfig, password: String) async throws {
+        try await verifyServers(imap: account.endpoint, smtp: account.smtp, password: password)
+        accountsAwaitingPassword.removeAll { $0.login == account.login }
+        try save(account, password: password)
+    }
+
+    /// Validates before anything is saved: a read-only login and capability check.
+    private func signInReadOnly(_ endpoint: IMAPEndpoint, password: String) async throws {
+        _ = try await MailSession.open(endpoint: endpoint, password: password) { session in session.capabilities }
+    }
+
+    /// Both servers tried with the password, each failure named for the setup form.
+    private func verifyServers(imap: IMAPEndpoint, smtp: SMTPEndpoint?, password: String) async throws {
         do {
-            _ = try await MailSession.open(endpoint: account.endpoint, password: password) { session in session.capabilities }
+            try await signInReadOnly(imap, password: password)
         } catch {
             throw AccountSetupError.incoming(String(describing: error))
         }
-        if let smtp = account.smtp {
-            do {
-                try await SMTPClient.verify(endpoint: smtp, password: password)
-            } catch {
-                throw AccountSetupError.outgoing(String(describing: error))
-            }
+        guard let smtp else { return }
+        do {
+            try await SMTPClient.verify(endpoint: smtp, password: password)
+        } catch {
+            throw AccountSetupError.outgoing(String(describing: error))
         }
-        accountsAwaitingPassword.removeAll { $0.login == account.login }
-        try save(account, password: password)
     }
 
     private func checkNotAdded(_ account: AccountConfig) throws {
@@ -687,12 +749,7 @@ final class AppModel {
             lastError = String(describing: error)
         }
         cache.removeAccount(account.id)
-        if account.id != "dev" {
-            let others = accounts.filter { $0.id != account.id }
-            for key in Set([account.login, account.endpoint.username]) where !others.contains(where: { $0.login == key || $0.endpoint.username == key }) {
-                Keychain.delete(account: key, everywhere: everywhere && Keychain.synchronizes)
-            }
-        }
+        deletePasswords(of: account, everywhere: everywhere)
         accounts.removeAll { $0.id == account.id }
         accountsAwaitingPassword.removeAll { $0.login == account.login }
         persistAccounts()
@@ -706,6 +763,15 @@ final class AppModel {
         show(Toast(message: String(localized: "Removed \(account.displayName)"), symbol: "person.crop.circle.badge.minus"))
     }
 
+    /// Its Keychain passwords, except ones another account signs in with too.
+    private func deletePasswords(of account: AccountConfig, everywhere: Bool) {
+        guard account.id != Self.devAccountID else { return }
+        let others = accounts.filter { $0.id != account.id }
+        for key in Set([account.login, account.endpoint.username]) where !others.contains(where: { $0.login == key || $0.endpoint.username == key }) {
+            Keychain.delete(account: key, everywhere: everywhere && Keychain.synchronizes)
+        }
+    }
+
     /// One account's Inbox (nil: every account together, the default).
     func goToInbox(account id: String?) {
         let changed = inboxAccountID != id
@@ -713,9 +779,7 @@ final class AppModel {
         if !isInInbox {
             selection = .category(.primary)     // reloads
         } else if changed {
-            selectedThreadID = nil
-            selectionIndexHint = nil
-            heldCategories = [:]
+            forgetListPosition()
             endSearch()
             reload()
         }
@@ -767,72 +831,78 @@ final class AppModel {
         highlightTraining = (try? store.highlightTraining()) ?? highlightTraining
         scheduleCloudPush()
         do {
-            // One read of the Inbox serves the stream, a category and the unread count.
-            var unifiedCache: [ThreadSummary]?
-            func unified() throws -> [ThreadSummary] {
-                if let unifiedCache { return unifiedCache }
-                let loaded = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
-                unifiedCache = loaded
-                return loaded
-            }
-            // The Inbox on screen: every account's, or one account's.
-            var filteredCache: [ThreadSummary]?
-            func inbox() throws -> [ThreadSummary] {
-                guard let id = inboxAccountID else { return try unified() }
-                if let filteredCache { return filteredCache }
-                let loaded = try store.threads(mailbox: "INBOX", accountID: id, ownAddresses: ownAddresses)
-                filteredCache = loaded
-                return loaded
-            }
-            switch selection {
-            case .inbox, .accountInbox:
-                threads = try inbox()
-            case .outbox:
-                threads = []
-            case .snoozed:
-                // Each account's snoozed folder ("Snoozed", or "INBOX.Snoozed" on some servers).
-                let paths = Set(mailboxes.map(\.path).filter(AccountSync.isSnoozedMailbox)
-                                + [AccountSync.snoozedMailbox, "INBOX.Snoozed", "INBOX/Snoozed"])
-                var seen = Set<String>()
-                threads = try paths.flatMap { try store.threads(mailbox: $0, ownAddresses: ownAddresses) }
-                    .filter { seen.insert($0.threadID).inserted }
-                    .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
-            case .replyLater:
-                threads = try inbox().filter(\.isReplyLater)
-            case .category(let category):
-                // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
-                threads = try inbox().filter { !$0.isReplyLater && shows($0, under: category) }
-                for thread in threads where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
-            case .mailbox(let accountID, let path):
-                threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
-            case .smartFolder(let id):
-                threads = try smartFolder(id: id).map(smartFolderThreads) ?? []
-            case .aiCategory(let id):
-                aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
-                threads = try inbox().filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
-            }
-            // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
-            if pinnedOnly, isInInbox { threads = threads.filter(\.isPinned) }
-            if unreadOnly {
-                let open = selectedThreadID
-                threads = threads.filter { $0.unreadCount > 0 || $0.threadID == open }
-            }
-            if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
+            let inbox = InboxReader(store: store, accountID: inboxAccountID, ownAddresses: ownAddresses)
+            threads = try filteredForList(threadsForSelection(inbox))
             if selection == .inbox { holdOpenBundles() }
             mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
-            let primary = try unified().filter { $0.latest.category == .primary }
-            inboxUnreadCount = primary.reduce(0) { $0 + $1.unreadCount }
-            #if os(macOS)
-            BackgroundMode.setDockBadge(inboxUnreadCount)
-            #endif
-            accountUnreadCounts = accounts.count > 1
-                ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
-                : [:]
-            replyLaterCount = try unified().filter(\.isReplyLater).count
+            try updateBadges(unifiedInbox: inbox.unified())
             scheduleSmartFolderCounts()
         } catch {
             lastError = String(describing: error)
         }
+    }
+
+    private func threadsForSelection(_ inbox: InboxReader) throws -> [ThreadSummary] {
+        switch selection {
+        case .inbox, .accountInbox:
+            return try inbox.shown()
+        case .outbox:
+            return []
+        case .snoozed:
+            return try snoozedThreads()
+        case .replyLater:
+            return try inbox.shown().filter(\.isReplyLater)
+        case .category(let category):
+            // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
+            let shown = try inbox.shown().filter { !$0.isReplyLater && shows($0, under: category) }
+            for thread in shown where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
+            return shown
+        case .mailbox(let accountID, let path):
+            return try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
+        case .smartFolder(let id):
+            return try smartFolder(id: id).map(smartFolderThreads) ?? []
+        case .aiCategory(let id):
+            aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
+            return try inbox.shown().filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
+        }
+    }
+
+    /// Snoozed is a folder per account ("Snoozed", or "INBOX.Snoozed" on some servers); the
+    /// list goes in wake-up order.
+    private func snoozedThreads() throws -> [ThreadSummary] {
+        let paths = Set(mailboxes.map(\.path).filter(AccountSync.isSnoozedMailbox) + Self.knownSnoozedMailboxes)
+        var seen = Set<String>()
+        return try paths.flatMap { try store.threads(mailbox: $0, ownAddresses: ownAddresses) }
+            .filter { seen.insert($0.threadID).inserted }
+            .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
+    }
+
+    private static let knownSnoozedMailboxes = [AccountSync.snoozedMailbox, "INBOX.Snoozed", "INBOX/Snoozed"]
+
+    /// Pinned Only, Unread Only, and rows an action has already taken away.
+    private func filteredForList(_ loaded: [ThreadSummary]) -> [ThreadSummary] {
+        var list = loaded
+        // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
+        if pinnedOnly, isInInbox { list = list.filter(\.isPinned) }
+        if unreadOnly {
+            let open = selectedThreadID
+            list = list.filter { $0.unreadCount > 0 || $0.threadID == open }
+        }
+        if !pendingRemovals.isEmpty { list.removeAll { pendingRemovals.contains($0.threadID) } }
+        return list
+    }
+
+    /// The Inbox, Dock and per-account badges count unread Primary conversations, from every account.
+    private func updateBadges(unifiedInbox unified: [ThreadSummary]) {
+        let primary = unified.filter { $0.latest.category == .primary }
+        inboxUnreadCount = primary.reduce(0) { $0 + $1.unreadCount }
+        #if os(macOS)
+        BackgroundMode.setDockBadge(inboxUnreadCount)
+        #endif
+        accountUnreadCounts = accounts.count > 1
+            ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
+            : [:]
+        replyLaterCount = unified.filter(\.isReplyLater).count
     }
 
     /// A reload a moment from now, folding together the ones asked for in the meantime
@@ -840,15 +910,13 @@ final class AppModel {
     func scheduleReload() {
         guard reloadTask == nil else { return }
         reloadTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: Self.reloadCoalescingDelay)
             guard let self else { return }
             self.reloadTask = nil
             self.reload()
         }
     }
 
-    /// The Inbox stream: primary conversations as rows, every other category collapsed into a
-    /// bundle placed where its newest conversation would be.
     /// Conversations held back until a bundle's next delivery, with when that is.
     func waiting(_ category: MailCategory) -> (count: Int, next: Date)? {
         guard let schedule = bundleSchedules[category], let last = schedule.lastDelivery(before: now),
@@ -884,13 +952,10 @@ final class AppModel {
         }
     }
 
+    /// The Inbox stream: primary conversations as rows, every other category collapsed into a
+    /// bundle placed where its newest conversation would be.
     var streamItems: [StreamItem] {
-        guard selection == .inbox else {
-            // Pinned first everywhere (stable, so each list keeps its own order otherwise);
-            // Snoozed stays in wake-up order.
-            guard selection != .snoozed else { return threads.map(StreamItem.thread) }
-            return (threads.filter(\.isPinned) + threads.filter { !$0.isPinned }).map(StreamItem.thread)
-        }
+        guard selection == .inbox else { return listItems }
         var items: [StreamItem] = []
         var bundles: [MailCategory: [ThreadSummary]] = [:]
         let later = threads.filter(\.isReplyLater)
@@ -901,28 +966,40 @@ final class AppModel {
             if category == .primary || thread.isPinned { items.append(.thread(thread)) }
             else { bundles[category, default: []].append(thread) }
         }
-        for (category, members) in bundles {
-            // Scheduled bundles show what arrived before their last delivery; the rest waits.
-            if let delivered = bundleSchedules[category]?.lastDelivery(before: now) {
-                let ready = members.filter { $0.arrivedAt <= delivered }
-                if !ready.isEmpty { items.append(.bundle(category, ready, deliveredAt: delivered)) }
-            } else {
-                items.append(.bundle(category, members, deliveredAt: nil))
-            }
-        }
+        items += bundles.compactMap { deliveredBundle($0.key, members: $0.value) }
         return items.sorted { a, b in
             let (ta, tb) = (tier(a), tier(b))
-            return ta != tb ? ta > tb : sortDate(a) > sortDate(b)
+            return ta != tb ? ta.rawValue > tb.rawValue : sortDate(a) > sortDate(b)
         }
+    }
+
+    /// Every list but the Inbox: pinned first (stable, so each list keeps its own order
+    /// otherwise); Snoozed stays in wake-up order.
+    private var listItems: [StreamItem] {
+        guard selection != .snoozed else { return threads.map(StreamItem.thread) }
+        return (threads.filter(\.isPinned) + threads.filter { !$0.isPinned }).map(StreamItem.thread)
+    }
+
+    /// Scheduled bundles show what arrived before their last delivery; the rest waits.
+    private func deliveredBundle(_ category: MailCategory, members: [ThreadSummary]) -> StreamItem? {
+        guard let delivered = bundleSchedules[category]?.lastDelivery(before: now) else {
+            return .bundle(category, members, deliveredAt: nil)
+        }
+        let ready = members.filter { $0.arrivedAt <= delivered }
+        return ready.isEmpty ? nil : .bundle(category, ready, deliveredAt: delivered)
     }
 
     /// Pinned conversations sit on top, then Reply Later, then bundles with new mail, then
     /// everything by time.
-    private func tier(_ item: StreamItem) -> Int {
+    private enum StreamTier: Int {
+        case byTime, bundleWithNewMail, replyLater, pinned
+    }
+
+    private func tier(_ item: StreamItem) -> StreamTier {
         switch item {
-        case .thread(let thread): thread.isPinned ? 3 : 0
-        case .replyLater: 2
-        case .bundle(let category, let members, _): isBundlePinned(category, members) ? 1 : 0
+        case .thread(let thread): thread.isPinned ? .pinned : .byTime
+        case .replyLater: .replyLater
+        case .bundle(let category, let members, _): isBundlePinned(category, members) ? .bundleWithNewMail : .byTime
         }
     }
 
@@ -949,10 +1026,6 @@ final class AppModel {
         }
     }
 
-    func unreadCount(_ category: MailCategory) -> Int {
-        (try? store.threads(mailbox: "INBOX").filter { $0.latest.category == category }.reduce(0) { $0 + $1.unreadCount }) ?? 0
-    }
-
     func toggleBundle(_ category: MailCategory) {
         if expandedBundles.contains(category) {
             expandedBundles.remove(category)
@@ -962,7 +1035,7 @@ final class AppModel {
         } else {
             if let item = streamItems.first(where: { if case .bundle(category, _, _) = $0 { true } else { false } }) {
                 bundleAnchors[category] = sortDate(item)
-                if tier(item) == 1 { pinnedOpenBundles.insert(category) }
+                if tier(item) == .bundleWithNewMail { pinnedOpenBundles.insert(category) }
             }
             expandedBundles.insert(category)
             holdOpenBundles()
@@ -993,11 +1066,8 @@ final class AppModel {
         if isSearching {
             let ids = searchHits.map(\.id) + relatedHits.map(\.id)
             guard !ids.isEmpty else { return }
-            let index = selectedHitID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
-            lastMoveDirection = delta > 0 ? 1 : -1
-            isKeyboardNavigating = true
-            selectedHitID = ids[max(0, min(ids.count - 1, index + delta))]
-            isKeyboardNavigating = false
+            let index = selectedHitID.flatMap { ids.firstIndex(of: $0) } ?? Self.indexBeforeFirstMove(delta, count: ids.count)
+            navigateByKeyboard(delta) { self.selectedHitID = ids[Self.clampedIndex(index + delta, count: ids.count)] }
             return
         }
         multiSelection = []
@@ -1006,10 +1076,21 @@ final class AppModel {
         // If the selection has left the list, the row that took its place is "next".
         let index = selectedThreadID.flatMap { ids.firstIndex(of: $0) }
             ?? selectionIndexHint.map { delta > 0 ? $0 - 1 : $0 }
-            ?? (delta > 0 ? -1 : ids.count)
+            ?? Self.indexBeforeFirstMove(delta, count: ids.count)
+        navigateByKeyboard(delta) { self.selectedThreadID = ids[Self.clampedIndex(index + delta, count: ids.count)] }
+    }
+
+    /// With nothing selected, j starts at the top and k at the bottom.
+    private static func indexBeforeFirstMove(_ delta: Int, count: Int) -> Int { delta > 0 ? -1 : count }
+
+    private static func clampedIndex(_ index: Int, count: Int) -> Int { max(0, min(count - 1, index)) }
+
+    /// Moves the selection as j/k do: the reader waits for a pause, and the list keeps lookahead
+    /// in the direction of travel.
+    private func navigateByKeyboard(_ delta: Int, _ move: () -> Void) {
         lastMoveDirection = delta > 0 ? 1 : -1
         isKeyboardNavigating = true
-        selectedThreadID = ids[max(0, min(ids.count - 1, index + delta))]
+        move()
         isKeyboardNavigating = false
     }
 
@@ -1056,32 +1137,37 @@ final class AppModel {
         let firstKey = searchHits.isEmpty
         searchTask = Task { [weak self] in
             // The first letters show results at once; later ones wait for a pause in typing.
-            if !firstKey { try? await Task.sleep(for: .milliseconds(120)) }
+            if !firstKey { try? await Task.sleep(for: Self.keyboardPause) }
             guard !Task.isCancelled else { return }
-            let result = await Task.detached(priority: .userInitiated) { () -> (SearchHits?, SearchFacets?, ContactHit?) in
+            let result = await Task.detached(priority: .userInitiated) { () -> SearchOutcome in
                 let hits = try? engine.hits(query)
                 let facets = query.wantsFacets ? try? engine.facets(query) : nil
+                // The person card: never yourself.
                 let contact = (try? engine.contact(for: typed)).flatMap { own.contains($0.address.lowercased()) ? nil : $0 }
-                return (hits, facets, contact)
+                return SearchOutcome(hits: hits, facets: facets, contact: contact)
             }.value
             guard !Task.isCancelled, let self else { return }
-            self.searchHits = result.0?.hits ?? []
-            if let hits = result.0 { self.searchMilliseconds = Double(hits.duration.components.attoseconds) / 1e15 }
-            self.facets = result.1
-            // The person card: never yourself.
-            self.searchContact = result.2
+            self.searchHits = result.hits?.hits ?? []
+            if let hits = result.hits { self.searchMilliseconds = Self.milliseconds(hits.duration) }
+            self.facets = result.facets
+            self.searchContact = result.contact
             self.scheduleRelated(for: typed, excluding: Set(self.searchHits.map(\.id)))
         }
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Double {
+        let parts = duration.components
+        return Double(parts.seconds) * 1_000 + Double(parts.attoseconds) / 1e15
     }
 
     /// Semantic second tier: a moment after typing stops, off the main thread.
     private func scheduleRelated(for query: SearchQuery, excluding: Set<Int64>) {
         relatedHits = []
         let text = (query.terms + query.phrases).joined(separator: " ")
-        guard text.count >= 3, let embedder = refinement?.embedder else { return }
+        guard text.count >= Self.minimumRelatedSearchLength, let embedder = refinement?.embedder else { return }
         let engine = SearchEngine(store: store)
         relatedTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: Self.relatedSearchDelay)
             guard !Task.isCancelled else { return }
             let found = await Task.detached(priority: .userInitiated) {
                 (try? engine.related(to: text, embedder: embedder, excluding: excluding)) ?? []
@@ -1143,29 +1229,77 @@ final class AppModel {
     }
 }
 
+/// What one search run finds, handed back from the background.
+private struct SearchOutcome: Sendable {
+    var hits: SearchHits?
+    var facets: SearchFacets?
+    var contact: ContactHit?
+}
+
+/// One read of the Inbox per reload, shared by the list, a category tab and the badges.
+private final class InboxReader {
+    private let store: MailStore
+    private let accountID: String?
+    private let ownAddresses: Set<String>
+    private var unifiedCache: [ThreadSummary]?
+    private var shownCache: [ThreadSummary]?
+
+    init(store: MailStore, accountID: String?, ownAddresses: Set<String>) {
+        self.store = store
+        self.accountID = accountID
+        self.ownAddresses = ownAddresses
+    }
+
+    /// Every account's Inbox together.
+    func unified() throws -> [ThreadSummary] {
+        if let unifiedCache { return unifiedCache }
+        let loaded = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+        unifiedCache = loaded
+        return loaded
+    }
+
+    /// The Inbox on screen: every account's, or one account's.
+    func shown() throws -> [ThreadSummary] {
+        guard let accountID else { return try unified() }
+        if let shownCache { return shownCache }
+        let loaded = try store.threads(mailbox: "INBOX", accountID: accountID, ownAddresses: ownAddresses)
+        shownCache = loaded
+        return loaded
+    }
+}
+
 /// Account list persistence. Passwords live only in the Keychain.
 enum AccountStorage {
-    static func loadAwaiting(dev: Bool) -> [AccountConfig] {
-        guard let data = UserDefaults.standard.data(forKey: dev ? "\(devKey).awaiting" : "accounts.awaiting.v1") else { return [] }
-        return (try? JSONDecoder().decode([AccountConfig].self, from: data)) ?? []
-    }
-
-    static func saveAwaiting(_ accounts: [AccountConfig], dev: Bool) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: dev ? "\(devKey).awaiting" : "accounts.awaiting.v1")
-    }
-
     static let key = "accounts.v1"
+    private static let awaitingKey = "accounts.awaiting.v1"
     /// The dev copy's own list (`-TidingsDevServer`), so it never touches the real one; one per
     /// `-TidingsDevUser`, like its data folder.
     nonisolated(unsafe) static var devKey = "accounts.dev.v1"
 
     static func load(dev: Bool = false) -> [AccountConfig] {
-        guard let data = UserDefaults.standard.data(forKey: dev ? devKey : key) else { return [] }
-        return (try? JSONDecoder().decode([AccountConfig].self, from: data)) ?? []
+        read(forKey: dev ? devKey : key)
     }
 
     static func save(_ accounts: [AccountConfig], dev: Bool = false) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: dev ? devKey : key)
+        write(accounts, forKey: dev ? devKey : key)
+    }
+
+    /// Accounts another device added, waiting for their password to reach this one.
+    static func loadAwaiting(dev: Bool) -> [AccountConfig] {
+        read(forKey: dev ? "\(devKey).awaiting" : awaitingKey)
+    }
+
+    static func saveAwaiting(_ accounts: [AccountConfig], dev: Bool) {
+        write(accounts, forKey: dev ? "\(devKey).awaiting" : awaitingKey)
+    }
+
+    private static func read(forKey key: String) -> [AccountConfig] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([AccountConfig].self, from: data)) ?? []
+    }
+
+    private static func write(_ accounts: [AccountConfig], forKey key: String) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(accounts), forKey: key)
     }
 }
 

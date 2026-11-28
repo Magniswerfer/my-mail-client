@@ -33,6 +33,14 @@ enum CategoryTab: Hashable, Identifiable {
 }
 
 extension AppModel {
+    /// A category's description keeps this many recent examples for the model.
+    private static let maxCategoryExamples = 12
+    /// A move teaches the model from at most this many of the moved conversations.
+    private static let examplesPerMove = 4
+    /// Each pass sorts at most this many batches per category; the rest waits for the next sync.
+    private static let sortingBatchesPerPass = 5
+    private static let previewLimit = 300
+
     // MARK: Tabs
 
     /// Primary (where the Inbox opens), the other five categories, yours, and All always last.
@@ -125,11 +133,6 @@ extension AppModel {
         aiMembership = (try? store.aiCategoryMembership()) ?? [:]
     }
 
-    func moveAICategories(from: IndexSet, to: Int) {
-        aiCategories.move(fromOffsets: from, toOffset: to)
-        try? store.saveAICategories(aiCategories)
-    }
-
     // MARK: Sorting (on device)
 
     /// After each sync: new Inbox mail through every AI category. A new category first sorts
@@ -145,7 +148,7 @@ extension AppModel {
             var changed = false
             for category in categories {
                 let rule = self.calibrated(category.asRule)
-                for _ in 0..<5 {   // at most a few batches per pass; the rest next time
+                for _ in 0..<Self.sortingBatchesPerPass {
                     let batch = (try? self.store.messagesToSort(into: category.id, ownAddresses: self.ownAddresses)) ?? []
                     guard let last = batch.last?.id else { break }
                     for message in batch {
@@ -189,10 +192,8 @@ extension AppModel {
         for thread in threads {
             try? store.setMembership(threadID: thread.threadID, categoryID: id, isMember: true)
         }
-        let examples = threads.prefix(4).map {
-            AboutCondition.Example(text: "\($0.latest.senderDisplay): \($0.latest.subject)", matches: true)
-        }
-        category.about.examples = Array((category.about.examples + examples).suffix(12))
+        let examples = threads.prefix(Self.examplesPerMove).map { Self.example($0, matches: true) }
+        category.about.examples = Self.recentExamples(category.about.examples + examples)
         replace(aiCategory: category)
         multiSelection = []
         let undoToken = offerUndo(named: String(localized: "Move")) { [weak self] in
@@ -244,6 +245,15 @@ extension AppModel {
                    symbol: category.symbol, undo: undoToken))
     }
 
+    /// A conversation as the model learns it: who it's from and what it's about.
+    private static func example(_ thread: ThreadSummary, matches: Bool) -> AboutCondition.Example {
+        AboutCondition.Example(text: "\(thread.latest.senderDisplay): \(thread.latest.subject)", matches: matches)
+    }
+
+    private static func recentExamples(_ examples: [AboutCondition.Example]) -> [AboutCondition.Example] {
+        Array(examples.suffix(maxCategoryExamples))
+    }
+
     private func replace(aiCategory category: AICategory) {
         if let i = aiCategories.firstIndex(where: { $0.id == category.id }) { aiCategories[i] = category }
         try? store.saveAICategories(aiCategories)
@@ -291,10 +301,8 @@ extension AppModel {
         guard var category = aiCategory(id: id) else { return }
         let isMember = aiMembership[thread.threadID]?.contains(id) == true
         try? store.setMembership(threadID: thread.threadID, categoryID: id, isMember: !isMember)
-        let example = AboutCondition.Example(text: "\(thread.latest.senderDisplay): \(thread.latest.subject)", matches: !isMember)
-        category.about.examples = Array((category.about.examples + [example]).suffix(12))
-        if let i = aiCategories.firstIndex(where: { $0.id == id }) { aiCategories[i] = category }
-        try? store.saveAICategories(aiCategories)
+        category.about.examples = Self.recentExamples(category.about.examples + [Self.example(thread, matches: !isMember)])
+        replace(aiCategory: category)
         aiMembership = (try? store.aiCategoryMembership()) ?? [:]
         reload()
         show(Toast(message: isMember ? String(localized: "Removed from “\(category.name)”") : String(localized: "Added to “\(category.name)”"),
@@ -304,6 +312,6 @@ extension AppModel {
     /// What a new or edited category would catch in your recent mail (on-device).
     func previewAICategory(_ category: AICategory) async -> [StoredMessage] {
         guard ruleJudge != nil else { return [] }
-        return (try? await ruleEngine.preview(calibrated(category.asRule), store: store, limit: 300)) ?? []
+        return (try? await ruleEngine.preview(calibrated(category.asRule), store: store, limit: Self.previewLimit)) ?? []
     }
 }

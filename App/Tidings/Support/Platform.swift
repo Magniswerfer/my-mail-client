@@ -164,19 +164,9 @@ enum FontTraits {
         #endif
     }
 
+    /// The font with bold (or italic) turned on where asked; nothing is turned off.
     static func adding(bold: Bool = false, italic: Bool = false, to font: PlatformFont) -> PlatformFont {
-        #if os(macOS)
-        var traits = font.fontDescriptor.symbolicTraits
-        if bold { traits.insert(.bold) }
-        if italic { traits.insert(.italic) }
-        return NSFont(descriptor: font.fontDescriptor.withSymbolicTraits(traits), size: font.pointSize) ?? font
-        #else
-        var traits = font.fontDescriptor.symbolicTraits
-        if bold { traits.insert(.traitBold) }
-        if italic { traits.insert(.traitItalic) }
-        guard let descriptor = font.fontDescriptor.withSymbolicTraits(traits) else { return font }
-        return UIFont(descriptor: descriptor, size: font.pointSize)
-        #endif
+        setting(bold: bold ? true : nil, italic: italic ? true : nil, on: font)
     }
 }
 

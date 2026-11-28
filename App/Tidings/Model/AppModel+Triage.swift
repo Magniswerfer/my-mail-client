@@ -72,7 +72,25 @@ struct SnoozePreset: Identifiable, Hashable {
     }
 }
 
+/// Where one triage action runs: an account's server, in one folder.
+private struct TriagePlace: Hashable {
+    var accountID: String
+    var mailbox: String
+}
+
+private struct TriageBatch {
+    var place: TriagePlace
+    var threadIDs: [String]
+}
+
 extension AppModel {
+    private static let toastDuration: Duration = .seconds(6)
+    /// Opening an unread conversation marks it read after this long, so j/k skimming doesn't.
+    private static let markReadDwell: Duration = .milliseconds(800)
+    /// Removals closer together than this skip the animation (rapid E).
+    private static let quickRepeatInterval: TimeInterval = 0.5
+    private static let removalAnimationDuration: TimeInterval = 0.18
+
     // MARK: Targets
 
     /// What an action applies to: the selected conversation, or every one in a ⌘A block
@@ -161,57 +179,71 @@ extension AppModel {
             show(Toast(message: kind.toastText(count: targets.count), symbol: kind.symbol, undo: undoToken))
         }
         let ids = Set(targets.map(\.threadID))
-        if kind == .done || kind == .markRead || kind == .trash || kind == .junk { ids.forEach(notifier.clear) }
+        if kind.clearsNotifications { ids.forEach(notifier.clear) }
         let removes = removesFromCurrentView(kind)
-        if removes {
-            // One motion: the row leaves and the selection moves on together, before the engine
-            // has written anything (it catches up a moment later; see `pendingRemovals`).
-            pendingRemovals.formUnion(ids)
-            // The first press animates; presses in quick succession don't wait on animations.
-            let animation: Animation? = Date().timeIntervalSince(lastRemovalAt) < 0.5 ? nil : .snappy(duration: 0.18)
-            lastRemovalAt = Date()
-            // Like j/k: the reader follows once you pause, so rapid E never waits on rendering mail.
-            isKeyboardNavigating = true
-            withAnimation(animation) {
-                self.threads.removeAll { ids.contains($0.threadID) }
-                selectedThreadID = nextSelection
-            }
-            isKeyboardNavigating = false
-        }
+        if removes { removeRowsAtOnce(ids, selecting: nextSelection) }
         let source = sourceMailbox
-        // A smart folder mixes folders: each conversation is acted on where it lives.
         // A smart folder mixes folders, and Snoozed is a different folder on each account
         // ("INBOX.Snoozed" on some servers): act where each conversation is.
         let perFolder: Bool = switch selection { case .smartFolder, .snoozed: true; default: false }
-        struct Where: Hashable { var accountID: String; var mailbox: String }
         Task {
-            // A conversation can live in more than one account (mail sent to two of your
-            // addresses): it's acted on in each, unless you're looking at one account's Inbox.
-            let owners = self.owningAccounts(of: targets.map(\.threadID))
-            var groups: [Where: [ThreadSummary]] = [:]
-            for thread in targets {
-                for account in onlyAccount.map({ [$0] }) ?? owners[thread.threadID] ?? [thread.latest.accountID] {
-                    groups[Where(accountID: account, mailbox: perFolder ? thread.latest.mailbox : source), default: []].append(thread)
-                }
-            }
-            for (place, group) in groups {
-                guard let sync = syncs[place.accountID] else { continue }
-                do {
-                    if let change = try await sync.perform(kind, threadIDs: group.map(\.threadID), from: place.mailbox) {
-                        box.changes.append(change)
-                    }
-                } catch {
-                    lastError = String(describing: error)
-                }
-            }
-            // Undo was pressed before the engine finished: reverse right away.
-            if box.undone { await undo(box) }
+            let batches = self.batches(for: targets, inAccount: onlyAccount, mailbox: perFolder ? nil : source)
+            await apply(kind, batches, into: box)
             // The store has the change now, so these can't come back on the next reload.
             pendingRemovals.subtract(ids)
             // Removals already show; batch their reloads. Flag changes (pin, read) show on reload.
             if removes { scheduleReload() } else { reload() }
         }
         return box
+    }
+
+    /// One motion: the rows leave and the selection moves on together, before the engine has
+    /// written anything (it catches up a moment later; see `pendingRemovals`).
+    private func removeRowsAtOnce(_ ids: Set<String>, selecting next: String?) {
+        pendingRemovals.formUnion(ids)
+        // The first press animates; presses in quick succession don't wait on animations.
+        let isQuickRepeat = Date().timeIntervalSince(lastRemovalAt) < Self.quickRepeatInterval
+        let animation: Animation? = isQuickRepeat ? nil : .snappy(duration: Self.removalAnimationDuration)
+        lastRemovalAt = Date()
+        // Like j/k: the reader follows once you pause, so rapid E never waits on rendering mail.
+        isKeyboardNavigating = true
+        withAnimation(animation) {
+            self.threads.removeAll { ids.contains($0.threadID) }
+            selectedThreadID = next
+        }
+        isKeyboardNavigating = false
+    }
+
+    /// The conversations grouped by where to act on them. A conversation can live in more than
+    /// one account (mail sent to two of your addresses): it's acted on in each, unless one
+    /// account is asked for or you're looking at one account's Inbox. `mailbox` nil: each
+    /// conversation where it is.
+    private func batches(for targets: [ThreadSummary], inAccount onlyAccount: String?, mailbox: String?) -> [TriageBatch] {
+        let owners = owningAccounts(of: targets.map(\.threadID))
+        var groups: [TriagePlace: [String]] = [:]
+        for thread in targets {
+            for account in onlyAccount.map({ [$0] }) ?? owners[thread.threadID] ?? [thread.latest.accountID] {
+                let place = TriagePlace(accountID: account, mailbox: mailbox ?? thread.latest.mailbox)
+                groups[place, default: []].append(thread.threadID)
+            }
+        }
+        return groups.map { TriageBatch(place: $0.key, threadIDs: $0.value) }
+    }
+
+    /// Runs the action on each account's server, collecting what Undo needs in `box`; an Undo
+    /// pressed before the engine finished reverses it right away.
+    private func apply(_ kind: TriageKind, _ batches: [TriageBatch], into box: ChangeBox) async {
+        for batch in batches {
+            guard let sync = syncs[batch.place.accountID] else { continue }
+            do {
+                if let change = try await sync.perform(kind, threadIDs: batch.threadIDs, from: batch.place.mailbox) {
+                    box.changes.append(change)
+                }
+            } catch {
+                lastError = String(describing: error)
+            }
+        }
+        if box.undone { await undo(box) }
     }
 
     /// Like `perform`, for a conversation that may not be in the list on screen (e.g. replying
@@ -223,12 +255,9 @@ extension AppModel {
         }
         let box = ChangeBox()
         Task {
-            for account in owningAccounts(of: [threadID])[threadID] ?? [accountID] {
-                if let change = try? await syncs[account]?.perform(kind, threadIDs: [threadID], from: mailbox) {
-                    box.changes.append(change)
-                }
-            }
-            if box.undone { await undo(box) }
+            let owners = owningAccounts(of: [threadID])[threadID] ?? [accountID]
+            let batches = owners.map { TriageBatch(place: TriagePlace(accountID: $0, mailbox: mailbox), threadIDs: [threadID]) }
+            await apply(kind, batches, into: box)
             reload()
         }
         return box
@@ -400,7 +429,11 @@ extension AppModel {
 
     private func undo(_ box: ChangeBox) async {
         for change in box.changes {
-            try? await syncs[change.accountID]?.undo(change)
+            do {
+                try await syncs[change.accountID]?.undo(change)
+            } catch {
+                lastError = String(describing: error)
+            }
         }
         box.changes = []
         reload()
@@ -412,7 +445,7 @@ extension AppModel {
         self.toast = toast
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(6))
+            try? await Task.sleep(for: Self.toastDuration)
             guard !Task.isCancelled else { return }
             self?.toast = nil
         }
@@ -426,62 +459,22 @@ extension AppModel {
         markReadTask?.cancel()
         guard let thread = targetThreads.first, thread.unreadCount > 0 else { return }
         markReadTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(800))
+            try? await Task.sleep(for: Self.markReadDwell)
             guard !Task.isCancelled, let self, self.selectedThreadID == thread.threadID else { return }
             self.perform(.markRead, on: [thread], toast: false)
         }
     }
 }
 
-extension AppModel {
-    // MARK: Folders
-
-    /// Where a conversation can be moved (V): Inbox and Archive first, then your own folders.
-    /// Not the folder it's in, and not Sent, Drafts or Snoozed (snoozing has its own key).
-    func folderTargets(for thread: ThreadSummary?) -> [MailboxState] {
-        guard let accountID = thread?.latest.accountID ?? accounts.first?.id else { return [] }
-        let source = sourceMailbox
-        func rank(_ box: MailboxState) -> Int {
-            switch box.role {
-            case .inbox: 0
-            case .archive: 1
-            case .junk: 3
-            case .trash: 4
-            default: 2
-            }
-        }
-        return mailboxes
-            .filter { $0.accountID == accountID && $0.path != source && !AccountSync.isSnoozedMailbox($0.path)
-                && $0.role != .sent && $0.role != .drafts }
-            .sorted { rank($0) == rank($1) ? $0.path.localizedStandardCompare($1.path) == .orderedAscending : rank($0) < rank($1) }
-    }
-
-    /// Moves conversations to a folder, using the matching triage action for the special ones
-    /// (so moving to Archive is Done, and back to Inbox clears snooze keywords).
-    func move(_ threads: [ThreadSummary]? = nil, toFolder box: MailboxState) {
-        let kind: TriageKind = switch box.role {
-        case .inbox: selection == .snoozed ? .unsnooze : .moveToInbox
-        case .archive: .done
-        case .trash: .trash
-        case .junk: .junk
-        default: .move(toMailbox: box.path)
-        }
-        // A folder belongs to one account; the others don't get a folder of that name.
-        if case .move = kind { perform(kind, on: threads, inAccount: box.accountID) } else { perform(kind, on: threads) }
-    }
-}
-
-extension MailboxState {
-    /// A folder's name as shown: the role's title for special folders, else the last path part.
-    var displayName: String { role?.title ?? Self.displayName(path) }
-
-    static func displayName(_ path: String) -> String {
-        if path.uppercased() == "INBOX" { return String(localized: "Inbox") }
-        return path.split(whereSeparator: { $0 == "/" || $0 == "." }).last.map(String.init) ?? path
-    }
-}
-
 extension TriageKind {
+    /// Dealt with: the conversation's notifications go.
+    var clearsNotifications: Bool {
+        switch self {
+        case .done, .markRead, .trash, .junk: true
+        default: false
+        }
+    }
+
     var removesFromView: Bool {
         switch self {
         case .done, .trash, .junk, .moveToInbox, .move, .snooze, .unsnooze: true
