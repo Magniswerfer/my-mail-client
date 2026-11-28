@@ -17,17 +17,20 @@ extension AppModel {
         if ids.allSatisfy(isMuted) {
             for id in ids { try? store.unmute(threadID: id) }
             mutedThreadIDs.subtract(ids)
+            discardReloadInFlight()
             revision &+= 1
             show(Toast(message: String(localized: "Unmuted"), symbol: "bell"))
             return
         }
         for id in ids { try? store.mute(threadID: id) }
         mutedThreadIDs.formUnion(ids)
+        discardReloadInFlight()
         // Muting in the Inbox also takes it out of the Inbox; elsewhere it only mutes.
         let box = sourceMailbox == "INBOX" ? perform(.done, on: targets, toast: false) : nil
         let undo: @MainActor () -> Void = { [weak self] in
             for id in ids { try? self?.store.unmute(threadID: id) }
             self?.mutedThreadIDs.subtract(ids)
+            self?.discardReloadInFlight()
             if let box { self?.undo(box: box) }
             self?.revision &+= 1
         }
@@ -40,6 +43,7 @@ extension AppModel {
     func unmute(threadID: String) {
         try? store.unmute(threadID: threadID)
         mutedThreadIDs.remove(threadID)
+        discardReloadInFlight()
         revision &+= 1
     }
 }

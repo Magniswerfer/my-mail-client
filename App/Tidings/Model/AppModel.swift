@@ -817,21 +817,31 @@ final class AppModel {
                 let result = await Task.detached(priority: .userInitiated) {
                     Result(catching: { try input.fetch() })
                 }.value
-                // Asked again while reading (the store changed since): read again.
-                guard model.reloadRequests == request else { continue }
-                model.reloadTask = nil
-                // A full reload ran meanwhile and read a newer store: keep its result.
-                guard model.reloadGeneration == generation else { return }
-                model.reloadGeneration &+= 1
-                switch result {
-                case .success(let snapshot): model.apply(snapshot)
-                case .failure(let error):
-                    model.revision &+= 1
-                    model.lastError = String(describing: error)
+                // Unless a full reload ran meanwhile and read a newer store, this is newer than
+                // what's on screen: show it, even if more changes came in while reading. (Only
+                // ever re-reading would starve the list during a busy sync.)
+                if model.reloadGeneration == generation {
+                    model.reloadGeneration &+= 1
+                    switch result {
+                    case .success(let snapshot): model.apply(snapshot)
+                    case .failure(let error):
+                        model.revision &+= 1
+                        model.lastError = String(describing: error)
+                    }
                 }
-                return
+                guard model.reloadRequests != request else { model.reloadTask = nil; return }
+                // Asked again while reading (the store changed since): read again, a moment later.
+                try? await Task.sleep(for: .milliseconds(250))
             }
         }
+    }
+
+    /// For a change made straight to on-screen state that a snapshot also carries (mute): a
+    /// background read already under way would put the old value back, so it's dropped and
+    /// read again.
+    func discardReloadInFlight() {
+        reloadGeneration &+= 1
+        if reloadTask != nil { reloadRequests &+= 1 }
     }
 
     /// What a reload reads, for the place on screen.
