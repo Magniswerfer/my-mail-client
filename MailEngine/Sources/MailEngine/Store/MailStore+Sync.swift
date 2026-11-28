@@ -60,6 +60,18 @@ extension MailStore {
         }
     }
 
+    /// The stream's query (`threads(mailbox:)`) for the unified Inbox filters on `mailbox` alone,
+    /// which `message_mailbox_thread` (accountID first) can't serve: every reload scanned the whole
+    /// message table. This covering index answers it (and the per-account form) from the index.
+    /// Registered last: it names columns later migrations added.
+    static func registerStreamIndexMigrations(_ m: inout DatabaseMigrator) {
+        m.registerMigration("v27-stream-index") { db in
+            try db.execute(sql: """
+                CREATE INDEX IF NOT EXISTS message_stream ON message(mailbox, threadID, sortKey, surfacedAt, date, reactionTo, accountID)
+                """)
+        }
+    }
+
     // MARK: Mailbox state
 
     public func mailboxStates(accountID: String) throws -> [MailboxState] {

@@ -246,6 +246,10 @@ extension AppModel {
 /// ⌘K: type to filter every command, ↑↓ to choose, Return to run.
 struct CommandPalette: View {
     @Environment(AppModel.self) private var model
+    /// The enabled commands, built once when the palette opens. Building them reads the store
+    /// (invites, date suggestions) and system state (login items), and depends on most of the
+    /// model: rebuilding per keystroke, or on every model change while open, made typing lag.
+    @State private var available: [AppCommand]?
     @State private var query = ""
     @State private var highlighted = 0
     @FocusState private var focused: Bool
@@ -283,7 +287,10 @@ struct CommandPalette: View {
         .macFrame(width: 520)
         .glassEffect(.regular, in: .rect(cornerRadius: 18))
         .shadow(radius: 30, y: 10)
-        .onAppear { focused = true }
+        .onAppear {
+            if available == nil { available = model.commands.filter(\.isEnabled) }
+            focused = true
+        }
         .onChange(of: query) { highlighted = 0 }
         .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, max(0, matches.count - 1)); return .handled }
         .onKeyPress(.upArrow) { highlighted = max(highlighted - 1, 0); return .handled }
@@ -292,7 +299,7 @@ struct CommandPalette: View {
 
     private var filtered: [AppCommand] {
         let words = query.lowercased().split(separator: " ")
-        let all = model.commands.filter(\.isEnabled)
+        let all = available ?? model.commands.filter(\.isEnabled)
         guard !words.isEmpty else { return all }
         return all.filter { command in
             let haystack = "\(command.title) \(command.keys ?? "")".lowercased()

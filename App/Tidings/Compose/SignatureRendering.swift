@@ -169,6 +169,13 @@ import UIKit
         loaded = nil
     }
 
+    /// The page's process died mid-load (none of the above then comes): carry on, or every
+    /// later signature would wait behind this one forever.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        loaded?.resume()
+        loaded = nil
+    }
+
     /// Links in a signature never open from the picture's page.
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
         navigationAction.navigationType == .other ? .allow : .cancel

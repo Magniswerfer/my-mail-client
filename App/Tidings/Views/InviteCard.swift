@@ -9,12 +9,38 @@ struct InviteCard: View {
     let message: StoredMessage
     let invite: CalendarInvite
     @State private var showGuests = false
+    /// What the calendar says about this invite. EventKit lookups are synchronous and slow, so
+    /// they run when the invite or `model.revision` changes (every calendar action bumps it),
+    /// not on every redraw (the guest popover, hover, a sync elsewhere).
+    @State private var calendarState = CalendarState()
+
+    private struct CalendarState {
+        var inCalendar: EKEvent?
+        var conflicts: [EKEvent] = []
+        var isLinked = false
+    }
+
+    private struct CalendarKey: Equatable {
+        var revision: Int
+        var uid: String
+        var sequence: Int
+        var isCancelled: Bool
+    }
+
+    private var calendarKey: CalendarKey {
+        CalendarKey(revision: model.revision, uid: invite.uid, sequence: invite.sequence, isCancelled: invite.isCancelled)
+    }
+
+    private func refreshCalendar() {
+        let calendar = CalendarBridge.shared
+        calendarState = CalendarState(inCalendar: calendar.existingEvent(for: invite),
+                                      conflicts: calendar.conflicts(for: invite),
+                                      isLinked: calendar.isLinked(invite))
+    }
 
     var body: some View {
-        let _ = model.revision
-        let calendar = CalendarBridge.shared
-        let inCalendar = calendar.existingEvent(for: invite)
-        let conflicts = calendar.conflicts(for: invite)
+        let inCalendar = calendarState.inCalendar
+        let conflicts = calendarState.conflicts
         let mine = model.myResponse(to: invite, accountID: message.accountID)
         let isOrganizer = invite.isOrganized(by: model.ownAddresses)
 
@@ -62,7 +88,11 @@ struct InviteCard: View {
         .background(.tint.opacity(0.06), in: .rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.tint.opacity(0.18)))
         .tint(invite.isCancelled ? .red : .accentColor)
-        .task(id: "\(invite.uid)#\(invite.sequence)#\(invite.isCancelled)") { model.syncCalendarCopy(invite) }
+        .onChange(of: calendarKey, initial: true) { refreshCalendar() }
+        .task(id: "\(invite.uid)#\(invite.sequence)#\(invite.isCancelled)") {
+            model.syncCalendarCopy(invite)
+            refreshCalendar()   // the copy may have moved or gone; that doesn't bump the revision
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Invitation: \(invite.summary)"))
     }
@@ -113,7 +143,7 @@ struct InviteCard: View {
     @ViewBuilder private func actions(mine: CalendarInvite.ParticipationStatus?, isOrganizer: Bool, inCalendar: EKEvent?) -> some View {
         HStack(spacing: 8) {
             if invite.isCancelled {
-                if inCalendar != nil, CalendarBridge.shared.isLinked(invite) {
+                if inCalendar != nil, calendarState.isLinked {
                     Button("Remove from Calendar", systemImage: "calendar.badge.minus") { model.removeFromCalendar(invite) }
                 }
             } else if invite.method == .request, !isOrganizer, invite.organizer != nil {

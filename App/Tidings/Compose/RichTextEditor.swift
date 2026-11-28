@@ -58,12 +58,22 @@ enum QuoteBars {
     /// The bars' rects in the text view's coordinates (`origin`: where the text container starts).
     static func rects(storage: NSAttributedString, layout: NSTextLayoutManager, origin: CGPoint) -> [CGRect] {
         guard let content = layout.textContentManager, storage.length > 0 else { return [] }
+        // Only the laid-out part on screen: asking for frames anywhere else would lay out the
+        // whole quote (a long forward, say) on every draw, i.e. on every keystroke.
+        let viewport = layout.textViewportLayoutController.viewportRange
         var rects: [CGRect] = []
         storage.enumerateAttribute(.tidingsQuote, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
             guard value != nil,
                   let start = content.location(content.documentRange.location, offsetBy: range.location),
                   let end = content.location(start, offsetBy: range.length),
-                  let textRange = NSTextRange(location: start, end: end) else { return }
+                  let quoteRange = NSTextRange(location: start, end: end) else { return }
+            let textRange: NSTextRange
+            if let viewport {
+                guard let visible = quoteRange.intersection(viewport) else { return }
+                textRange = visible
+            } else {
+                textRange = quoteRange
+            }
             var block = CGRect.null
             layout.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, _, _ in
                 block = block.union(frame)
@@ -74,21 +84,39 @@ enum QuoteBars {
         }
         return rects
     }
+
+    /// Whether the text has any quoted paragraph (cheap: no layout).
+    static func hasQuote(in storage: NSAttributedString) -> Bool {
+        var found = false
+        storage.enumerateAttribute(.tidingsQuote, in: NSRange(location: 0, length: storage.length),
+                                   options: .longestEffectiveRangeNotRequired) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
+        }
+        return found
+    }
 }
 
 #if os(macOS)
 final class QuoteBarTextView: NSTextView {
+    /// The last draw put bars up: they need redrawing (or clearing) as the text changes.
+    private var drewBars = false
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        let bars = quoteBars()
+        drewBars = !bars.isEmpty
+        guard drewBars else { return }
         NSColor.tertiaryLabelColor.setFill()
-        for bar in quoteBars() where bar.intersects(dirtyRect) {
+        for bar in bars where bar.intersects(dirtyRect) {
             NSBezierPath(roundedRect: bar, xRadius: 1, yRadius: 1).fill()
         }
     }
 
     override func didChangeText() {
         super.didChangeText()
-        needsDisplay = true
+        // The bars move with the text. Without any quote, typing needn't redraw the whole view.
+        if drewBars { needsDisplay = true; return }
+        if let storage = textStorage, QuoteBars.hasQuote(in: storage) { needsDisplay = true }
     }
 
     private func quoteBars() -> [CGRect] {
@@ -111,19 +139,26 @@ final class QuoteBarTextView: NSTextView {
 }
 #else
 final class QuoteBarTextView: UITextView {
+    /// The last draw put bars up: they need redrawing (or clearing) as it scrolls.
+    private var drewBars = false
+
     override func draw(_ rect: CGRect) {
         super.draw(rect)
-        guard let layout = textLayoutManager else { return }
-        UIColor.tertiaryLabel.setFill()
+        guard let layout = textLayoutManager else { drewBars = false; return }
         let origin = CGPoint(x: textContainerInset.left, y: textContainerInset.top)
-        for bar in QuoteBars.rects(storage: textStorage, layout: layout, origin: origin) where bar.intersects(rect) {
+        let bars = QuoteBars.rects(storage: textStorage, layout: layout, origin: origin)
+        drewBars = !bars.isEmpty
+        guard drewBars else { return }
+        UIColor.tertiaryLabel.setFill()
+        for bar in bars where bar.intersects(rect) {
             UIBezierPath(roundedRect: bar, cornerRadius: 1).fill()
         }
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        setNeedsDisplay()
+        // Runs on every scroll step: redraw only when there are bars to move or clear.
+        if drewBars || QuoteBars.hasQuote(in: textStorage) { setNeedsDisplay() }
     }
 }
 #endif
@@ -293,6 +328,7 @@ struct RichTextEditor: NSViewRepresentable {
         scroll.drawsBackground = false
         view.textStorage?.setAttributedString(text)
         context.coordinator.textView = view
+        context.coordinator.lastText = text
         if focusOnAppear {
             DispatchQueue.main.async {
                 view.window?.makeFirstResponder(view)
@@ -303,8 +339,20 @@ struct RichTextEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.parent = self
         guard let view = scroll.documentView as? NSTextView, !context.coordinator.isEditing else { return }
-        if view.attributedString() != text { view.textStorage?.setAttributedString(text) }
+        // Every keystroke comes back here as the very text the editor reported: only a text set
+        // from elsewhere (signature, unfolded quote) is compared and put in.
+        if text !== context.coordinator.lastText {
+            context.coordinator.lastText = text
+            if view.attributedString() != text {
+                // Keep the caret where it was (a signature's picture can arrive while you type).
+                let selection = view.selectedRange()
+                view.textStorage?.setAttributedString(text)
+                let location = min(selection.location, text.length)
+                view.setSelectedRange(NSRange(location: location, length: min(selection.length, text.length - location)))
+            }
+        }
         if let insertion, insertion.id != context.coordinator.lastInsertion {
             context.coordinator.lastInsertion = insertion.id
             // After this update: undoable, and reported through textDidChange like typing.
@@ -321,6 +369,8 @@ struct RichTextEditor: NSViewRepresentable {
         weak var textView: NSTextView? { didSet { if textView != nil { TextFormatting.active = self } } }
         var isEditing = false
         var lastInsertion: UUID?
+        /// The text last reported to (or taken from) the binding.
+        var lastText: NSAttributedString?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
 
@@ -350,7 +400,9 @@ struct RichTextEditor: NSViewRepresentable {
                 view.setSelectedRange(NSRange(location: caret, length: 0))
                 view.typingAttributes = RichTextEditor.baseAttributes
             }
-            parent.text = view.attributedString().copy() as! NSAttributedString
+            let snapshot = view.attributedString().copy() as! NSAttributedString
+            lastText = snapshot
+            parent.text = snapshot
             isEditing = false
         }
 
@@ -428,6 +480,7 @@ struct RichTextEditor: UIViewRepresentable {
         view.writingToolsBehavior = .complete
         view.dataDetectorTypes = []
         context.coordinator.textView = view
+        context.coordinator.lastText = text
         view.inputAccessoryView = context.coordinator.formattingBar()
         if focusOnAppear {
             DispatchQueue.main.async {
@@ -439,8 +492,18 @@ struct RichTextEditor: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.parent = self
         guard !context.coordinator.isEditing else { return }
-        if view.attributedText != text { view.attributedText = text }
+        // As on the Mac: the text the editor itself reported isn't copied out and compared again.
+        if text !== context.coordinator.lastText {
+            context.coordinator.lastText = text
+            if view.attributedText != text {
+                let selection = view.selectedRange
+                view.attributedText = text
+                let location = min(selection.location, text.length)
+                view.selectedRange = NSRange(location: location, length: min(selection.length, text.length - location))
+            }
+        }
         if let insertion, insertion.id != context.coordinator.lastInsertion {
             context.coordinator.lastInsertion = insertion.id
             let coordinator = context.coordinator
@@ -457,6 +520,8 @@ struct RichTextEditor: UIViewRepresentable {
         weak var textView: UITextView?
         var isEditing = false
         var lastInsertion: UUID?
+        /// The text last reported to (or taken from) the binding.
+        var lastText: NSAttributedString?
 
         init(_ parent: RichTextEditor) { self.parent = parent }
 
@@ -507,7 +572,9 @@ struct RichTextEditor: UIViewRepresentable {
                 view.selectedRange = NSRange(location: caret, length: 0)
                 view.typingAttributes = RichTextEditor.baseAttributes
             }
-            parent.text = view.attributedText.copy() as! NSAttributedString
+            let snapshot = view.attributedText.copy() as! NSAttributedString
+            lastText = snapshot
+            parent.text = snapshot
             isEditing = false
         }
 

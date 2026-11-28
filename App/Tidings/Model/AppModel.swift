@@ -49,6 +49,7 @@ final class AppModel {
     // Navigation
     var selection: SidebarItem = .category(.primary) {
         didSet {
+            streamInputsVersion &+= 1
             // One account's Inbox is a filter on the Inbox: leaving the Inbox ends it.
             if !isInInbox { inboxAccountID = nil }
             if selection != oldValue {
@@ -91,7 +92,7 @@ final class AppModel {
     /// bundle you've opened. The background classifier keeps learning after each sync, and
     /// without this a conversation could hop to another bundle (taking rows with it) while
     /// you triage. Released when you leave the view, collapse the bundle, or move it yourself.
-    @ObservationIgnored var heldCategories: [String: MailCategory] = [:]
+    @ObservationIgnored var heldCategories: [String: MailCategory] = [:] { didSet { streamInputsVersion &+= 1 } }
 
     /// The category a conversation is shown under: where you saw it, else its current one.
     func displayCategory(_ thread: ThreadSummary) -> MailCategory {
@@ -126,13 +127,13 @@ final class AppModel {
             self.readerThreadID = self.selectedThreadID
         }
     }
-    var expandedBundles: Set<MailCategory> = []
+    var expandedBundles: Set<MailCategory> = [] { didSet { streamInputsVersion &+= 1 } }
     /// Where an open bundle sits in the stream, captured when it's opened. A bundle is placed by
     /// its newest conversation, so without this, archiving that one would move the whole open
     /// bundle down the list mid-triage. It can still move up (new mail), never down.
-    @ObservationIgnored private var bundleAnchors: [MailCategory: Date] = [:]
+    @ObservationIgnored private var bundleAnchors: [MailCategory: Date] = [:] { didSet { streamInputsVersion &+= 1 } }
     /// Open bundles that were pinned to the top (they had new mail) when opened; they stay there until collapsed.
-    @ObservationIgnored private var pinnedOpenBundles: Set<MailCategory> = []
+    @ObservationIgnored private var pinnedOpenBundles: Set<MailCategory> = [] { didSet { streamInputsVersion &+= 1 } }
     /// Show only pinned conversations (Google Inbox's pin toggle).
     var pinnedOnly = false { didSet { reload() } }
     /// Show only conversations with unread mail, in any list. The one you're reading stays
@@ -277,18 +278,42 @@ final class AppModel {
     @ObservationIgnored var refinement: Refinement?
     @ObservationIgnored var refinementTask: Task<Void, Never>?
     private(set) var isRefining = false
-    var bundleSchedules: [MailCategory: BundleSchedule] = BundleScheduleStorage.load()
+    var bundleSchedules: [MailCategory: BundleSchedule] = BundleScheduleStorage.load() { didSet { streamInputsVersion &+= 1 } }
     /// "Now" for delivery schedules; bumped at each delivery so the stream re-renders.
-    var now = Date()
+    var now = Date() { didSet { streamInputsVersion &+= 1 } }
     /// Bumped on every reload so views that read the store directly (the reader) redraw.
     var revision = 0
     @ObservationIgnored var deliveryTask: Task<Void, Never>?
     @ObservationIgnored var reloadTask: Task<Void, Never>?
+    /// Bumped by every synchronous `reload()`: a background read that started before it is stale.
+    @ObservationIgnored private var reloadGeneration = 0
+    /// Bumped by every `scheduleReload()`: a background read that started before it reads again.
+    @ObservationIgnored private var reloadRequests = 0
+    /// Bumped when anything `streamItems` reads changes; `streamCache` is good until then.
+    @ObservationIgnored private var streamInputsVersion = 0
+    @ObservationIgnored private var streamCache: (version: Int, items: [StreamItem], ids: [String])?
+    /// Whether Things is installed, asked at most once a minute (context menus read it per row).
+    @ObservationIgnored var thingsCheck: (at: Date, installed: Bool)?
+    @ObservationIgnored var folderLayoutCache: [String: (separator: Character?, prefix: String)] = [:]
+    @ObservationIgnored private var readerCache: (key: ReaderCacheKey, messages: [StoredMessage])?
     /// When a triage action last removed a row; quick repeats skip the animation.
     @ObservationIgnored var lastRemovalAt = Date.distantPast
 
     // Data
-    var accounts: [AccountConfig] = []
+    var accounts: [AccountConfig] = [] {
+        didSet {
+            let own = Set(accounts.flatMap(\.addresses))
+            if own != ownAddresses { ownAddresses = own }
+        }
+    }
+    /// Every address of every account (kept with `accounts`; read per list row, so not computed).
+    private(set) var ownAddresses: Set<String> = []
+    /// Muted conversations (read with each reload, and updated at once by Mute), so menus and
+    /// the reader ask memory, not the store.
+    var mutedThreadIDs: Set<String> = []
+    /// The Inbox as the last reload read it (one account's while `inboxAccountID` is set), for
+    /// the category tabs' counts without another store read per render.
+    private(set) var inboxThreads: [ThreadSummary] = []
     /// Showing one account's Inbox (and its category tabs) instead of the unified one. Nil, the
     /// default, is every account together. Set with `goToInbox(account:)`.
     var inboxAccountID: String?
@@ -309,7 +334,7 @@ final class AppModel {
     var isPushServerSheetShown = false
     /// Unread Primary conversations per account (the sidebar's per-account Inbox badges).
     private(set) var accountUnreadCounts: [String: Int] = [:]
-    internal(set) var threads: [ThreadSummary] = []
+    internal(set) var threads: [ThreadSummary] = [] { didSet { streamInputsVersion &+= 1 } }
     private(set) var mailboxes: [MailboxState] = []
     private(set) var inboxUnreadCount = 0
     /// How many conversations are set aside with Reply Later (the sidebar badge).
@@ -420,6 +445,7 @@ final class AppModel {
             }
             if changed { AccountStorage.save(accounts) }
         }
+        ownAddresses = Set(accounts.flatMap(\.addresses))
         reload()
         reloadOutbox()
         loadRules()
@@ -540,14 +566,15 @@ final class AppModel {
         case .started: syncStatus[account.id] = String(localized: "Syncing…")
         case .mailboxProgress(let mailbox, let done, let total):
             syncStatus[account.id] = String(localized: "\(mailbox): \(done) of \(total)")
-            if done % 100 == 0 || done == total { reload() }
-        case .mailboxSynced: reload()
+            // Off the main thread and folded together: a big first sync never stalls the window.
+            if done % 100 == 0 || done == total { scheduleReload() }
+        case .mailboxSynced: scheduleReload()
         case .idle:
             syncStatus[account.id] = String(localized: "Up to date")
             accountErrors[account.id] = nil
             lastError = nil
             cloudAfterMailSync()
-            reload()
+            scheduleReload()
             scheduleRefinement()
             scheduleAutoDrafts()
             scheduleEventScan()
@@ -577,7 +604,7 @@ final class AppModel {
             lastError = message
             show(Toast(message: String(localized: "Couldn't send: \(message)"), symbol: "exclamationmark.triangle"))
         case .snoozesWoke:
-            reload()
+            scheduleReload()
         }
     }
 
@@ -595,7 +622,7 @@ final class AppModel {
             guard let self else { return }
             self.isRefining = false
             self.refinementTask = nil
-            if (report?.changed ?? 0) > 0 { self.reload() }
+            if (report?.changed ?? 0) > 0 { self.scheduleReload() }
             self.scheduleRules()
         }
     }
@@ -725,8 +752,6 @@ final class AppModel {
 
     // MARK: Loading
 
-    var ownAddresses: Set<String> { Set(accounts.flatMap(\.addresses)) }
-
     /// Mac list column title (as in Mail): "Inbox" for All and every category tab; the tab is
     /// in the subtitle.
     var listTitle: String {
@@ -761,90 +786,112 @@ final class AppModel {
         }
     }
 
+    /// Reads the store for what's on screen and updates the lists, now (navigation, and
+    /// anything that must show at once). Background changes use `scheduleReload()`.
     func reload() {
-        now = Date()
-        revision &+= 1
-        highlightTraining = (try? store.highlightTraining()) ?? highlightTraining
-        scheduleCloudPush()
+        reloadGeneration &+= 1
         do {
-            // One read of the Inbox serves the stream, a category and the unread count.
-            var unifiedCache: [ThreadSummary]?
-            func unified() throws -> [ThreadSummary] {
-                if let unifiedCache { return unifiedCache }
-                let loaded = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
-                unifiedCache = loaded
-                return loaded
-            }
-            // The Inbox on screen: every account's, or one account's.
-            var filteredCache: [ThreadSummary]?
-            func inbox() throws -> [ThreadSummary] {
-                guard let id = inboxAccountID else { return try unified() }
-                if let filteredCache { return filteredCache }
-                let loaded = try store.threads(mailbox: "INBOX", accountID: id, ownAddresses: ownAddresses)
-                filteredCache = loaded
-                return loaded
-            }
-            switch selection {
-            case .inbox, .accountInbox:
-                threads = try inbox()
-            case .outbox:
-                threads = []
-            case .snoozed:
-                // Each account's snoozed folder ("Snoozed", or "INBOX.Snoozed" on some servers).
-                let paths = Set(mailboxes.map(\.path).filter(AccountSync.isSnoozedMailbox)
-                                + [AccountSync.snoozedMailbox, "INBOX.Snoozed", "INBOX/Snoozed"])
-                var seen = Set<String>()
-                threads = try paths.flatMap { try store.threads(mailbox: $0, ownAddresses: ownAddresses) }
-                    .filter { seen.insert($0.threadID).inserted }
-                    .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
-            case .replyLater:
-                threads = try inbox().filter(\.isReplyLater)
-            case .category(let category):
-                // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
-                threads = try inbox().filter { !$0.isReplyLater && shows($0, under: category) }
-                for thread in threads where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
-            case .mailbox(let accountID, let path):
-                threads = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
-            case .smartFolder(let id):
-                threads = try smartFolder(id: id).map(smartFolderThreads) ?? []
-            case .aiCategory(let id):
-                aiMembership = (try? store.aiCategoryMembership()) ?? aiMembership
-                threads = try inbox().filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
-            }
-            // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
-            if pinnedOnly, isInInbox { threads = threads.filter(\.isPinned) }
-            if unreadOnly {
-                let open = selectedThreadID
-                threads = threads.filter { $0.unreadCount > 0 || $0.threadID == open }
-            }
-            if !pendingRemovals.isEmpty { threads.removeAll { pendingRemovals.contains($0.threadID) } }
-            if selection == .inbox { holdOpenBundles() }
-            mailboxes = try accounts.flatMap { try store.mailboxStates(accountID: $0.id) }
-            let primary = try unified().filter { $0.latest.category == .primary }
-            inboxUnreadCount = primary.reduce(0) { $0 + $1.unreadCount }
-            #if os(macOS)
-            BackgroundMode.setDockBadge(inboxUnreadCount)
-            #endif
-            accountUnreadCounts = accounts.count > 1
-                ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
-                : [:]
-            replyLaterCount = try unified().filter(\.isReplyLater).count
-            scheduleSmartFolderCounts()
+            apply(try reloadInput.fetch())
         } catch {
+            revision &+= 1
             lastError = String(describing: error)
         }
     }
 
     /// A reload a moment from now, folding together the ones asked for in the meantime
-    /// (pressing E ten times in a row reads the store once, not ten times).
+    /// (pressing E ten times in a row reads the store once, not ten times). The store is read
+    /// off the main thread; a result older than a `reload()` that ran meanwhile is dropped, and
+    /// one asked for again while reading reads again, so stale rows never come back.
     func scheduleReload() {
+        reloadRequests &+= 1
         guard reloadTask == nil else { return }
         reloadTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
-            guard let self else { return }
-            self.reloadTask = nil
-            self.reload()
+            while let model = self {
+                let request = model.reloadRequests
+                let generation = model.reloadGeneration
+                let input = model.reloadInput
+                let result = await Task.detached(priority: .userInitiated) {
+                    Result(catching: { try input.fetch() })
+                }.value
+                // Asked again while reading (the store changed since): read again.
+                guard model.reloadRequests == request else { continue }
+                model.reloadTask = nil
+                // A full reload ran meanwhile and read a newer store: keep its result.
+                guard model.reloadGeneration == generation else { return }
+                model.reloadGeneration &+= 1
+                switch result {
+                case .success(let snapshot): model.apply(snapshot)
+                case .failure(let error):
+                    model.revision &+= 1
+                    model.lastError = String(describing: error)
+                }
+                return
+            }
         }
+    }
+
+    /// What a reload reads, for the place on screen.
+    private var reloadInput: ReloadInput {
+        var query: String?
+        if case .smartFolder(let id) = selection { query = smartFolder(id: id)?.query }
+        // Each account's snoozed folder ("Snoozed", or "INBOX.Snoozed" on some servers).
+        let snoozed = Set(mailboxes.map(\.path).filter(AccountSync.isSnoozedMailbox)
+                          + [AccountSync.snoozedMailbox, "INBOX.Snoozed", "INBOX/Snoozed"])
+        return ReloadInput(store: store, selection: selection, inboxAccountID: inboxAccountID,
+                           accountIDs: accounts.map(\.id), ownAddresses: ownAddresses,
+                           snoozedPaths: snoozed, smartFolderQuery: query)
+    }
+
+    /// Puts what a reload read on screen. Only what changed is assigned, so a reload that finds
+    /// nothing new (most sync passes) redraws nothing but the reader.
+    private func apply(_ snapshot: ReloadSnapshot) {
+        revision &+= 1
+        folderLayoutCache = [:]
+        // "Now" only matters for scheduled bundles, and only when a delivery has passed.
+        let fresh = Date()
+        if bundleSchedules.values.contains(where: { $0.lastDelivery(before: fresh) != $0.lastDelivery(before: now) }) { now = fresh }
+        if let training = snapshot.highlightTraining, training != highlightTraining { highlightTraining = training }
+        if snapshot.muted != mutedThreadIDs { mutedThreadIDs = snapshot.muted }
+        scheduleCloudPush()
+        var list: [ThreadSummary]
+        switch selection {
+        case .replyLater:
+            list = snapshot.place.filter(\.isReplyLater)
+        case .category(let category):
+            // Set-aside conversations live in Set Aside, as they do in the Inbox's Reply Later row.
+            list = snapshot.place.filter { !$0.isReplyLater && shows($0, under: category) }
+            for thread in list where heldCategories[thread.threadID] == nil { heldCategories[thread.threadID] = category }
+        case .aiCategory(let id):
+            if let membership = snapshot.aiMembership, membership != aiMembership { aiMembership = membership }
+            list = snapshot.place.filter { !$0.isReplyLater && aiMembership[$0.threadID]?.contains(id) == true }
+        default:
+            list = snapshot.place
+        }
+        // Pinned Only works on every Inbox tab (the Inbox now opens on Primary, not All).
+        if pinnedOnly, isInInbox { list = list.filter(\.isPinned) }
+        if unreadOnly {
+            let open = selectedThreadID
+            list = list.filter { $0.unreadCount > 0 || $0.threadID == open }
+        }
+        if !pendingRemovals.isEmpty { list.removeAll { pendingRemovals.contains($0.threadID) } }
+        if list != threads { threads = list }
+        if snapshot.inbox != inboxThreads { inboxThreads = snapshot.inbox }
+        if selection == .inbox { holdOpenBundles() }
+        if snapshot.mailboxes != mailboxes { mailboxes = snapshot.mailboxes }
+        let primary = snapshot.unified.filter { $0.latest.category == .primary }
+        let unread = primary.reduce(0) { $0 + $1.unreadCount }
+        if unread != inboxUnreadCount { inboxUnreadCount = unread }
+        #if os(macOS)
+        BackgroundMode.setDockBadge(unread)
+        #endif
+        let perAccount: [String: Int] = accounts.count > 1
+            ? primary.reduce(into: [:]) { counts, thread in counts[thread.latest.accountID, default: 0] += thread.unreadCount }
+            : [:]
+        if perAccount != accountUnreadCounts { accountUnreadCounts = perAccount }
+        let later = snapshot.unified.filter(\.isReplyLater).count
+        if later != replyLaterCount { replyLaterCount = later }
+        scheduleSmartFolderCounts()
     }
 
     /// The Inbox stream: primary conversations as rows, every other category collapsed into a
@@ -884,7 +931,29 @@ final class AppModel {
         }
     }
 
-    var streamItems: [StreamItem] {
+    /// Built once per change of what it depends on (the list reads it per row and per key press).
+    var streamItems: [StreamItem] { streamEntry.items }
+
+    /// Flattened rows as displayed (bundles expanded inline), used for j/k navigation.
+    var visibleThreadIDs: [String] { streamEntry.ids }
+
+    private var streamEntry: (items: [StreamItem], ids: [String]) {
+        // Read what the stream depends on, so views showing it follow changes when the cache answers.
+        _ = (selection, threads, expandedBundles, bundleSchedules, now)
+        if let cache = streamCache, cache.version == streamInputsVersion { return (cache.items, cache.ids) }
+        let items = buildStreamItems()
+        let ids = items.flatMap { item -> [String] in
+            switch item {
+            case .thread(let t): [t.threadID]
+            case .bundle(let c, let members, _): expandedBundles.contains(c) ? members.map(\.threadID) : []
+            case .replyLater: []
+            }
+        }
+        streamCache = (streamInputsVersion, items, ids)
+        return (items, ids)
+    }
+
+    private func buildStreamItems() -> [StreamItem] {
         guard selection == .inbox else {
             // Pinned first everywhere (stable, so each list keeps its own order otherwise);
             // Snoozed stays in wake-up order.
@@ -938,19 +1007,8 @@ final class AppModel {
         return item.date
     }
 
-    /// Flattened rows as displayed (bundles expanded inline), used for j/k navigation.
-    var visibleThreadIDs: [String] {
-        streamItems.flatMap { item -> [String] in
-            switch item {
-            case .thread(let t): [t.threadID]
-            case .bundle(let c, let members, _): expandedBundles.contains(c) ? members.map(\.threadID) : []
-            case .replyLater: []
-            }
-        }
-    }
-
     func unreadCount(_ category: MailCategory) -> Int {
-        (try? store.threads(mailbox: "INBOX").filter { $0.latest.category == category }.reduce(0) { $0 + $1.unreadCount }) ?? 0
+        inboxThreads.filter { $0.latest.category == category }.reduce(0) { $0 + $1.unreadCount }
     }
 
     func toggleBundle(_ category: MailCategory) {
@@ -1121,6 +1179,16 @@ final class AppModel {
     /// The conversation as the reader shows it: a message that reached two of your accounts
     /// (same Message-ID) once, the copy in the account you're looking at (else the first).
     func readerMessages(inThread threadID: String) -> [StoredMessage] {
+        // The reader, its cards and ⌘K ask this many times per redraw; the store only changes
+        // the answer with a reload (which bumps `revision`).
+        let key = ReaderCacheKey(threadID: threadID, revision: revision, inboxAccountID: inboxAccountID, accountCount: accounts.count)
+        if let cached = readerCache, cached.key == key { return cached.messages }
+        let shown = loadReaderMessages(inThread: threadID)
+        readerCache = (key, shown)
+        return shown
+    }
+
+    private func loadReaderMessages(inThread threadID: String) -> [StoredMessage] {
         let all = messages(inThread: threadID)
         guard accounts.count > 1 else { return all }
         var chosen: [String: StoredMessage] = [:]
@@ -1182,4 +1250,71 @@ enum AccountSetupError: LocalizedError {
         case .outgoing(let detail): String(localized: "Signed in to IMAP, but the outgoing (SMTP) server said no: \(detail)")
         }
     }
+}
+
+/// What a reload reads, captured on the main actor so the read can run anywhere.
+struct ReloadInput: Sendable {
+    let store: MailStore
+    let selection: SidebarItem
+    let inboxAccountID: String?
+    let accountIDs: [String]
+    let ownAddresses: Set<String>
+    let snoozedPaths: Set<String>
+    let smartFolderQuery: String?
+
+    func fetch() throws -> ReloadSnapshot {
+        // One read of the Inbox serves the stream, a category and the unread counts.
+        let unified = try store.threads(mailbox: "INBOX", ownAddresses: ownAddresses)
+        // The Inbox on screen: every account's, or one account's.
+        let inbox = try inboxAccountID.map { try store.threads(mailbox: "INBOX", accountID: $0, ownAddresses: ownAddresses) } ?? unified
+        var place: [ThreadSummary] = []
+        var membership: [String: Set<String>]?
+        switch selection {
+        case .inbox, .accountInbox, .replyLater, .category:
+            place = inbox
+        case .outbox:
+            place = []
+        case .snoozed:
+            var seen = Set<String>()
+            place = try snoozedPaths.flatMap { try store.threads(mailbox: $0, ownAddresses: ownAddresses) }
+                .filter { seen.insert($0.threadID).inserted }
+                .sorted { ($0.snoozedUntil ?? .distantFuture) < ($1.snoozedUntil ?? .distantFuture) }
+        case .mailbox(let accountID, let path):
+            place = try store.threads(mailbox: path, accountID: accountID, ownAddresses: ownAddresses)
+        case .smartFolder:
+            if let smartFolderQuery {
+                let ids = try SearchEngine(store: store).conversations(SearchQuery(parsing: smartFolderQuery))
+                place = try store.threads(representedBy: ids, ownAddresses: ownAddresses)
+            }
+        case .aiCategory:
+            membership = try? store.aiCategoryMembership()
+            place = inbox
+        }
+        return ReloadSnapshot(unified: unified, inbox: inbox, place: place,
+                              mailboxes: try accountIDs.flatMap { try store.mailboxStates(accountID: $0) },
+                              highlightTraining: try? store.highlightTraining(),
+                              aiMembership: membership,
+                              muted: (try? store.mutedThreadIDs()) ?? [])
+    }
+}
+
+/// What a reload read.
+struct ReloadSnapshot: Sendable {
+    var unified: [ThreadSummary]
+    var inbox: [ThreadSummary]
+    /// The place on screen before the filters that need main-actor state (held categories,
+    /// AI membership, unread/pinned only, pending removals).
+    var place: [ThreadSummary]
+    var mailboxes: [MailboxState]
+    var highlightTraining: HighlightTraining?
+    var aiMembership: [String: Set<String>]?
+    var muted: Set<String>
+}
+
+/// What `readerMessages(inThread:)`'s answer depends on.
+struct ReaderCacheKey: Equatable {
+    var threadID: String
+    var revision: Int
+    var inboxAccountID: String?
+    var accountCount: Int
 }

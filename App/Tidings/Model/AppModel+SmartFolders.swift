@@ -36,10 +36,16 @@ extension AppModel {
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, let self else { return }
             let engine = SearchEngine(store: self.store)
-            var counts: [String: Int] = [:]
-            for folder in self.allSmartFolders {
-                counts[folder.id] = (try? engine.conversationCount(SearchQuery(parsing: folder.query))) ?? 0
-            }
+            let folders = self.allSmartFolders.map { ($0.id, $0.query) }
+            // Every folder is a search: run them off the main thread.
+            let counts = await Task.detached(priority: .utility) {
+                var counts: [String: Int] = [:]
+                for (id, query) in folders {
+                    counts[id] = (try? engine.conversationCount(SearchQuery(parsing: query))) ?? 0
+                }
+                return counts
+            }.value
+            guard !Task.isCancelled else { return }
             if counts != self.smartFolderCounts { self.smartFolderCounts = counts }
         }
     }

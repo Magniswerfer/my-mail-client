@@ -85,9 +85,12 @@ struct MessageSourceView: View {
         do {
             let data = try await model.rawMessage(message)
             raw = data
-            source = String(decoding: data, as: UTF8.self)
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-            try? data.write(to: url)
+            // Decoding and writing a large message (attachments and all) off the main actor.
+            source = await Task.detached(priority: .userInitiated) { () -> String in
+                try? data.write(to: url)
+                return String(decoding: data, as: UTF8.self)
+            }.value
             file = url
         } catch {
             self.error = String(describing: error)

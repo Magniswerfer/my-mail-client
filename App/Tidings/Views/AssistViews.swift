@@ -35,6 +35,8 @@ struct SummaryLine: View {
         }
         .task(id: "\(threadID)#\(messageCount)") {
             text = nil
+            // A run cancelled mid-summary (a new message arrived) left this on.
+            working = false
             guard let digest = model.summaryDigest(threadID: threadID) else { return }
             if let cached = model.cachedSummary(threadID: threadID, digest: digest) {
                 text = cached

@@ -227,13 +227,14 @@ struct ThreadRow: View {
         let m = thread.latest
         let unread = thread.unreadCount > 0
         let avatarSize: CGFloat = inBundle ? 26 : 32
+        let sender = senderLine
         HStack(alignment: .top, spacing: 10) {
             // The newest sender's picture, unless that's you (then initials of who you wrote with).
-            Avatar(name: senderLine, address: model.ownAddresses.contains(m.fromAddress) ? nil : m.fromAddress, size: avatarSize)
+            Avatar(name: sender, address: model.ownAddresses.contains(m.fromAddress) ? nil : m.fromAddress, size: avatarSize)
                 .padding(.leading, inBundle ? 18 : 0)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(senderLine)
+                    Text(sender)
                         .font(.headline.weight(unread ? .semibold : .regular))
                         .lineLimit(1)
                     if thread.messageCount > 1 {

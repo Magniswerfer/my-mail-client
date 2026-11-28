@@ -110,7 +110,13 @@ extension AppModel {
 
     static let thingsAdd = URL(string: "things:///add")!
 
-    var canAddToThings: Bool { Platform.canOpen(URL(string: "things:///")!) }
+    /// Asked at most once a minute: context menus build this for every row.
+    var canAddToThings: Bool {
+        if let check = thingsCheck, Date().timeIntervalSince(check.at) < 60 { return check.installed }
+        let installed = Platform.canOpen(URL(string: "things:///")!)
+        thingsCheck = (Date(), installed)
+        return installed
+    }
 
     /// Things' URL scheme: title, the sender and the link back in the notes.
     func addToThings(thread: ThreadSummary? = nil) {
