@@ -215,13 +215,10 @@ final class SMTPConnection: Sendable {
     }
 
     func ehlo() async throws -> [String] {
-        #if os(macOS)
-        let name = Host.current().localizedName.map { $0.replacingOccurrences(of: " ", with: "-") } ?? "tidings"
-        #else
-        // No host-name API on iOS (or a server); an address literal is valid and reveals nothing.
-        let name = "[127.0.0.1]"
-        #endif
-        let reply = try await command("EHLO \(name.isEmpty ? "tidings" : name)")
+        // RFC 5321 §4.1.4: a domain name or, lacking one, an address literal. A Mac's own name
+        // ("Anna’s MacBook Pro") is neither: it isn't a valid domain (spam filters score an
+        // invalid HELO), and it would put the owner's name in every Received header.
+        let reply = try await command("EHLO [127.0.0.1]")
         guard reply.code == 250 else { throw SMTPError.rejected(command: "EHLO", code: reply.code, message: reply.text) }
         return Array(reply.lines.dropFirst())
     }

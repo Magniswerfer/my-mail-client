@@ -333,18 +333,30 @@ enum HeaderParameters {
         }
         for (key, pieces) in continuations {
             let sorted = pieces.sorted { $0.0 < $1.0 }
-            var joined = ""
+            // The charset is named once, on the first piece, and a character's bytes may span
+            // pieces (RFC 2231 §4.1): join the bytes, then decode them together.
+            var charset = "utf-8"
+            var bytes: [UInt8] = []
             for (index, piece) in sorted.enumerated() {
-                joined += piece.2 ? decodeRFC2231(piece.1, hasCharset: index == 0) : piece.1
+                guard piece.2 else { bytes += Array(piece.1.utf8); continue }
+                let decoded = percentDecoded(piece.1, hasCharset: index == 0)
+                if let named = decoded.charset { charset = named }
+                bytes += decoded.bytes
             }
-            simple[key] = joined
+            simple[key] = Charsets.decode(bytes, charset: charset)
         }
         return (value, simple)
     }
 
     /// `utf-8'da'Faktura%20%C3%A6.pdf` → `Faktura æ.pdf`.
     static func decodeRFC2231(_ value: String, hasCharset: Bool) -> String {
-        var charset = "utf-8"
+        let decoded = percentDecoded(value, hasCharset: hasCharset)
+        return Charsets.decode(decoded.bytes, charset: decoded.charset ?? "utf-8")
+    }
+
+    /// The bytes of an extended value, and the charset its `charset'lang'` prefix names.
+    static func percentDecoded(_ value: String, hasCharset: Bool) -> (bytes: [UInt8], charset: String?) {
+        var charset: String?
         var encoded = Substring(value)
         if hasCharset {
             let pieces = value.split(separator: "'", maxSplits: 2, omittingEmptySubsequences: false)
@@ -365,7 +377,7 @@ enum HeaderParameters {
                 i = encoded.index(after: i)
             }
         }
-        return Charsets.decode(bytes, charset: charset)
+        return (bytes, charset)
     }
 }
 
