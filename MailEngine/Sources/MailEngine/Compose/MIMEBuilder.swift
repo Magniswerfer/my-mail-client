@@ -64,23 +64,41 @@ public struct OutgoingMessage: Codable, Sendable, Hashable {
 /// Serializes an `OutgoingMessage` to RFC 5322 / MIME bytes.
 ///
 /// Output is 7-bit clean (quoted-printable text, base64 binaries, RFC 2047 headers, RFC 2231
-/// filenames), so it passes any SMTP server without 8BITMIME or SMTPUTF8.
+/// filenames), so it passes any SMTP server without 8BITMIME or SMTPUTF8. Every line stays
+/// within 78 characters, and nothing the user typed can break out of its header (CR/LF in a
+/// subject, name or filename becomes a space).
+///
+/// The body is shaped the way Apple Mail, Gmail and Outlook send it themselves:
+///
+///     multipart/mixed                      (only with attachments)
+///       multipart/alternative
+///         text/plain
+///         multipart/related; type="text/html"   (only with inline images)
+///           text/html
+///           image/png (Content-ID)
+///         text/calendar; method=…               (only for invite replies)
+///       application/pdf (attachment)
 public enum MIMEBuilder {
     public static func build(_ m: OutgoingMessage, userAgent: String = "Tidings") -> Data {
         var headers: [String] = [
-            "From: \(address(m.from))",
             "Date: \(rfc5322Date(m.date))",
-            "Message-ID: <\(HeaderText.token(m.messageID))>",
-            "Subject: \(encodeHeader(m.subject))",
+            "From: \(address(m.from))",
         ]
         if !m.to.isEmpty { headers.append("To: \(m.to.map(address).joined(separator: ", "))") }
         if !m.cc.isEmpty { headers.append("Cc: \(m.cc.map(address).joined(separator: ", "))") }
-        if let parent = m.inReplyTo.map(HeaderText.token), !parent.isEmpty { headers.append("In-Reply-To: <\(parent)>") }
-        let references = m.references.map(HeaderText.token).filter { !$0.isEmpty }
+        if m.to.isEmpty, m.cc.isEmpty {
+            // Bcc only: an empty group keeps the message well-formed without naming anyone
+            // (RFC 5322 §3.6.3), and spam filters don't flag a missing To.
+            headers.append("To: undisclosed-recipients:;")
+        }
+        headers.append("Subject: \(encodeText(clean(m.subject)))")
+        headers.append("Message-ID: <\(messageID(m.messageID))>")
+        if let parent = m.inReplyTo.map(messageID), !parent.isEmpty { headers.append("In-Reply-To: <\(parent)>") }
+        let references = m.references.map(messageID).filter { !$0.isEmpty }
         if !references.isEmpty { headers.append("References: \(references.map { "<\($0)>" }.joined(separator: " "))") }
         if let auto = m.autoSubmitted.map(HeaderText.token), !auto.isEmpty { headers.append("Auto-Submitted: \(auto)") }
         headers.append("MIME-Version: 1.0")
-        headers.append("User-Agent: \(HeaderText.singleLine(userAgent))")
+        headers.append("User-Agent: \(clean(userAgent))")
 
         let body = bodyPart(m)
         var lines = headers.map(fold)
@@ -96,105 +114,212 @@ public enum MIMEBuilder {
         var serialized: String { headers.joined(separator: "\r\n") + "\r\n\r\n" + content }
     }
 
+    static func textPart(_ subtype: String, _ content: String, extra: String = "") -> Part {
+        Part(headers: ["Content-Type: text/\(subtype); charset=utf-8\(extra)", "Content-Transfer-Encoding: quoted-printable"],
+             content: quotedPrintable(content))
+    }
+
     static func bodyPart(_ m: OutgoingMessage) -> Part {
         if let reaction = m.reaction { return reactionPart(reaction) }
-        let textPart = Part(headers: ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                            content: quotedPrintable(m.text))
-        var main = textPart
+        // Inline (cid:) images only mean something next to the HTML that shows them.
+        let inline = m.html == nil ? [] : m.attachments.filter { $0.contentID != nil }
+        let regular = m.attachments.filter { m.html == nil || $0.contentID == nil }
+
+        var alternatives = [textPart("plain", m.text)]
         if let html = m.html {
-            let htmlPart = Part(headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                                content: quotedPrintable(html))
-            main = multipart("alternative", [textPart, htmlPart])
+            let htmlPart = textPart("html", html)
+            // The images belong to the HTML, not to the text alternative beside it (RFC 2387).
+            alternatives.append(inline.isEmpty ? htmlPart
+                : multipart("related", [htmlPart] + inline.map(attachmentPart), parameters: "; type=\"text/html\""))
         }
         if let calendar = m.calendar {
             // iTIP over email (RFC 6047): the calendar is an alternative of the text, with the
             // method repeated on the Content-Type so clients don't have to parse it.
-            let calendarPart = Part(
-                headers: ["Content-Type: text/calendar; charset=utf-8; method=\(calendar.method.rawValue)",
-                          "Content-Transfer-Encoding: quoted-printable"],
-                content: quotedPrintable(calendar.ics))
-            let alternatives = m.html == nil ? [textPart] : [textPart, Part(
-                headers: ["Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: quoted-printable"],
-                content: quotedPrintable(m.html ?? ""))]
-            main = multipart("alternative", alternatives + [calendarPart])
+            alternatives.append(textPart("calendar", calendar.ics, extra: "; method=\(calendar.method.rawValue)"))
         }
-        let inline = m.attachments.filter { $0.contentID != nil }
-        let regular = m.attachments.filter { $0.contentID == nil }
-        if !inline.isEmpty {
-            main = multipart("related", [main] + inline.map(attachmentPart))
-        }
+        var main = alternatives.count == 1 ? alternatives[0] : multipart("alternative", alternatives)
         if !regular.isEmpty {
             main = multipart("mixed", [main] + regular.map(attachmentPart))
         }
         return main
     }
 
-    static func multipart(_ subtype: String, _ parts: [Part]) -> Part {
-        let boundary = "=_tidings_\(UUID().uuidString.lowercased().prefix(16))"
+    static func multipart(_ subtype: String, _ parts: [Part], parameters: String = "") -> Part {
+        // "=_" can't occur in quoted-printable or base64 output, so the boundary never collides.
+        let boundary = "=_tidings_\(UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(24))"
         var content = ""
         for part in parts {
             content += "--\(boundary)\r\n" + part.serialized + "\r\n"
         }
         content += "--\(boundary)--\r\n"
-        return Part(headers: ["Content-Type: multipart/\(subtype); boundary=\"\(boundary)\""], content: content)
+        return Part(headers: ["Content-Type: multipart/\(subtype); boundary=\"\(boundary)\"\(parameters)"].map(fold), content: content)
     }
 
     static func attachmentPart(_ a: OutgoingAttachment) -> Part {
-        let filename = HeaderText.singleLine(a.filename)
-        let ascii = filename.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
-        let dispositionName = ascii
-            ? "filename=\"\(filename)\""
-            : "filename*=utf-8''\(filename.addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "attachment")"
+        let filename = clean(a.filename).trimmingCharacters(in: .whitespaces)
+        let name = filename.isEmpty ? "attachment" : filename
+        let ascii = name.allSatisfy { $0.isASCII && $0 != "\"" && $0 != "\\" }
+        let disposition = a.contentID == nil ? "attachment" : "inline"
+        let simple = "Content-Disposition: \(disposition); filename=\"\(name)\""
+        let dispositionHeader = ascii && simple.count <= 78
+            ? simple
+            : "Content-Disposition: \(disposition);\r\n" + rfc2231("filename", name)
         var headers = [
-            fold("Content-Type: \(mimeType(a.mimeType)); name=\"\(ascii ? filename : encodeHeader(filename))\""),
-            fold("Content-Disposition: \(a.contentID == nil ? "attachment" : "inline"); \(dispositionName)"),
+            // `name=` is for clients that predate Content-Disposition; RFC 2047 inside the quotes
+            // is what every client sends and reads there.
+            fold("Content-Type: \(mimeType(a.mimeType)); name=\"\(ascii ? name : encodeHeader(name))\""),
+            dispositionHeader,
             "Content-Transfer-Encoding: base64",
         ]
-        if let cid = a.contentID.map(HeaderText.token) { headers.append("Content-ID: <\(cid)>") }
-        return Part(headers: headers, content: a.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn, .endLineWithLineFeed]) + "\r\n")
+        if let cid = a.contentID.map(messageID), !cid.isEmpty { headers.append("Content-ID: <\(cid)>") }
+        let base64 = a.data.base64EncodedString(options: [.lineLength76Characters, .endLineWithCarriageReturn, .endLineWithLineFeed])
+        return Part(headers: headers, content: base64.isEmpty ? "" : base64 + "\r\n")
     }
 
-    static let rfc2231Safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "!#$&+-.^_`|~"))
-        .subtracting(CharacterSet(charactersIn: "æøåÆØÅ")).intersection(CharacterSet(charactersIn: Unicode.Scalar(0)...Unicode.Scalar(127)))
-
-    /// `type/subtype` as given when it's a plain MIME type, else `application/octet-stream`.
-    static func mimeType(_ s: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "!#$&^_.+-"))
-        let parts = s.split(separator: "/", omittingEmptySubsequences: false)
-        let valid = parts.count == 2 && parts.allSatisfy {
-            !$0.isEmpty && $0.unicodeScalars.allSatisfy { $0.isASCII && allowed.contains($0) }
+    /// An RFC 2231 extended parameter: percent-encoded UTF-8, split into numbered continuations
+    /// (`filename*0*=utf-8''…; filename*1*=…`) so no line goes past 78 characters.
+    static func rfc2231(_ attribute: String, _ value: String) -> String {
+        var chunks: [String] = []
+        var current = ""
+        // Split between characters, never inside one's UTF-8 bytes: some clients decode each
+        // continuation on its own.
+        for ch in value {
+            let piece = String(ch).addingPercentEncoding(withAllowedCharacters: rfc2231Safe) ?? "_"
+            if !current.isEmpty, current.count + piece.count > 54 { chunks.append(current); current = "" }
+            current += piece
         }
-        return valid ? s : "application/octet-stream"
+        if !current.isEmpty || chunks.isEmpty { chunks.append(current) }
+        if chunks.count == 1 { return " \(attribute)*=utf-8''\(chunks[0])" }
+        return chunks.enumerated().map { i, chunk in
+            " \(attribute)*\(i)*=" + (i == 0 ? "utf-8''" : "") + chunk + (i == chunks.count - 1 ? "" : ";")
+        }.joined(separator: "\r\n")
+    }
+
+    /// attribute-char (RFC 2231): ASCII letters, digits and the token punctuation, unescaped.
+    static let rfc2231Safe = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$&+-.^_`|~")
+
+    /// A Content-Type that is a well-formed `type/subtype`, or application/octet-stream.
+    static func mimeType(_ raw: String) -> String {
+        let type = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let token = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789!#$&^_.+-")
+        let parts = type.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts.allSatisfy({ !$0.isEmpty && $0.unicodeScalars.allSatisfy(token.contains) }) else {
+            return "application/octet-stream"
+        }
+        return type
     }
 
     // MARK: Headers
 
-    /// Every header value is kept on one line: names and subjects often come from received mail
-    /// (a reply's recipients, "Re: …"), which a sender controls.
+    /// Header text as one line: CR, LF and other control characters (the way to inject a
+    /// header) become spaces. Names and subjects often come from received mail (a reply's
+    /// recipients, "Re: …"), which a sender controls.
+    static func clean(_ s: String) -> String {
+        HeaderText.singleLine(s.replacingOccurrences(of: "\r\n", with: " "))
+    }
+
+    /// A Message-ID's inside (no angle brackets, no whitespace).
+    static func messageID(_ s: String) -> String {
+        String(HeaderText.token(s).filter { !$0.isWhitespace })
+    }
+
     static func address(_ a: MailAddress) -> String {
-        let addr = HeaderText.token(a.address)
-        guard let name = a.name.map(HeaderText.singleLine), !name.isEmpty else { return addr }
-        if !name.allSatisfy(\.isASCII) { return "\(encodeHeader(name)) <\(addr)>" }
+        let addr = messageID(a.address)
+        guard let raw = a.name, case let name = clean(raw).trimmingCharacters(in: .whitespaces), !name.isEmpty,
+              name != addr else { return addr }
+        if !name.allSatisfy(\.isASCII) || name.contains("=?") { return "\(encodeHeader(name, force: true)) <\(addr)>" }
         let needsQuotes = name.contains { "()<>[]:;@\\,.\"".contains($0) }
         let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         return needsQuotes ? "\"\(escaped)\" <\(addr)>" : "\(name) <\(addr)>"
     }
 
     /// RFC 2047 B-encoding for non-ASCII header text, split so each encoded word stays short
-    /// and never cuts a UTF-8 sequence. Control characters (CR, LF, …) become spaces first.
-    public static func encodeHeader(_ s: String) -> String {
-        let s = HeaderText.singleLine(s)
-        guard !s.allSatisfy(\.isASCII) else { return s }
+    /// (64 characters at most, room to sit in a folded line or a quoted parameter) and never
+    /// cuts a UTF-8 sequence. ASCII text goes as is, unless it looks like an encoded
+    /// word itself ("=?…?="), which a client would otherwise decode.
+    public static func encodeHeader(_ s: String) -> String { encodeHeader(s, force: false) }
+
+    static func encodeHeader(_ s: String, force: Bool) -> String {
+        let s = clean(s)
+        guard force || !s.allSatisfy(\.isASCII) || s.contains("=?") else { return s }
         var words: [String] = []
         var chunk = ""
         for ch in s {
-            if (chunk + String(ch)).utf8.count > 45 {
+            if !chunk.isEmpty, (chunk + String(ch)).utf8.count > 39 {
                 words.append("=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=")
                 chunk = ""
             }
             chunk.append(ch)
         }
         if !chunk.isEmpty { words.append("=?utf-8?B?\(Data(chunk.utf8).base64EncodedString())?=") }
+        return words.joined(separator: " ")
+    }
+
+    /// Unstructured header text (a subject) the way Apple Mail and Gmail write it: plain
+    /// words stay readable, and only runs of words that need it become encoded words: Q for
+    /// mostly-Latin text ("Re: =?utf-8?Q?M=C3=B8de?= i morgen"), B for emoji and other scripts.
+    static func encodeText(_ s: String) -> String {
+        func needsEncoding(_ word: Substring) -> Bool { !word.allSatisfy(\.isASCII) || word.contains("=?") }
+        let words = s.split(separator: " ", omittingEmptySubsequences: false)
+        guard words.contains(where: needsEncoding) else { return s }
+        var out: [String] = []
+        var run: [Substring] = []
+        func flush() {
+            guard !run.isEmpty else { return }
+            out.append(encodedWords(run.joined(separator: " ")))
+            run = []
+        }
+        // Empty words are extra spaces. Between two encoded words they must stay inside the
+        // run: decoders drop the whitespace between adjacent encoded words ("æ  ø" → "æø").
+        var spaces: [Substring] = []
+        for word in words {
+            if needsEncoding(word) {
+                if run.isEmpty { out += spaces.map(String.init) } else { run += spaces }
+                spaces = []
+                run.append(word)
+            } else if word.isEmpty, !run.isEmpty {
+                spaces.append(word)
+            } else {
+                flush()
+                out += spaces.map(String.init)
+                spaces = []
+                out.append(String(word))
+            }
+        }
+        flush()
+        out += spaces.map(String.init)
+        return out.joined(separator: " ")
+    }
+
+    /// `text` as encoded words of at most 64 characters each, never cutting a character.
+    static func encodedWords(_ text: String) -> String {
+        let qSafe = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!*+-/".utf8)
+        func q(_ ch: Character) -> String {
+            String(ch).utf8.map { byte in
+                byte == 32 ? "_" : qSafe.contains(byte) ? String(UnicodeScalar(byte)) : String(format: "=%02X", byte)
+            }.joined()
+        }
+        let qLength = text.reduce(0) { $0 + q($1).count }
+        // Q keeps mostly-Latin text legible; B is far shorter for emoji and non-Latin scripts.
+        let bLength = (text.utf8.count + 2) / 3 * 4
+        let useQ = qLength <= bLength * 3 / 2
+        let budget = 64 - "=?utf-8?Q??=".count
+        var words: [String] = []
+        var chunk = ""
+        var chunkBytes = Data()
+        func emit() {
+            guard !chunk.isEmpty || !chunkBytes.isEmpty else { return }
+            words.append(useQ ? "=?utf-8?Q?\(chunk)?=" : "=?utf-8?B?\(chunkBytes.base64EncodedString())?=")
+            chunk = ""; chunkBytes = Data()
+        }
+        for ch in text {
+            let bytes = Data(String(ch).utf8)
+            let fits = useQ ? chunk.count + q(ch).count <= budget : (chunkBytes.count + bytes.count + 2) / 3 * 4 <= budget
+            if !fits { emit() }
+            if useQ { chunk += q(ch) }
+            chunkBytes += bytes
+        }
+        emit()
         return words.joined(separator: " ")
     }
 
@@ -217,6 +342,7 @@ public enum MIMEBuilder {
     static func rfc5322Date(_ date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
         f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
         return f.string(from: date)
     }
@@ -224,14 +350,21 @@ public enum MIMEBuilder {
     // MARK: Bodies
 
     /// Quoted-printable with CRLF line endings and soft breaks at 76 columns.
+    ///
+    /// A line (or soft-broken piece) never starts with "." or "From ": the first is SMTP's
+    /// end-of-data marker, the second gets rewritten to ">From " by mbox delivery, which
+    /// changes the body and breaks the DKIM signature.
     static func quotedPrintable(_ s: String) -> String {
         let normalized = s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        let from = Array("From ".utf8)
         var out = ""
         for (index, line) in normalized.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             if index > 0 { out += "\r\n" }
             var length = 0
             let bytes = Array(line.utf8)
-            for (i, byte) in bytes.enumerated() {
+            var i = 0
+            while i < bytes.count {
+                let byte = bytes[i]
                 let isLast = i == bytes.count - 1
                 var piece: String
                 switch byte {
@@ -239,14 +372,17 @@ public enum MIMEBuilder {
                 case 32, 9: piece = isLast ? String(format: "=%02X", byte) : String(UnicodeScalar(byte)) // trailing space must be encoded
                 default: piece = String(format: "=%02X", byte)
                 }
-                // A line starting with "." or "From " is safe for SMTP but encode "." to be robust.
-                if length == 0, byte == 46 { piece = "=2E" }
                 if length + piece.count > 75 {
                     out += "=\r\n"
                     length = 0
                 }
+                if length == 0 {
+                    if byte == 46 { piece = "=2E" }
+                    if byte == 70, bytes[i...].starts(with: from) { piece = "=46" }
+                }
                 out += piece
                 length += piece.count
+                i += 1
             }
         }
         return out

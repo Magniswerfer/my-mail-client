@@ -616,14 +616,30 @@ enum MailBodyConverter {
                 location = NSMaxRange(range)
                 continue
             }
-            var line = string.substring(with: range).trimmingCharacters(in: .newlines).replacingOccurrences(of: "\u{FFFC}", with: "")
+            var line = plainLine(text.attributedSubstring(from: range))
             let attrs = text.attributes(at: range.location, effectiveRange: nil)
-            line = line.replacingOccurrences(of: "\t•\t", with: "• ").replacingOccurrences(of: "\t", with: " ")
+            // The visible list marker ("\t•\t", "\t1.\t") as "• " / "1. ", flush left.
+            if let marker = line.range(of: #"^\t[^\t]*\t"#, options: .regularExpression) {
+                line.replaceSubrange(marker, with: line[marker].trimmingCharacters(in: .whitespaces) + " ")
+            }
+            line = line.replacingOccurrences(of: "\t", with: " ")
             if attrs[.tidingsQuote] != nil { line = "> " + line }
             lines.append(line)
             location = NSMaxRange(range)
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// A paragraph's text with each link's address written out where its text doesn't say it
+    /// ("the agenda <https://…>"): the plain-text part has no other way to carry it.
+    static func plainLine(_ paragraph: NSAttributedString) -> String {
+        var line = ""
+        paragraph.enumerateAttribute(.link, in: NSRange(location: 0, length: paragraph.length)) { link, range, _ in
+            let piece = (paragraph.string as NSString).substring(with: range)
+            let href = (link as? URL)?.absoluteString ?? (link as? String)
+            line += href.map { OutgoingHTML.plainTextLink(text: piece, href: $0) } ?? piece
+        }
+        return line.trimmingCharacters(in: .newlines).replacingOccurrences(of: "\u{FFFC}", with: "")
     }
 
     /// Clean, inline-styled HTML: <p>, <ul>/<ol>, <blockquote>, <b>/<i>/<u>/<s>, links.
@@ -657,7 +673,7 @@ enum MailBodyConverter {
             closeBlocks(list: list, quote: quote)
             // As the editor shows them: a 2pt bar and grey text 14pt in; lists 24pt in; no gaps
             // between paragraphs but the blank lines you typed.
-            if quote, !inQuote { html += "<blockquote style=\"margin:0;border-left:2px solid #c7c7cc;padding-left:12px;color:#6e6e73\">"; inQuote = true }
+            if quote, !inQuote { html += "<blockquote type=\"cite\" style=\"margin:0;border-left:2px solid #c7c7cc;padding-left:12px;color:#6e6e73\">"; inQuote = true }
             if let list, openList == nil { html += "<\(list) style=\"margin:0;padding-left:24px\">"; openList = list }
 
             var content = text.attributedSubstring(from: range)
@@ -675,16 +691,20 @@ enum MailBodyConverter {
             location = NSMaxRange(range)
         }
         closeBlocks(list: nil, quote: false)
-        return "<div style=\"font-family:-apple-system,Helvetica,sans-serif;font-size:14px\">\(html)</div>"
+        // 14px, the size the editor sets it in (`RichTextEditor.baseFont`).
+        return OutgoingHTML.document(html, fontSize: 14)
     }
 
     static func inlineHTML(_ text: NSAttributedString) -> String {
         var out = ""
         text.enumerateAttributes(in: NSRange(location: 0, length: text.length)) { attrs, range, _ in
             // U+FFFC: a picture (the signature's) that isn't text.
-            var piece = escape((text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines)
-                .replacingOccurrences(of: "\u{FFFC}", with: ""))
-            guard !piece.isEmpty else { return }
+            let raw = (text.string as NSString).substring(with: range).trimmingCharacters(in: .newlines)
+                .replacingOccurrences(of: "\u{FFFC}", with: "")
+            guard !raw.isEmpty else { return }
+            // Spaces HTML would collapse (several in a row, indents) stay as typed.
+            var piece = OutgoingHTML.text(raw, leadingEdge: range.location == 0,
+                                          trailingEdge: NSMaxRange(range) >= text.length - 1)
             if let font = attrs[.font] as? PlatformFont {
                 if FontTraits.isBold(font) { piece = "<b>\(piece)</b>" }
                 if FontTraits.isItalic(font) { piece = "<i>\(piece)</i>" }
