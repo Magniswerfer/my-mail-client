@@ -11,7 +11,7 @@ extension AppModel {
         // where they already ran. (A new device starts empty, so synced rules wait.)
         if !UserDefaults.standard.bool(forKey: "rules.sendingConfirmationMigrated") {
             UserDefaults.standard.set(true, forKey: "rules.sendingConfirmationMigrated")
-            rules.forEach(confirmSendingActionsOnThisDevice)
+            for rule in rules { confirmSendingActionsOnThisDevice(rule) }
         }
         ruleCounts = (try? store.ruleRunCounts(since: Date().addingTimeInterval(-7 * 86_400))) ?? [:]
     }
