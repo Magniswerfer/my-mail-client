@@ -91,7 +91,16 @@ extension AppModel {
     }
 
     /// The newest message in a conversation with something upcoming to suggest.
+    /// Read once per thread and revision (every change to suggestions bumps it): the reader, the
+    /// Mac menu and ⌘K all ask on each redraw or selection change.
     func dateSuggestions(inThread threadID: String) -> (message: StoredMessage, record: EventSuggestionRecord)? {
+        if let cached = dateSuggestionCache, cached.threadID == threadID, cached.revision == revision { return cached.found }
+        let found = findDateSuggestions(inThread: threadID)
+        dateSuggestionCache = (threadID, revision, found)
+        return found
+    }
+
+    private func findDateSuggestions(inThread threadID: String) -> (message: StoredMessage, record: EventSuggestionRecord)? {
         for message in messages(inThread: threadID).reversed() {
             // A flight or reservation Highlight already offers Add to Calendar for this booking.
             if message.highlights?.contains(where: { ($0.kind == .flight || $0.kind == .reservation) && $0.date != nil }) == true {

@@ -11,7 +11,7 @@ extension AppModel {
     func reactions(on messages: [StoredMessage]) -> [Int64: [MailReaction]] {
         let ids = messages.compactMap(\.messageID)
         guard !ids.isEmpty else { return [:] }
-        let stored = (try? store.reactions(toMessageIDs: ids, ownAddresses: ownAddresses)) ?? [:]
+        let stored = storedReactions(ids.map(Self.bareMessageID))
         var result: [Int64: [MailReaction]] = [:]
         for message in messages {
             guard let id = message.id, let messageID = message.messageID else { continue }
@@ -40,7 +40,21 @@ extension AppModel {
         guard let messageID = message.messageID else { return nil }
         let key = Self.bareMessageID(messageID)
         if let sent = sentReactions[key] { return sent.isEmpty ? nil : sent }
-        return (try? store.reactions(toMessageIDs: [key], ownAddresses: ownAddresses))?[key]?.first(where: \.isMine)?.emoji
+        return storedReactions([key])[key]?.first(where: \.isMine)?.emoji
+    }
+
+    /// Reactions in the store by bare Message-ID, read once per revision: the reader and every
+    /// hovered message's ribbon and menu ask again on each redraw.
+    private func storedReactions(_ keys: [String]) -> [String: [MailReaction]] {
+        if reactionCache.revision != revision { reactionCache = (revision, [:]) }
+        let missing = Array(Set(keys.filter { reactionCache.byKey[$0] == nil }))
+        if !missing.isEmpty {
+            let found = (try? store.reactions(toMessageIDs: missing, ownAddresses: ownAddresses)) ?? [:]
+            for key in missing { reactionCache.byKey[key] = found[key] ?? [] }
+        }
+        var result: [String: [MailReaction]] = [:]
+        for key in keys { if let list = reactionCache.byKey[key], !list.isEmpty { result[key] = list } }
+        return result
     }
 
     /// Reacts with `emoji`, or takes your reaction back when it's the one you already gave.

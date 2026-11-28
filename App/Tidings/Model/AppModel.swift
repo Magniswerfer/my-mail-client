@@ -295,6 +295,9 @@ final class AppModel {
     /// Whether Things is installed, asked at most once a minute (context menus read it per row).
     @ObservationIgnored var thingsCheck: (at: Date, installed: Bool)?
     @ObservationIgnored var folderLayoutCache: [String: (separator: Character?, prefix: String)] = [:]
+    @ObservationIgnored var reactionCache: (revision: Int, byKey: [String: [MailReaction]]) = (-1, [:])
+    @ObservationIgnored var dateSuggestionCache: (threadID: String, revision: Int,
+                                                  found: (message: StoredMessage, record: EventSuggestionRecord)?)?
     @ObservationIgnored private var readerCache: (key: ReaderCacheKey, messages: [StoredMessage])?
     /// When a triage action last removed a row; quick repeats skip the animation.
     @ObservationIgnored var lastRemovalAt = Date.distantPast
