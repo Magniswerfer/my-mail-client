@@ -200,10 +200,10 @@ The CI job **Performance budgets** checks the engine's share of the rows marked 
 
 | Metric | Budget |
 |---|---|
-| Cold launch → usable stream † | < 400 ms (CI, engine: ~275 ms) |
-| Search keystroke → results † | < 30 ms p95 (M0: 6.1 ms @ 250k; CI: ~11 ms) |
+| Cold launch → usable stream † | < 400 ms (CI, engine: ~45 ms) |
+| Search keystroke → results † | < 30 ms p95, hits + person card (M0: 6.1 ms hits @ 250k; CI: ~14 ms) |
 | Search facets † | < 100 ms p95 (M0: 50 ms @ 250k; CI: ~34 ms) |
-| Open cached message † | < 50 ms (CI, engine: ~3.5 ms) |
+| Open cached message † | < 50 ms (CI, engine: ~3 ms) |
 | Done/Pin/Snooze feedback | next frame (optimistic) |
 | Scrolling | 120 fps ProMotion |
 | Memory † | < 300 MB (CI, engine process peak: ~52 MB) |

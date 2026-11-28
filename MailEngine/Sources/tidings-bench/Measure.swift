@@ -42,7 +42,8 @@ struct Metric: Codable {
 ///
 /// - **Cold launch → usable stream**: open the store (GRDB pool + migration check) and read the
 ///   Inbox conversations the stream shows (`threads(mailbox:)`), as `AppModel.reload` does.
-/// - **Search keystroke / facets**: the typed sequence from `tidings-probe bench-search`.
+/// - **Search keystroke → results**: phase 1 of `AppModel.runSearch`, the hits plus the person
+///   card, over the typed sequence from `tidings-probe bench-search`. **Facets**: phase 2.
 /// - **Open cached message**: the conversation's messages, the raw body from the cache tier and
 ///   a full MIME parse (text, HTML, attachment list).
 /// - **Memory**: the process's peak resident size after all of the above.
@@ -51,6 +52,8 @@ enum Measure {
                         "s", "sk", "sko", "sko from:zalando", "m", "mø", "møde", "møde projekt",
                         "invoice after:2024-01-01", "category:advertising", "has:attachment kontrakt",
                         "from:anna", "\"din pakke\"", "security -password"]
+    /// Extra prefixes for the person card: names and addresses people type ("no" → noreply@…).
+    static let senderPrefixes = ["an", "anna", "pe", "peter", "no", "noreply", "post", "ma"]
 
     /// Runs the whole measurement `repeats` times and keeps each metric's median run, so one
     /// noisy pass (a busy CI neighbour) moves nothing: a single pass's search p95 varies ±15%
@@ -95,11 +98,23 @@ enum Measure {
         _ = try engine.hits(SearchQuery(parsing: "warmup"))
         var hits: [Double] = []
         var facets: [Double] = []
+        var contact: [Double] = []
         for _ in 0..<rounds {
             for text in typed {
+                // What the app waits for before results show (AppModel.runSearch, phase 1): the
+                // hits and the person card above them.
                 let query = SearchQuery(parsing: text)
-                hits.append(ms(try engine.hits(query).duration))
+                let start = ContinuousClock.now
+                _ = try engine.hits(query)
+                _ = try engine.contact(for: query)
+                hits.append(ms(ContinuousClock.now - start))
                 if query.wantsFacets { facets.append(ms(try engine.facets(query).duration)) }
+            }
+            // The person card alone, with prefixes that match busy senders.
+            for text in typed + senderPrefixes {
+                let start = ContinuousClock.now
+                _ = try engine.contact(for: SearchQuery(parsing: text))
+                contact.append(ms(ContinuousClock.now - start))
             }
         }
 
@@ -139,6 +154,8 @@ enum Measure {
                        value: percentile(hits, 0.95), budget: 30, noiseFloor: 1, gated: true),
                 Metric(id: "search.facets.p95", label: "Search facets (p95)", unit: "ms",
                        value: percentile(facets, 0.95), budget: 100, noiseFloor: 3, gated: true),
+                Metric(id: "search.contact.p95", label: "Search person card (p95)", unit: "ms",
+                       value: percentile(contact, 0.95), budget: nil, noiseFloor: 5, gated: true),
                 Metric(id: "open.cached.p95", label: "Open cached message (p95)", unit: "ms",
                        value: percentile(open, 0.95), budget: 50, noiseFloor: 1, gated: true),
                 Metric(id: "memory.peak", label: "Peak memory", unit: "MB",

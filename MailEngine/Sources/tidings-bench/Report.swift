@@ -30,7 +30,7 @@ struct Report {
                 return sameMachine ? .regressed(change) : .slowerElsewhere
             }
         }
-        return metric.budget == nil ? .info : .ok
+        return metric.gated ? .ok : .info
     }
 
     func baselineValue(_ metric: Metric) -> Double? {
